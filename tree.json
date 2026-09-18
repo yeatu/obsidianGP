@@ -1,6 +1,6 @@
 {
-  "sha": "7a38df744badaff9e773e773db18e82ff0618c59",
-  "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/7a38df744badaff9e773e773db18e82ff0618c59",
+  "sha": "694e0acba622351ea70597bc661645df95c0ba6b",
+  "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/694e0acba622351ea70597bc661645df95c0ba6b",
   "tree": [
     {
       "path": ".gitignore",
@@ -19,33 +19,19 @@
       "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/a96a3c1b0aba65fa0e2980ebd50b740117416493"
     },
     {
+      "path": "tree.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cb44925b52e9335731d5022e11a38a060a8ad1c3",
+      "size": 38028,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/cb44925b52e9335731d5022e11a38a060a8ad1c3"
+    },
+    {
       "path": "ГП",
       "mode": "040000",
       "type": "tree",
-      "sha": "5a24a1a3f360c5fcd70175fd8b96a7221d44ff5e",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/5a24a1a3f360c5fcd70175fd8b96a7221d44ff5e"
-    },
-    {
-      "path": "ГП/0ссылки",
-      "mode": "040000",
-      "type": "tree",
-      "sha": "982ce7156ba583e4213489ba2c8cdad9f3e5bed8",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/982ce7156ba583e4213489ba2c8cdad9f3e5bed8"
-    },
-    {
-      "path": "ГП/0ссылки/Ученики",
-      "mode": "040000",
-      "type": "tree",
-      "sha": "2ad61f04ea2e01775e81502ba8ff91b4c69f2d17",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/2ad61f04ea2e01775e81502ba8ff91b4c69f2d17"
-    },
-    {
-      "path": "ГП/0ссылки/Ученики/Ученики.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "a43155c671ff08a132d269d13e0943693345897a",
-      "size": 738,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/a43155c671ff08a132d269d13e0943693345897a"
+      "sha": "73090d78c01bf46b0eb3218099b51db2c887cd76",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/73090d78c01bf46b0eb3218099b51db2c887cd76"
     },
     {
       "path": "ГП/История",
@@ -70,26 +56,49 @@
       "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/91908a131961d884687db4dd949c3d62f9145620"
     },
     {
+      "path": "ГП/Сюжет",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4e638248d690fe6cb1e60ea239cee523d033acd1",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/4e638248d690fe6cb1e60ea239cee523d033acd1"
+    },
+    {
+      "path": "ГП/Сюжет/Предыстория.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e973aeaba2c3f3e8e328332a1690c145563e6ab8",
+      "size": 13779,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e973aeaba2c3f3e8e328332a1690c145563e6ab8"
+    },
+    {
       "path": "ГП/государство",
       "mode": "040000",
       "type": "tree",
-      "sha": "02a9c9b9c3f230daaefea423bcf1fc55d4e7dc23",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/02a9c9b9c3f230daaefea423bcf1fc55d4e7dc23"
+      "sha": "2a52b685943ad2b5d4e790e4851b3f0cfe22ce3a",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/2a52b685943ad2b5d4e790e4851b3f0cfe22ce3a"
     },
     {
       "path": "ГП/государство/Государственное и политическое устройство",
       "mode": "040000",
       "type": "tree",
-      "sha": "168a9a4b120554bf221a5756e37c6161794024f3",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/168a9a4b120554bf221a5756e37c6161794024f3"
+      "sha": "54b9520e377a3b2879995b0448267910864cafeb",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/54b9520e377a3b2879995b0448267910864cafeb"
     },
     {
       "path": "ГП/государство/Государственное и политическое устройство/Великобритании.md",
       "mode": "100644",
       "type": "blob",
-      "sha": "9610d207e49ad770e068340adae81a8db5669deb",
-      "size": 26512,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/9610d207e49ad770e068340adae81a8db5669deb"
+      "sha": "6107505dddae4470215d10ac23d2498b9dcdcafe",
+      "size": 26268,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/6107505dddae4470215d10ac23d2498b9dcdcafe"
+    },
+    {
+      "path": "ГП/государство/Государственное и политическое устройство/Магическая реформа (1944).md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c13bb3803d7e9c80ccac792831bafd2b26d7686e",
+      "size": 9505,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/c13bb3803d7e9c80ccac792831bafd2b26d7686e"
     },
     {
       "path": "ГП/государство/Магостроению.md",
@@ -142,279 +151,16 @@
       "path": "ГП/государство/маг градостроение",
       "mode": "040000",
       "type": "tree",
-      "sha": "431e8d50ed600028e4a6ff748188d1c73532b93e",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/431e8d50ed600028e4a6ff748188d1c73532b93e"
+      "sha": "426bfae363c33ac7e58bffb50b0786453eddb65a",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/426bfae363c33ac7e58bffb50b0786453eddb65a"
     },
     {
-      "path": "ГП/государство/маг градостроение/бардели.md",
+      "path": "ГП/государство/маг градостроение/магический город.md",
       "mode": "100644",
       "type": "blob",
-      "sha": "43b6e769bc04fb2e1a85c602d4351b0c02fc2e4f",
-      "size": 2565,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/43b6e769bc04fb2e1a85c602d4351b0c02fc2e4f"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/бюрократия и кредитная система.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "f5d51eb082badf753555e03b1858f5c838d81a2c",
-      "size": 213,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/f5d51eb082badf753555e03b1858f5c838d81a2c"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/водоснабжение и канализация.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/выбор имени.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "013cfaf4228ce122456482af9cbc6b1e598eacce",
-      "size": 1046,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/013cfaf4228ce122456482af9cbc6b1e598eacce"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/дороги.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "b7f0f8a022c5769f8a328a44edbd306998a58176",
-      "size": 3956,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/b7f0f8a022c5769f8a328a44edbd306998a58176"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/животноводство.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "fad9e0e4378fa8485d7673a3472de20c634ad60b",
-      "size": 577,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/fad9e0e4378fa8485d7673a3472de20c634ad60b"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/жильё и строительство.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/заповедники.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "437ee939424f1c41a8d24b40d6adb43b72cda193",
-      "size": 62,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/437ee939424f1c41a8d24b40d6adb43b72cda193"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/казино и тоттализатор.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "885fa472974cd69620be0157156b315c6074f5f9",
-      "size": 1044,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/885fa472974cd69620be0157156b315c6074f5f9"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/культурные центры.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "1e6df40f9f4d060f58c0b4845bff6febb1ed5bb6",
-      "size": 265,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/1e6df40f9f4d060f58c0b4845bff6febb1ed5bb6"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/медицина.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/наркотики.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "83a186f6bab6238202c10cb94cacd7faf0a13f49",
-      "size": 422,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/83a186f6bab6238202c10cb94cacd7faf0a13f49"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/образование.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/общественные пространства.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/пищепром.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/подготовка кадров.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "3ad2d18a8252eca20a3d98710bcca55315e46b13",
-      "size": 7022,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/3ad2d18a8252eca20a3d98710bcca55315e46b13"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/религия.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/ремесла и промышленность.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/связь и коммуникации.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/сельхоз.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "2261292f0ef849993dd5f5985e992b5c8baf306c",
-      "size": 3068,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/2261292f0ef849993dd5f5985e992b5c8baf306c"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/службы спасения.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/судебная система.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "7282cdc52e655cb6aa107ec7ed52bb9be809dcee",
-      "size": 1006,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/7282cdc52e655cb6aa107ec7ed52bb9be809dcee"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/торговля и рынки.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "3cbebba4878afb7f2d6a42307dd1fae1c8c8ce32",
-      "size": 357,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/3cbebba4878afb7f2d6a42307dd1fae1c8c8ce32"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/транспорт внутри города.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/уникальный образ города.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/утилизация отходов.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/хранилища.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "54f00aabc1c0e2f45cfa2a39569e55049c453f66",
-      "size": 49,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/54f00aabc1c0e2f45cfa2a39569e55049c453f66"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/шахты.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e238013d60a619fcebe6674e73a63f6a9d2cfcc6",
-      "size": 3172,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e238013d60a619fcebe6674e73a63f6a9d2cfcc6"
-    },
-    {
-      "path": "ГП/государство/маг градостроение/энергетика (топливо, электричество).md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "ГП/государство/фракции",
-      "mode": "040000",
-      "type": "tree",
-      "sha": "3bfd74655e26a030ce88beb49348212537adcaa7",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/3bfd74655e26a030ce88beb49348212537adcaa7"
-    },
-    {
-      "path": "ГП/государство/фракции/1Сводка.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "a450b9b9c72c6a3eb7eea5c4cf77f477e7c1f4e4",
-      "size": 22913,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/a450b9b9c72c6a3eb7eea5c4cf77f477e7c1f4e4"
-    },
-    {
-      "path": "ГП/государство/фракции/Отдела магического правопорядка.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "1e88f4c2166364b0390101677f0b55a69e97f304",
-      "size": 2684,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/1e88f4c2166364b0390101677f0b55a69e97f304"
-    },
-    {
-      "path": "ГП/государство/фракции/Рэддл.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "fea6b35929c77578a314785a702c0edb4d513494",
-      "size": 18446,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/fea6b35929c77578a314785a702c0edb4d513494"
-    },
-    {
-      "path": "ГП/государство/фракции/нужно прописать все органы здесь.md",
-      "mode": "100644",
-      "type": "blob",
-      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "size": 0,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+      "sha": "cc43e9b3e725c3736fc4d36eee1a38cf07240fbc",
+      "size": 25396,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/cc43e9b3e725c3736fc4d36eee1a38cf07240fbc"
     },
     {
       "path": "ГП/иное",
@@ -859,6 +605,45 @@
       "sha": "117a318167aa231ef525a2f058f46c1d46c04e70",
       "size": 1592,
       "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/117a318167aa231ef525a2f058f46c1d46c04e70"
+    },
+    {
+      "path": "ГП/фракции",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3bfd74655e26a030ce88beb49348212537adcaa7",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/3bfd74655e26a030ce88beb49348212537adcaa7"
+    },
+    {
+      "path": "ГП/фракции/1Сводка.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a450b9b9c72c6a3eb7eea5c4cf77f477e7c1f4e4",
+      "size": 22913,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/a450b9b9c72c6a3eb7eea5c4cf77f477e7c1f4e4"
+    },
+    {
+      "path": "ГП/фракции/Отдела магического правопорядка.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1e88f4c2166364b0390101677f0b55a69e97f304",
+      "size": 2684,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/1e88f4c2166364b0390101677f0b55a69e97f304"
+    },
+    {
+      "path": "ГП/фракции/Рэддл.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fea6b35929c77578a314785a702c0edb4d513494",
+      "size": 18446,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/fea6b35929c77578a314785a702c0edb4d513494"
+    },
+    {
+      "path": "ГП/фракции/нужно прописать все органы здесь.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "size": 0,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
     }
   ],
   "truncated": false
