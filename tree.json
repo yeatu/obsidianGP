@@ -1,6 +1,6 @@
 {
-  "sha": "c7aa15af220c679a32580e4143138e14281424c1",
-  "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/c7aa15af220c679a32580e4143138e14281424c1",
+  "sha": "155b1f00e329b331f203c76f7bf6ea13f1230754",
+  "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/155b1f00e329b331f203c76f7bf6ea13f1230754",
   "tree": [
     {
       "path": ".gitignore",
@@ -22,16 +22,16 @@
       "path": "tree.json",
       "mode": "100644",
       "type": "blob",
-      "sha": "3108243e480efe56dfc3b026895625e226b3c1f2",
-      "size": 27564,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/3108243e480efe56dfc3b026895625e226b3c1f2"
+      "sha": "8eb7c3a4d5b913e313536f4340e9736f50f60207",
+      "size": 28924,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/8eb7c3a4d5b913e313536f4340e9736f50f60207"
     },
     {
       "path": "ГП",
       "mode": "040000",
       "type": "tree",
-      "sha": "38358f264a02170077c8c51f9f8aed4d883254cb",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/38358f264a02170077c8c51f9f8aed4d883254cb"
+      "sha": "ea262fa8360a45d12dfc7f8017d25a9173e202fb",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/ea262fa8360a45d12dfc7f8017d25a9173e202fb"
     },
     {
       "path": "ГП/История",
@@ -493,8 +493,8 @@
       "path": "ГП/разобрать",
       "mode": "040000",
       "type": "tree",
-      "sha": "2681fb924c536249d364ae6057bb0b98d185ccf4",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/2681fb924c536249d364ae6057bb0b98d185ccf4"
+      "sha": "288384dd7a40f97c2bc1f6b9a8c6ce050ef786f8",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/288384dd7a40f97c2bc1f6b9a8c6ce050ef786f8"
     },
     {
       "path": "ГП/разобрать/Демография.md",
@@ -521,6 +521,14 @@
       "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/be72d4c08136a8efaa3295818c09d14346a4537a"
     },
     {
+      "path": "ГП/разобрать/Черновик.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b6a5613948076840256fb6903d63ac0e63a2cac7",
+      "size": 1362,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/b6a5613948076840256fb6903d63ac0e63a2cac7"
+    },
+    {
       "path": "ГП/разобрать/распределение сфер влияния.md",
       "mode": "100644",
       "type": "blob",
@@ -532,8 +540,8 @@
       "path": "ГП/система магии",
       "mode": "040000",
       "type": "tree",
-      "sha": "896c6fb946a28ba3bcb9cc44db01450e893928c9",
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/896c6fb946a28ba3bcb9cc44db01450e893928c9"
+      "sha": "32a4114c1cf0aba911571bd12d1e4a1f8aa49c65",
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/trees/32a4114c1cf0aba911571bd12d1e4a1f8aa49c65"
     },
     {
       "path": "ГП/система магии/Алхимия.md",
@@ -571,9 +579,9 @@
       "path": "ГП/система магии/Пространство.md",
       "mode": "100644",
       "type": "blob",
-      "sha": "26091e36452ec0eef38392ca046785e7238e3ffa",
-      "size": 14055,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/26091e36452ec0eef38392ca046785e7238e3ffa"
+      "sha": "2a1e2d70223c6c3029f1ad643f989cb3dafd0bbf",
+      "size": 14056,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/2a1e2d70223c6c3029f1ad643f989cb3dafd0bbf"
     },
     {
       "path": "ГП/система магии/Трансфигурация.md",
@@ -587,17 +595,17 @@
       "path": "ГП/система магии/система магии.md",
       "mode": "100644",
       "type": "blob",
-      "sha": "7572138338a1b73d4d7d17a7010e2b383ec876d0",
-      "size": 49983,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/7572138338a1b73d4d7d17a7010e2b383ec876d0"
+      "sha": "057623e650fb944a913857d1d7252d59dd37e6f6",
+      "size": 49046,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/057623e650fb944a913857d1d7252d59dd37e6f6"
     },
     {
       "path": "ГП/система магии/устройство.md",
       "mode": "100644",
       "type": "blob",
-      "sha": "035e194ffecbb8ffaa1b2372a4fde7a77a8b7e7c",
-      "size": 4070,
-      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/035e194ffecbb8ffaa1b2372a4fde7a77a8b7e7c"
+      "sha": "e83c016c70a188de96974b27b15474cb4d49185b",
+      "size": 43785,
+      "url": "https://api.github.com/repos/yeatu/obsidianGP/git/blobs/e83c016c70a188de96974b27b15474cb4d49185b"
     },
     {
       "path": "ГП/система магии/факультеты.md",
