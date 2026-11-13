@@ -102,6 +102,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           for attempt in 1 2 3 4 5; do
+            : > "$RUNNER_TEMP/registry-path"
             python - <<'PY'
           import os
           import re
@@ -144,7 +145,8 @@ jobs:
           if not registry.is_file() or registry.is_symlink():
               raise SystemExit(f"Session registry is missing or unsafe: {registry}")
 
-          # Check metadata only. The existing registry contents are never read.
+          # The append script never opens the registry for reading.
+          # Git handles the local file bytes when preparing the commit.
           has_existing_content = registry.stat().st_size > 0
           with registry.open("ab") as destination:
               for fragment in fragments:
@@ -167,9 +169,17 @@ jobs:
                   print(f"Appended and consumed: {fragment.name}")
 
           print(f"Updated registry: {registry}")
+          target_path_file = Path(os.environ["RUNNER_TEMP"]) / "registry-path"
+          target_path_file.write_text(registry.as_posix(), encoding="utf-8")
           PY
 
-            git add -- "$PROJECT_DIR"
+            if [[ ! -s "$RUNNER_TEMP/registry-path" ]]; then
+              echo "No queued fragments needed processing."
+              exit 0
+            fi
+            REGISTRY_PATH="$(cat "$RUNNER_TEMP/registry-path")"
+            git add -- "$REGISTRY_PATH"
+            git add -u -- "$PROJECT_DIR/.append-queue"
             if git diff --cached --quiet; then
               echo "No queued fragments needed processing."
               exit 0
