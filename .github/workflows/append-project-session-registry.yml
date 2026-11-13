@@ -16,16 +16,16 @@ jobs:
     permissions:
       contents: read
     outputs:
-      project_dir: \${{ steps.detect.outputs.project_dir }}
+      project_dir: ${{ steps.detect.outputs.project_dir }}
     steps:
       - name: Detect the project from the incoming queue fragment
         id: detect
         shell: bash
         env:
-          GITHUB_TOKEN: \${{ github.token }}
-          REPOSITORY: \${{ github.repository }}
-          BEFORE_SHA: \${{ github.event.before }}
-          AFTER_SHA: \${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
         run: |
           python - <<'PY'
           import json
@@ -80,21 +80,21 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: append-project-session-registry-\${{ needs.identify_project.outputs.project_dir }}
+      group: append-project-session-registry-${{ needs.identify_project.outputs.project_dir }}
       queue: max
     steps:
       - name: Check out only the selected project
         uses: actions/checkout@v7
         with:
           ref: main
-          sparse-checkout: \${{ needs.identify_project.outputs.project_dir }}
+          sparse-checkout: ${{ needs.identify_project.outputs.project_dir }}
           sparse-checkout-cone-mode: true
           fetch-depth: 1
 
       - name: Append queued fragments and commit
         shell: bash
         env:
-          PROJECT_DIR: \${{ needs.identify_project.outputs.project_dir }}
+          PROJECT_DIR: ${{ needs.identify_project.outputs.project_dir }}
         run: |
           set -euo pipefail
           export GIT_TERMINAL_PROMPT=0
@@ -109,7 +109,12 @@ jobs:
 
           project = Path(os.environ["PROJECT_DIR"])
           expected_parent = Path("GPT/Нейросеть/Проекты")
-          if len(project.parts) != 4 or project.parts[:3] != expected_parent.parts:
+          if (
+              len(project.parts) != 4
+              or project.parts[:3] != expected_parent.parts
+              or project.name in {".", ".."}
+              or project.resolve().parent != expected_parent.resolve()
+          ):
               raise SystemExit(f"Refusing unexpected project path: {project}")
           if not project.is_dir() or project.is_symlink():
               raise SystemExit(f"Project directory is missing or unsafe: {project}")
