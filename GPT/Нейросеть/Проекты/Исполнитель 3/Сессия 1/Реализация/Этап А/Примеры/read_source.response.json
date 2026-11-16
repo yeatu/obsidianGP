@@ -1,0 +1,47 @@
+{
+  "schema_version": "sfra.read_source.v1",
+  "status": "ok",
+  "requested": {
+    "node_id": "fixture_voice_001",
+    "expected_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
+    "scope": "node",
+    "budget_tokens": 2500
+  },
+  "target_source": {
+    "node_id": "fixture_voice_001",
+    "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
+    "source_path": "fixtures/персонажи/Тестовый персонаж.md",
+    "heading_path": ["Общий стиль речи"],
+    "line_start": 10,
+    "line_end": 10,
+    "document_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "index_generation": 1
+  },
+  "fragments": [
+    {
+      "role": "target",
+      "node_id": "fixture_voice_001",
+      "source_path": "fixtures/персонажи/Тестовый персонаж.md",
+      "heading_path": ["Общий стиль речи"],
+      "line_start": 10,
+      "line_end": 10,
+      "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
+      "raw_text": "Тестовый фрагмент: персонаж избегает прямых угроз и отвечает коротко.",
+      "token_count": 19
+    }
+  ],
+  "token_accounting": {
+    "budget_tokens": 2500,
+    "tokens_used": 19,
+    "response_tokens_estimated": 130,
+    "token_counter": {
+      "name": "tiktoken",
+      "version": "0.14.0",
+      "encoding": "o200k_base",
+      "exact_for_encoding": true,
+      "exact_for_client_model": false
+    }
+  },
+  "trust_label": "untrusted_source_data",
+  "diagnostics": []
+}
