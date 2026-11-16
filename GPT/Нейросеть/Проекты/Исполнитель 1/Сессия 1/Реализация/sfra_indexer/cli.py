@@ -33,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
 def _node_dict(node) -> dict:
     return {
         "local_key": node.local_key,
+        "node_id": node.node_id,
+        "content_hash": node.content_hash,
         "node_type": node.node_type,
         "heading_path": list(node.heading_path),
         "parent_key": node.parent_key,
