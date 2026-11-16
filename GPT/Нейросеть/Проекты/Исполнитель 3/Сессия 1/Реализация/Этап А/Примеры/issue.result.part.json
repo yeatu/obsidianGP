@@ -1,7 +1,10 @@
 {
+  "protocol_version": "sfra.issue.v1",
   "request_id": "6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14",
+  "attempt_no": 1,
   "part_index": 1,
   "parts_total": 1,
-  "marker": "<!-- sfra:request:6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14:part:1/1 -->",
-  "content_after_marker": "{\"schema_version\":\"sfra.context_pack.v1\",\"status\":\"complete\",\"Included\":[],\"Coverage\":[],\"Deferred\":[],\"Parallel Sources\":[],\"Known\":[],\"Version Changes\":[],\"Statistics\":{},\"Diagnostics\":[]}"
+  "encoding": "utf-8-json-compact",
+  "marker": "<!-- sfra:request:6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14:attempt:1:part:1/1 -->",
+  "content": "{\"schema_version\":\"sfra.context_pack.v1\",\"status\":\"complete\",\"Included\":[],\"Coverage\":[],\"Deferred\":[],\"Parallel Sources\":[],\"Known\":[],\"Version Changes\":[],\"Statistics\":{},\"Diagnostics\":[]}"
 }
