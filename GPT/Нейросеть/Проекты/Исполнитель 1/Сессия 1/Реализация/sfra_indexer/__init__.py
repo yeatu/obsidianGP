@@ -1,6 +1,7 @@
 """Stage-B structural parser for Source-First Retrieval Architecture."""
 
-from .indexer import IndexResult, index_vault, read_markdown_file
+from .identity import MatchPlan, build_match_plan, content_hash
+from .indexer import IndexResult, get_database_summary, index_vault, read_markdown_file
 from .models import ParsedDocument, Passage, SourceSpan, StructuralNode
 from .parser import (
     build_passages,
@@ -13,6 +14,10 @@ from .storage import connect_database, save_parsed_document
 
 __all__ = [
     "IndexResult",
+    "MatchPlan",
+    "build_match_plan",
+    "content_hash",
+    "get_database_summary",
     "ParsedDocument",
     "Passage",
     "SourceSpan",
