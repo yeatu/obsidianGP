@@ -2,7 +2,7 @@ name: SFRA FTS5 search kernel smoke test
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 permissions: {}
 
