@@ -1,0 +1,23 @@
+{
+  "protocol_version": "sfra.issue.v1",
+  "request_id": "6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14",
+  "issue_number": 321,
+  "operation": "search_vault",
+  "status": "FAILED",
+  "updated_at": "2026-11-17T01:35:00+03:00",
+  "workflow_run_id": 123456790,
+  "attempt_no": 1,
+  "max_attempts": 3,
+  "lease_expires_at": null,
+  "source_snapshot": null,
+  "result_manifest": null,
+  "error": {
+    "code": "GITHUB_API_TRANSIENT",
+    "message": "Временная ошибка GitHub API при чтении sidecar manifest.",
+    "retryable": true,
+    "retry_after": "2026-11-17T01:40:00+03:00",
+    "details": {
+      "last_step": "read_sidecar_manifest"
+    }
+  }
+}
