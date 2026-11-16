@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/context_pack.schema.json",
+  "title": "SFRA Context Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "query",
+    "Included",
+    "Coverage",
+    "Deferred",
+    "Parallel Sources",
+    "Known",
+    "Version Changes",
+    "Statistics",
+    "Diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "const": "sfra.context_pack.v1" },
+    "status": {
+      "type": "string",
+      "enum": ["complete", "partial", "empty", "budget_limited", "integrity_warning"]
+    },
+    "query": { "type": "string" },
+    "task": { "type": ["string", "null"] },
+    "search_complete": { "type": "boolean" },
+    "Included": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/includedNode" }
+    },
+    "Coverage": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/coverageAspect" }
+    },
+    "Deferred": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deferredNode" }
+    },
+    "Parallel Sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/parallelGroup" }
+    },
+    "Known": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/knownNode" }
+    },
+    "Version Changes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/versionChange" }
+    },
+    "Statistics": { "$ref": "#/$defs/statistics" },
+    "Diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "required": ["node_id", "source_path", "heading_path", "line_start", "line_end", "content_hash"],
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1 },
+        "source_path": { "type": "string", "minLength": 1 },
+        "heading_path": { "type": "array", "items": { "type": "string" } },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+        "zone": { "type": ["string", "null"] },
+        "has_author_notes": { "type": ["boolean", "null"] },
+        "score": { "type": "number" },
+        "match_type": { "type": "string" },
+        "signals": {
+          "type": "object",
+          "additionalProperties": { "type": ["boolean", "string", "number", "null"] }
+        },
+        "matched_focus_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "index_generation": { "type": ["integer", "null"] },
+        "document_hash": { "type": ["string", "null"] }
+      }
+    },
+    "includedNode": {
+      "allOf": [
+        { "$ref": "#/$defs/provenance" },
+        {
+          "type": "object",
+          "required": ["raw_text", "trust_label"],
+          "properties": {
+            "raw_text": {
+              "type": "string",
+              "description": "Verbatim original source slice. Must not be summarized or truncated."
+            },
+            "trust_label": { "const": "untrusted_source_data" },
+            "token_count": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "coverageAspect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aspect_id", "label", "status", "included_node_ids", "known_node_ids", "deferred_node_ids", "basis"],
+      "properties": {
+        "aspect_id": { "type": "string" },
+        "label": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["found", "deferred", "not_found_in_retrieval"]
+        },
+        "included_node_ids": { "type": "array", "items": { "type": "string" } },
+        "known_node_ids": { "type": "array", "items": { "type": "string" } },
+        "deferred_node_ids": { "type": "array", "items": { "type": "string" } },
+        "basis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["adapter_match", "explicit_entities_facets_terms", "exact_phrase_fallback"]
+          }
+        },
+        "diagnostic_note": { "type": ["string", "null"] }
+      }
+    },
+    "deferredNode": {
+      "allOf": [
+        { "$ref": "#/$defs/provenance" },
+        {
+          "type": "object",
+          "required": ["estimated_tokens", "reason"],
+          "properties": {
+            "estimated_tokens": { "type": "integer", "minimum": 0 },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "budget_limit",
+                "required_group_budget_limit",
+                "lower_priority_budget_limit",
+                "unresolved_required_dependency"
+              ]
+            },
+            "preservation": { "type": ["string", "null"], "enum": ["required", "normal", null] },
+            "required_with": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "parallelGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group_id", "relation", "description", "kept_separate", "sources"],
+      "properties": {
+        "group_id": { "type": "string" },
+        "relation": {
+          "type": "string",
+          "enum": ["same_basename_different_path", "adapter_overlap_group", "adapter_overlap_hint"]
+        },
+        "description": { "type": "string" },
+        "kept_separate": { "const": true },
+        "sources": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "required": ["node_id", "source_path", "content_hash"],
+            "properties": {
+              "node_id": { "type": "string" },
+              "source_path": { "type": "string" },
+              "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+              "signal": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "knownNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "content_hash", "delivery"],
+      "properties": {
+        "node_id": { "type": "string" },
+        "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+        "delivery": { "const": "already_known_not_repeated" }
+      }
+    },
+    "versionChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "known_hash", "current_hash", "action"],
+      "properties": {
+        "node_id": { "type": "string" },
+        "known_hash": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+        "current_hash": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+        "action": { "const": "deliver_current_version_if_budget_allows" }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retrieved_count",
+        "included_count",
+        "deferred_count",
+        "known_count",
+        "not_found_aspect_count",
+        "focus_count",
+        "coverage_available_ratio",
+        "coverage_included_ratio",
+        "budget_tokens",
+        "tokens_used",
+        "response_tokens_estimated",
+        "token_counter"
+      ],
+      "properties": {
+        "retrieved_count": { "type": "integer", "minimum": 0 },
+        "included_count": { "type": "integer", "minimum": 0 },
+        "deferred_count": { "type": "integer", "minimum": 0 },
+        "known_count": { "type": "integer", "minimum": 0 },
+        "not_found_aspect_count": { "type": "integer", "minimum": 0 },
+        "focus_count": { "type": "integer", "minimum": 0 },
+        "coverage_available_ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "coverage_included_ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "budget_tokens": { "type": "integer", "minimum": 1 },
+        "tokens_used": { "type": "integer", "minimum": 0 },
+        "response_tokens_estimated": { "type": "integer", "minimum": 0 },
+        "token_counter": {
+          "type": "object",
+          "required": ["name", "version", "encoding", "exact_for_encoding", "exact_for_client_model"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "encoding": { "type": "string" },
+            "exact_for_encoding": { "type": "boolean" },
+            "exact_for_client_model": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+        "message": { "type": "string" },
+        "node_ids": { "type": "array", "items": { "type": "string" } },
+        "details": { "type": "object" }
+      }
+    }
+  }
+}
