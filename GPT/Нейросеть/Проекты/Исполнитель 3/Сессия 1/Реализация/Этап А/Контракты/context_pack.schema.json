@@ -330,6 +330,18 @@
               "items": {
                 "type": "string"
               }
+            },
+            "unresolved_dependency_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "required_group_id": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         }
