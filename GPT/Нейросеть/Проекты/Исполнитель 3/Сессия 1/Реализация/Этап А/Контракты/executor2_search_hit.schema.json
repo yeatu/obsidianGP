@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/executor2_search_hit.schema.json",
+  "title": "Executor 2 search hit (upstream)",
+  "description": "A search hit from engine.search(). excerpt is not a full structural node.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "node_id",
+    "source_path",
+    "heading_path",
+    "line_start",
+    "line_end",
+    "content_hash",
+    "excerpt",
+    "match_type",
+    "match_reasons",
+    "relevance"
+  ],
+  "properties": {
+    "node_id": { "type": "string", "minLength": 1 },
+    "source_path": { "type": "string", "minLength": 1 },
+    "node_type": { "type": ["string", "null"] },
+    "parent_node_id": { "type": ["string", "null"] },
+    "heading_path": { "type": "array", "items": { "type": "string" } },
+    "line_start": { "type": "integer", "minimum": 1 },
+    "line_end": { "type": "integer", "minimum": 1 },
+    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "excerpt": {
+      "type": "string",
+      "description": "Search excerpt only. Must not be mapped to Context Pack Included.raw_text."
+    },
+    "match_type": { "type": "string" },
+    "match_reasons": { "type": "array", "items": { "type": "string" } },
+    "relevance": {
+      "type": "object",
+      "required": ["tier", "bm25"],
+      "properties": {
+        "tier": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "bm25": { "type": "number" }
+      }
+    },
+    "entity": { "type": ["object", "array", "null"] }
+  }
+}
