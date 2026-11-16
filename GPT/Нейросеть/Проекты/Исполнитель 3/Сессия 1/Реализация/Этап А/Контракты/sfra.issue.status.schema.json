@@ -11,89 +11,385 @@
     "operation",
     "status",
     "updated_at",
+    "workflow_run_id",
+    "attempt_no",
+    "max_attempts",
+    "lease_expires_at",
     "source_snapshot",
     "result_manifest",
     "error"
   ],
   "properties": {
-    "protocol_version": { "const": "sfra.issue.v1" },
+    "protocol_version": {
+      "const": "sfra.issue.v1"
+    },
     "request_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "issue_number": { "type": "integer", "minimum": 1 },
-    "operation": { "type": "string", "enum": ["search_vault", "read_source"] },
+    "issue_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "search_vault",
+        "read_source"
+      ]
+    },
     "status": {
       "type": "string",
-      "enum": ["PENDING", "RUNNING", "DONE", "FAILED"]
+      "enum": [
+        "PENDING",
+        "RUNNING",
+        "DONE",
+        "FAILED"
+      ]
     },
-    "updated_at": { "type": "string", "format": "date-time" },
-    "workflow_run_id": { "type": ["integer", "null"] },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workflow_run_id": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "attempt_no": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "max_attempts": {
+      "const": 3
+    },
+    "lease_expires_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
     "source_snapshot": {
-      "type": ["object", "null"],
-      "properties": {
-        "vault_commit_sha": { "type": "string" },
-        "sidecar_branch": { "type": "string" },
-        "sidecar_commit_sha": { "type": "string" },
-        "index_generation": { "type": ["integer", "null"] },
-        "manifest_sha256": { "type": ["string", "null"] }
-      }
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "vault_commit_sha",
+            "sidecar_branch",
+            "sidecar_commit_sha",
+            "index_generation",
+            "manifest_sha256"
+          ],
+          "properties": {
+            "vault_commit_sha": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "sidecar_branch": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sidecar_commit_sha": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "index_generation": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "manifest_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
     },
     "result_manifest": {
-      "type": ["object", "null"],
-      "required": ["encoding", "parts", "total_utf8_bytes", "sha256"],
-      "properties": {
-        "encoding": { "const": "utf-8-json-compact" },
-        "parts": { "type": "integer", "minimum": 1 },
-        "total_utf8_bytes": { "type": "integer", "minimum": 1 },
-        "sha256": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "attempt_no",
+            "encoding",
+            "parts",
+            "total_utf8_bytes",
+            "sha256"
+          ],
+          "properties": {
+            "attempt_no": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "encoding": {
+              "const": "utf-8-json-compact"
+            },
+            "parts": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "total_utf8_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
         }
-      }
+      ]
     },
     "error": {
-      "type": ["object", "null"],
-      "properties": {
-        "code": { "type": "string" },
-        "message": { "type": "string" },
-        "retryable": { "type": "boolean" },
-        "details": { "type": "object" }
-      }
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message",
+            "retryable",
+            "retry_after",
+            "details"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "retry_after": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "details": {
+              "type": "object"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "retryable": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "retryable"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "retry_after": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "retryable": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "retryable"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "retry_after": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   },
   "allOf": [
     {
       "if": {
-        "properties": { "status": { "const": "DONE" } },
-        "required": ["status"]
+        "properties": {
+          "status": {
+            "enum": [
+              "PENDING",
+              "RUNNING"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
       },
       "then": {
         "properties": {
-          "result_manifest": { "type": "object" },
-          "error": { "type": "null" }
+          "result_manifest": {
+            "type": "null"
+          },
+          "error": {
+            "type": "null"
+          }
         }
       }
     },
     {
       "if": {
-        "properties": { "status": { "const": "FAILED" } },
-        "required": ["status"]
+        "properties": {
+          "status": {
+            "const": "RUNNING"
+          }
+        },
+        "required": [
+          "status"
+        ]
       },
       "then": {
         "properties": {
-          "result_manifest": { "type": "null" },
-          "error": { "type": "object" }
+          "lease_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       }
     },
     {
       "if": {
-        "properties": { "status": { "enum": ["PENDING", "RUNNING"] } },
-        "required": ["status"]
+        "properties": {
+          "status": {
+            "enum": [
+              "PENDING",
+              "DONE",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
       },
       "then": {
-        "properties": { "result_manifest": { "type": "null" } }
+        "properties": {
+          "lease_expires_at": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "DONE"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result_manifest": {
+            "type": "object"
+          },
+          "error": {
+            "type": "null"
+          },
+          "source_snapshot": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "FAILED"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result_manifest": {
+            "type": "null"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "retryable": {
+                "const": true
+              }
+            },
+            "required": [
+              "retryable"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "then": {
+        "properties": {
+          "attempt_no": {
+            "maximum": 2
+          }
+        }
       }
     }
   ]
