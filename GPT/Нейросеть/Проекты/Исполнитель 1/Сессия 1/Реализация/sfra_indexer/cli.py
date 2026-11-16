@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .indexer import get_database_summary, index_vault, read_markdown_file
 from .parser import parse_markdown
+from .state import create_state_snapshot, verify_state_directory
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,6 +28,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     info_cmd = subparsers.add_parser("info", help="Show counts in an existing sidecar database")
     info_cmd.add_argument("--db", required=True, type=Path)
+
+    state_verify_cmd = subparsers.add_parser(
+        "state-verify", help="Verify a persisted state manifest and SQLite snapshot"
+    )
+    state_verify_cmd.add_argument("--state-dir", required=True, type=Path)
+
+    state_snapshot_cmd = subparsers.add_parser(
+        "state-snapshot", help="Create a verified SQLite Backup API snapshot and manifest"
+    )
+    state_snapshot_cmd.add_argument("--db", required=True, type=Path)
+    state_snapshot_cmd.add_argument("--state-dir", required=True, type=Path)
+    state_snapshot_cmd.add_argument("--source-repository", required=True)
+    state_snapshot_cmd.add_argument("--source-branch", required=True)
+    state_snapshot_cmd.add_argument("--source-commit", required=True)
+    state_snapshot_cmd.add_argument("--workflow-run-id", required=True)
+
     return parser
 
 
@@ -88,6 +105,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "info":
         print(json.dumps(get_database_summary(args.db), ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "state-verify":
+        manifest = verify_state_directory(args.state_dir)
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "state-snapshot":
+        manifest = create_state_snapshot(
+            args.db,
+            args.state_dir,
+            source_repository=args.source_repository,
+            source_branch=args.source_branch,
+            source_commit=args.source_commit,
+            workflow_run_id=args.workflow_run_id,
+        )
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return 0
     return 2
 

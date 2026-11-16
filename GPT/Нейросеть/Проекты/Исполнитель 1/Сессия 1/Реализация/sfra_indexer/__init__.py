@@ -10,6 +10,12 @@ from .parser import (
     parse_markdown,
     validate_parsed_document,
 )
+from .state import (
+    StateError,
+    create_state_snapshot,
+    sha256_file,
+    verify_state_directory,
+)
 from .storage import connect_database, save_parsed_document
 
 __all__ = [
@@ -31,4 +37,8 @@ __all__ = [
     "read_markdown_file",
     "save_parsed_document",
     "validate_parsed_document",
+    "StateError",
+    "create_state_snapshot",
+    "sha256_file",
+    "verify_state_directory",
 ]

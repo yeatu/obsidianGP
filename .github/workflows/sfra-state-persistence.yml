@@ -1,0 +1,181 @@
+name: SFRA persistent SQLite state
+
+on:
+  push:
+    branches:
+      - executor-1/sfra-indexer-session-1
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
+      - ".github/workflows/sfra-state-persistence.yml"
+  workflow_dispatch:
+    inputs:
+      initialize_state:
+        description: "Explicitly initialize sfra-state when it contains no database yet"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sfra-state-production
+  cancel-in-progress: false
+
+jobs:
+  persist-state:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: executor-1/sfra-indexer-session-1
+          path: source
+          fetch-depth: 1
+
+      - name: Checkout persistent state orphan branch
+        uses: actions/checkout@v4
+        with:
+          ref: sfra-state
+          path: state-repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify orphan history and state branch allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          root_commits="$(git -C state-repo rev-list --max-parents=0 HEAD)"
+          test -n "$root_commits"
+          test "$(printf '%s\n' "$root_commits" | wc -l)" -eq 1
+          root_commit="$(printf '%s\n' "$root_commits" | head -n 1)"
+          if git -C state-repo cat-file -p "$root_commit" | grep -q '^parent '; then
+            echo "sfra-state root commit unexpectedly has a parent" >&2
+            exit 1
+          fi
+
+          while IFS= read -r path; do
+            case "$path" in
+              README.md|state/structure.sqlite3|state/manifest.json) ;;
+              *)
+                echo "Unexpected file in sfra-state: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git -C state-repo ls-files)
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install indexer and test dependencies
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Determine restore or explicit initialization mode
+        id: state-mode
+        shell: bash
+        env:
+          INITIALIZE_STATE: ${{ inputs.initialize_state || false }}
+        run: |
+          set -euo pipefail
+          db_exists=false
+          manifest_exists=false
+          test ! -f state-repo/state/structure.sqlite3 || db_exists=true
+          test ! -f state-repo/state/manifest.json || manifest_exists=true
+
+          if [ "$db_exists" = true ] && [ "$manifest_exists" = true ]; then
+            if [ "$INITIALIZE_STATE" = true ]; then
+              echo "Refusing to initialize: sfra-state already contains a database" >&2
+              exit 1
+            fi
+            echo "mode=restore" >> "$GITHUB_OUTPUT"
+          elif [ "$db_exists" = false ] && [ "$manifest_exists" = false ]; then
+            if [ "$INITIALIZE_STATE" = true ]; then
+              echo "mode=initialize" >> "$GITHUB_OUTPUT"
+            else
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "sfra-state has no database yet. Run workflow_dispatch with initialize_state=true."
+            fi
+          else
+            echo "sfra-state is incomplete: database and manifest must both exist" >&2
+            exit 1
+          fi
+
+      - name: Verify and restore persisted SQLite
+        if: steps.state-mode.outputs.skip != 'true'
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/sfra-working-index"
+          if [ "${{ steps.state-mode.outputs.mode }}" = "restore" ]; then
+            sfra-index state-verify --state-dir "$GITHUB_WORKSPACE/state-repo"
+            cp "$GITHUB_WORKSPACE/state-repo/state/structure.sqlite3" \
+              "$RUNNER_TEMP/sfra-working-index/structure.sqlite3"
+          fi
+
+      - name: Index source Vault without modifying it
+        if: steps.state-mode.outputs.skip != 'true'
+        working-directory: source
+        run: |
+          set -euo pipefail
+          sfra-index index \
+            --vault "$GITHUB_WORKSPACE/source/ГП" \
+            --index-dir "$RUNNER_TEMP/sfra-working-index"
+          sfra-index info --db "$RUNNER_TEMP/sfra-working-index/structure.sqlite3"
+          git -C "$GITHUB_WORKSPACE/source" diff --exit-code -- ГП
+          test -z "$(git -C "$GITHUB_WORKSPACE/source" status --porcelain -- ГП)"
+
+      - name: Create SQLite Backup API snapshot and manifest
+        if: steps.state-mode.outputs.skip != 'true'
+        working-directory: source
+        env:
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          sfra-index state-snapshot \
+            --db "$RUNNER_TEMP/sfra-working-index/structure.sqlite3" \
+            --state-dir "$GITHUB_WORKSPACE/state-repo" \
+            --source-repository "$SOURCE_REPOSITORY" \
+            --source-branch executor-1/sfra-indexer-session-1 \
+            --source-commit "$SOURCE_COMMIT" \
+            --workflow-run-id "$WORKFLOW_RUN_ID"
+          sfra-index state-verify --state-dir "$GITHUB_WORKSPACE/state-repo"
+
+      - name: Validate state tree and publish with a fast-forward lease
+        if: steps.state-mode.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r path; do
+            case "$path" in
+              README.md|state/structure.sqlite3|state/manifest.json) ;;
+              *)
+                echo "Refusing to publish unexpected file: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git -C state-repo ls-files --cached --others --exclude-standard)
+
+          base_head="$(git -C state-repo rev-parse HEAD)"
+          git -C state-repo config user.name "github-actions[bot]"
+          git -C state-repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C state-repo add -- README.md state/structure.sqlite3 state/manifest.json
+          git -C state-repo diff --cached --check
+          git -C state-repo commit -m "chore(sfra-state): update structural index snapshot"
+
+          remote_head="$(git -C state-repo ls-remote origin refs/heads/sfra-state | awk '{print $1}')"
+          if [ "$remote_head" != "$base_head" ]; then
+            echo "sfra-state advanced during this run; refusing to overwrite concurrent state" >&2
+            exit 1
+          fi
+
+          # Ordinary push is fast-forward only. If the ref moves after ls-remote,
+          # Git rejects the non-fast-forward update instead of overwriting it.
+          git -C state-repo push origin HEAD:refs/heads/sfra-state

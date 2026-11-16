@@ -155,3 +155,14 @@ Schema migration upgrades Stage-B databases from version 1 to version 2, assigns
 4. Callout, blockquote, table and code contents remain atomic in this stage. Child structure inside a Callout is not separately exposed.
 5. Obsidian syntax beyond callouts (for example, embeds, wikilinks, properties and community-plugin blocks) is retained verbatim but not semantically interpreted.
 6. Parsing uses CommonMark plus GFM tables. Other extensions are not enabled implicitly.
+
+
+## GitHub Actions state persistence
+
+The \`sfra-state\` branch is a true orphan branch with one root commit and no parent. Its tree is restricted to \`README.md\`, \`state/structure.sqlite3\`, and \`state/manifest.json\`. The production workflow restores the saved database, checks its manifest digest and SQLite integrity, indexes the Vault into a temporary directory outside the Vault, and then publishes a consistent SQLite Backup API snapshot.
+
+The first production initialization is explicit: run \`SFRA persistent SQLite state\` with \`initialize_state=true\`. Normal pushes never silently replace missing state with a new database. Subsequent runs restore the previous database and use a regular fast-forward push after checking the remote branch head. A concurrency group serializes writers.
+
+The state branch separates files and Git history from the source Vault but does not restrict repository access. SQLite includes source text in current and historical node snapshots. Anyone who can read the repository and this branch can read that content.
+
+The independent-run integration test will use its own fixture Vault, SQLite database, and \`sfra-state-test\` branch. It must never write test data to production \`sfra-state\`.
