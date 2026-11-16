@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/sfra.issue.status.schema.json",
+  "title": "SFRA Issue transport status comment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "request_id",
+    "issue_number",
+    "operation",
+    "status",
+    "updated_at",
+    "source_snapshot",
+    "result_manifest",
+    "error"
+  ],
+  "properties": {
+    "protocol_version": { "const": "sfra.issue.v1" },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "issue_number": { "type": "integer", "minimum": 1 },
+    "operation": { "type": "string", "enum": ["search_vault", "read_source"] },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "RUNNING", "DONE", "FAILED"]
+    },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "workflow_run_id": { "type": ["integer", "null"] },
+    "source_snapshot": {
+      "type": ["object", "null"],
+      "properties": {
+        "vault_commit_sha": { "type": "string" },
+        "sidecar_branch": { "type": "string" },
+        "sidecar_commit_sha": { "type": "string" },
+        "index_generation": { "type": ["integer", "null"] },
+        "manifest_sha256": { "type": ["string", "null"] }
+      }
+    },
+    "result_manifest": {
+      "type": ["object", "null"],
+      "required": ["encoding", "parts", "total_utf8_bytes", "sha256"],
+      "properties": {
+        "encoding": { "const": "utf-8-json-compact" },
+        "parts": { "type": "integer", "minimum": 1 },
+        "total_utf8_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "object" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "DONE" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "result_manifest": { "type": "object" },
+          "error": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "FAILED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "result_manifest": { "type": "null" },
+          "error": { "type": "object" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "enum": ["PENDING", "RUNNING"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": { "result_manifest": { "type": "null" } }
+      }
+    }
+  ]
+}
