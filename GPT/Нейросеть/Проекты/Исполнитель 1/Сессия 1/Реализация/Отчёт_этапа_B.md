@@ -48,7 +48,7 @@ Node ID и Content Hash пока не генерируются: поля зар�
 
 ## 4. Удалённая проверка на GitHub Actions
 
-Запуск: https://github.com/yeatu/obsidianGP/actions/runs/43957145251
+Запуск: https://github.com/yeatu/obsidianGP/actions/runs/43957483126
 
 Среда: Ubuntu, Python 3.13.18, markdown-it-py 4.3.0, pytest 9.2.0.
 
