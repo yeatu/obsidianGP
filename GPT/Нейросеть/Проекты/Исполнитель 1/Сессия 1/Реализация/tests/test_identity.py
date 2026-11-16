@@ -357,7 +357,7 @@ def test_parent_context_resolves_duplicate_heading_key_without_false_ambiguity(t
             "SELECT COUNT(*) FROM node_match_events WHERE event_type='ambiguous'"
         ).fetchone()[0]
 
-    assert len(current) == 2
+    assert len(current) == 2, [dict(row) for row in current]
     assert sum(row["node_id"] == old_id for row in current) == 1
     assert {row["status"] for row in current} == {"active"}
     assert ambiguity_events == 0
