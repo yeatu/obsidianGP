@@ -222,7 +222,7 @@ Status comment содержит:
 - result_manifest или error;
 - workflow run id и время обновления.
 
-Result manifest дополнительно содержит attempt_no. Каждая часть результата публикуется как JSON-объект по схеме `sfra.issue.result-part.schema.json`: protocol_version, request_id, attempt_no, part_index, parts_total, encoding, marker и content. Поле content — очередная UTF-8-safe строка компактного JSON-результата; отдельная часть сама по себе не обязана быть валидным JSON. Сборка выполняется только после соединения content по порядку и проверки длины и SHA-256.
+Result manifest дополнительно содержит attempt_no, который обязан совпадать с top-level attempt_no в status comment. Worker сверяет это равенство. Каждая часть результата публикуется как JSON-объект по схеме `sfra.issue.result-part.schema.json`: protocol_version, request_id, attempt_no, part_index, parts_total, encoding, marker и content. Поле content — очередная UTF-8-safe строка компактного JSON-результата; отдельная часть сама по себе не обязана быть валидным JSON. Сборка выполняется только после соединения content по порядку и проверки длины и SHA-256.
 
 Payload comments содержат сериализованный результат. Тело каждого комментария состоит из marker на отдельной строке и следующего за ним content. Для небольшого ответа используется одна часть. Для большого ответа:
 - компактный JSON сериализуется в UTF-8 без форматирующих переносов;
@@ -275,21 +275,21 @@ GitHub поддерживает queue: max для сохранения до 100 
 
 Используются два workflow файла:
 
-1. \`.github/workflows/sfra-issue-worker.yml\` — общий worker. Он принимает:
-   - обычный триггер \`issues: types: [opened]\`;
-   - повторный вызов через \`workflow_call\` с обязательным input \`issue_number: number\`.
+1. `.github/workflows/sfra-issue-worker.yml` — общий worker. Он принимает:
+   - обычный триггер `issues: types: [opened]`;
+   - повторный вызов через `workflow_call` с обязательным input `issue_number: number`.
 
-   В обоих режимах worker получает актуальный Issue через GitHub API по issue_number и запускает один и тот же обработчик: проверка автора, префикса [SFRA], версии протокола, UUID, operation, payload schema и идемпотентности. Для прямого события issue_number берётся из \`github.event.issue.number\`, для reusable-вызова — из \`inputs.issue_number\`.
+   В обоих режимах worker получает актуальный Issue через GitHub API по issue_number и запускает один и тот же обработчик: проверка автора, префикса [SFRA], версии протокола, UUID, operation, payload schema и идемпотентности. Для прямого события issue_number берётся из `github.event.issue.number`, для reusable-вызова — из `inputs.issue_number`.
 
-2. \`.github/workflows/sfra-issue-recovery.yml\` — scheduled dispatcher:
-   - запускается каждые 5 минут через \`schedule\` и вручную через \`workflow_dispatch\`;
-   - с \`issues: read\` постранично получает открытые Issues, исключает Pull Requests и отбирает заголовки с точным префиксом [SFRA];
+2. `.github/workflows/sfra-issue-recovery.yml` — scheduled dispatcher:
+   - запускается каждые 5 минут через `schedule` и вручную через `workflow_dispatch`;
+   - с `issues: read` постранично получает открытые Issues, исключает Pull Requests и отбирает заголовки с точным префиксом [SFRA];
    - просматривает status marker и включает в recovery matrix только Issues без status, с PENDING, с истёкшим lease у RUNNING либо с FAILED/retryable=true, у которого retry_after наступил и attempt_no < max_attempts;
    - status comment и тело Issue при отборе используются только как подсказка для планирования, а не как граница доверия или разрешение выполнить операцию;
-   - создаёт matrix по issue_number (fail-fast=false, max-parallel=5) и для каждого элемента вызывает \`sfra-issue-worker.yml\` через \`uses: ./.github/workflows/sfra-issue-worker.yml\` и \`with: issue_number: ${{ matrix.issue_number }}\`;
-   - получает для вызова reusable worker permissions \`contents: read\` и \`issues: write\`.
+   - создаёт matrix по issue_number (fail-fast=false, max-parallel=5) и для каждого элемента вызывает `sfra-issue-worker.yml` через `uses: ./.github/workflows/sfra-issue-worker.yml` и `with: issue_number: ${{ matrix.issue_number }}`;
+   - job обнаружения кандидатов имеет только `issues: read`; отдельный matrix job, вызывающий reusable worker, получает `contents: read` и `issues: write`.
 
-Scheduled workflow не пытается искусственно генерировать событие \`issues.opened\`. Он вызывает тот же reusable worker напрямую. Внутри worker повторно выполняются все проверки; автор вне allowlist или невалидный payload не получает доступа к Vault. Per-Issue concurrency находится в общем reusable worker, поэтому обычное событие и recovery не могут параллельно обработать один Issue.
+Scheduled workflow не пытается искусственно генерировать событие `issues.opened`. Он вызывает тот же reusable worker напрямую. Внутри worker повторно выполняются все проверки; автор вне allowlist или невалидный payload не получает доступа к Vault. Per-Issue concurrency находится в общем reusable worker, поэтому обычное событие и recovery не могут параллельно обработать один Issue.
 
 Recovery scan только выбирает кандидатов. Окончательное решение о повторе всегда принимает worker после повторного чтения Issue и comments. Если status comment отсутствует или повреждён, worker не трактует это как DONE: он проводит обычную авторизацию и валидацию envelope, затем безопасно восстанавливает PENDING либо формирует диагностический FAILED.
 
@@ -300,17 +300,17 @@ Transport status transitions:
     PENDING -> RUNNING -> DONE
                          -> FAILED
 
-- Первичная попытка начинается с \`attempt_no=1\`; \`max_attempts=3\`.
-- \`DONE\` терминален. Повторная доставка события или запуск workflow не вызывает application service повторно.
-- \`FAILED\` с \`error.retryable=false\` терминален. Для исправленного запроса или ручного повторения после постоянной ошибки создаётся новое Issue и новый request_id.
-- \`FAILED\` с \`error.retryable=true\` допускает повтор через recovery workflow с тем же Issue и request_id, не раньше \`error.retry_after\`, пока \`attempt_no < max_attempts\`.
+- Первичная попытка начинается с `attempt_no=1`; `max_attempts=3`.
+- `DONE` терминален. Повторная доставка события или запуск workflow не вызывает application service повторно.
+- `FAILED` с `error.retryable=false` терминален. Для исправленного запроса или ручного повторения после постоянной ошибки создаётся новое Issue и новый request_id.
+- `FAILED` с `error.retryable=true` допускает повтор через recovery workflow с тем же Issue и request_id, не раньше `error.retry_after`, пока `attempt_no < max_attempts`.
 - При допуске повтора worker меняет status на PENDING, увеличивает attempt_no на 1, очищает error и затем переводит запрос в RUNNING. Верхний предел — три фактические попытки.
 - Предлагаемый backoff: 5 минут после первой неудачи, 15 минут после второй. Значение retry_after записывается в status comment и используется recovery scan.
 - Если третья попытка завершается transient error, worker публикует FAILED с retryable=false и code=RETRY_EXHAUSTED; исходный код сохраняется в details.last_error_code.
 - RUNNING содержит lease_expires_at (MVP: now + 20 минут). Если runner завершился/отменён до terminal status, recovery workflow после истечения lease и освобождения per-Issue concurrency переводит запрос в следующую попытку. Лимит max_attempts применяется и к такому восстановлению.
 - Коды авторизации, JSON/protocol/schema validation и другие постоянные ошибки всегда retryable=false. Временные ошибки GitHub API, кратковременная недоступность sidecar и прерывание runner могут быть retryable=true.
 
-\`PENDING\` и \`RUNNING\` всегда имеют \`error=null\`; \`DONE\` имеет \`error=null\` и result_manifest; \`FAILED\` имеет error и не имеет result_manifest. У FAILED/retryable=true поле retry_after обязательно; у retryable=false оно null. У lease_expires_at значение не null только для RUNNING.
+`PENDING` и `RUNNING` всегда имеют `error=null`; `DONE` имеет `error=null` и result_manifest; `FAILED` имеет error и не имеет result_manifest. У FAILED/retryable=true поле retry_after обязательно; у retryable=false оно null. У lease_expires_at значение не null только для RUNNING.
 
 Recovery sweep — страховка от задержанных/пропущенных событий и отменённых запусков; Issue остаётся долговременной записью запроса. Комментарии не запускают workflow, так как issue_comment отсутствует в триггерах.
 
