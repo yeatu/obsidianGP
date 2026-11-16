@@ -55,6 +55,7 @@ def extract_blocks(source: str) -> list[dict[str, Any]]:
     md = MarkdownIt("commonmark").enable(["table", "strikethrough"])
     tokens = md.parse(source)
     starts = make_line_starts(source)
+    raw_bytes = source.encode("utf-8")
     found: list[dict[str, Any]] = []
     heading_counts: dict[str, int] = {}
 
@@ -93,7 +94,7 @@ def extract_blocks(source: str) -> list[dict[str, Any]]:
 
         byte_start = char_to_utf8_byte_offset(source, char_start)
         byte_end = char_to_utf8_byte_offset(source, char_end)
-        exact = source[char_start:char_end] == excerpt
+        exact = raw_bytes[byte_start:byte_end].decode("utf-8") == excerpt
 
         item: dict[str, Any] = {
             "type": label,
