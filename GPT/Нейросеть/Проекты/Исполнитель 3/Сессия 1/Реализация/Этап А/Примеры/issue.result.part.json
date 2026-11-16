@@ -1,0 +1,7 @@
+{
+  "request_id": "6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14",
+  "part_index": 1,
+  "parts_total": 1,
+  "marker": "<!-- sfra:request:6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14:part:1/1 -->",
+  "content_after_marker": "{\"schema_version\":\"sfra.context_pack.v1\",\"status\":\"complete\",\"Included\":[],\"Coverage\":[],\"Deferred\":[],\"Parallel Sources\":[],\"Known\":[],\"Version Changes\":[],\"Statistics\":{},\"Diagnostics\":[]}"
+}
