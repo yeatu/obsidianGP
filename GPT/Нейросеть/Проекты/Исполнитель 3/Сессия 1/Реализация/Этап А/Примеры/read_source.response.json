@@ -11,10 +11,12 @@
     "node_id": "fixture_voice_001",
     "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
     "source_path": "fixtures/персонажи/Тестовый персонаж.md",
-    "heading_path": ["Общий стиль речи"],
+    "heading_path": [
+      "Общий стиль речи"
+    ],
     "line_start": 10,
     "line_end": 10,
-    "document_hash": "sha256:bf60faff3a2af8846d6cbd82feb8b3ff2c71e184ee56dd34a1611c10a6f01048",
+    "document_hash": "sha256:86c96ce179515eb471f4b242b8e4385884ac8e4121945f39cd0354e6fade551d",
     "index_generation": 1
   },
   "fragments": [
@@ -22,12 +24,16 @@
       "role": "target",
       "node_id": "fixture_voice_001",
       "source_path": "fixtures/персонажи/Тестовый персонаж.md",
-      "heading_path": ["Общий стиль речи"],
+      "heading_path": [
+        "Общий стиль речи"
+      ],
       "line_start": 10,
       "line_end": 10,
       "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
       "raw_text": "Тестовый фрагмент: персонаж избегает прямых угроз и отвечает коротко.",
-      "token_count": 19
+      "token_count": 19,
+      "document_hash": "sha256:86c96ce179515eb471f4b242b8e4385884ac8e4121945f39cd0354e6fade551d",
+      "index_generation": 1
     }
   ],
   "token_accounting": {
