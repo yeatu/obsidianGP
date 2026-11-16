@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/executor2_get_node.response.schema.json",
+  "title": "Executor 2 get_node normalized response",
+  "description": "Exact node version resolved by engine.get_node(node_id, content_hash).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "node_id",
+    "source_path",
+    "heading_path",
+    "line_start",
+    "line_end",
+    "content_hash",
+    "raw_text",
+    "index_generation",
+    "document_hash"
+  ],
+  "properties": {
+    "node_id": { "type": "string", "minLength": 1 },
+    "source_path": { "type": "string", "minLength": 1 },
+    "node_type": { "type": ["string", "null"] },
+    "parent_node_id": { "type": ["string", "null"] },
+    "heading_path": { "type": "array", "items": { "type": "string" } },
+    "line_start": { "type": "integer", "minimum": 1 },
+    "line_end": { "type": "integer", "minimum": 1 },
+    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "raw_text": {
+      "type": "string",
+      "description": "Complete verbatim structural node text. Not an excerpt."
+    },
+    "index_generation": { "type": "integer", "minimum": 0 },
+    "document_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
