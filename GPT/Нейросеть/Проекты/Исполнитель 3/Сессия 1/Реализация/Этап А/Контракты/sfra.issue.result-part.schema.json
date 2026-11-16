@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/sfra.issue.result-part.schema.json",
+  "title": "SFRA Issue result part comment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "request_id",
+    "attempt_no",
+    "part_index",
+    "parts_total",
+    "encoding",
+    "marker",
+    "content"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "sfra.issue.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "attempt_no": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "part_index": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "parts_total": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "encoding": {
+      "const": "utf-8-json-compact"
+    },
+    "marker": {
+      "type": "string",
+      "pattern": "^<!-- sfra:request:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:attempt:[1-3]:part:[1-9][0-9]*/[1-9][0-9]* -->$"
+    },
+    "content": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One UTF-8-safe chunk of the compact serialized result. Chunks are concatenated in part_index order; a single chunk need not be standalone JSON."
+    }
+  }
+}
