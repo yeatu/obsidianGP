@@ -31,3 +31,14 @@ jobs:
         run: |
           sfra-index index --vault ../../../../../../ГП --index-dir /tmp/sfra-vault-sidecar
           sfra-index info --db /tmp/sfra-vault-sidecar/structure.sqlite3
+          python - <<'PY'
+          import sqlite3
+          connection = sqlite3.connect("/tmp/sfra-vault-sidecar/structure.sqlite3")
+          parallel_sources = connection.execute(
+              "SELECT source_path FROM documents WHERE source_path LIKE '%Демография.md' ORDER BY source_path"
+          ).fetchall()
+          print("Parallel source documents:", parallel_sources)
+          assert len(parallel_sources) == 2, parallel_sources
+          connection.close()
+          PY
+          git diff --exit-code -- ГП
