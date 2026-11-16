@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/search_adapter.batch.schema.json",
+  "title": "SearchAdapter batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["complete", "inspected_count", "candidates"],
+  "properties": {
+    "complete": {
+      "type": "boolean",
+      "description": "True only when the adapter has exhausted the result set it is configured to return."
+    },
+    "cursor": { "type": ["string", "null"] },
+    "inspected_count": { "type": "integer", "minimum": 0 },
+    "candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/retrievalCandidate" }
+    }
+  },
+  "$defs": {
+    "retrievalCandidate": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "node_id",
+        "source_path",
+        "heading_path",
+        "line_start",
+        "line_end",
+        "content_hash",
+        "raw_text",
+        "score",
+        "match_type"
+      ],
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1 },
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Vault-relative path. Proposed separator is /."
+        },
+        "heading_path": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-fA-F]{64}$"
+        },
+        "raw_text": {
+          "type": "string",
+          "description": "Verbatim original Markdown slice. Never summarized, cleaned, or reconstructed."
+        },
+        "score": { "type": "number" },
+        "match_type": { "type": "string", "minLength": 1 },
+        "zone": { "type": ["string", "null"] },
+        "has_author_notes": { "type": ["boolean", "null"] },
+        "signals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entity_exact": { "type": "boolean" },
+            "path_or_heading_name": { "type": "boolean" },
+            "exact_terms": { "type": "boolean" },
+            "morphology": { "type": "boolean" },
+            "facet_match": { "type": "boolean" }
+          }
+        },
+        "matched_focus_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "preservation": {
+          "type": "string",
+          "enum": ["required", "normal"]
+        },
+        "required_with": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "parent_node_id": { "type": ["string", "null"] },
+        "parent_context_required": { "type": "boolean" },
+        "overlap_group_id": { "type": ["string", "null"] },
+        "overlap_hint": { "type": ["string", "null"] },
+        "index_generation": { "type": ["integer", "null"] },
+        "document_hash": {
+          "type": ["string", "null"],
+          "pattern": "^(sha256:[0-9a-fA-F]{64})?$"
+        }
+      }
+    }
+  }
+}
