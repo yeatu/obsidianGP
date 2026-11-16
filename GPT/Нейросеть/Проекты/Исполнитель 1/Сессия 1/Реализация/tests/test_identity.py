@@ -325,3 +325,39 @@ def test_stage_b_database_migrates_and_seeds_ids_hashes_and_version_one(tmp_path
         ).fetchone()[0] == 2
     finally:
         migrated.close()
+
+
+def test_parent_context_resolves_duplicate_heading_key_without_false_ambiguity(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    file = vault / "note.md"
+    file.write_text(
+        "# Alpha\\n\\n## Repeated\\nOld body A.\\n\\n# Beta\\n",
+        encoding="utf-8",
+    )
+    first = index_vault(vault, tmp_path / "sidecar")
+    with open_db(first) as connection:
+        old_id = connection.execute(
+            "SELECT node_id FROM structural_nodes WHERE node_type='heading' "
+            "AND metadata_json LIKE '%Repeated%' AND stale_generation IS NULL"
+        ).fetchone()[0]
+
+    file.write_text(
+        "# Alpha\\n\\n## Repeated\\nChanged body A.\\n\\n"
+        "# Beta\\n\\n## Repeated\\nNew body B.\\n",
+        encoding="utf-8",
+    )
+    second = index_vault(vault, tmp_path / "sidecar")
+    with open_db(second) as connection:
+        current = connection.execute(
+            "SELECT node_id, status FROM structural_nodes WHERE node_type='heading' "
+            "AND metadata_json LIKE '%Repeated%' AND stale_generation IS NULL"
+        ).fetchall()
+        ambiguity_events = connection.execute(
+            "SELECT COUNT(*) FROM node_match_events WHERE event_type='ambiguous'"
+        ).fetchone()[0]
+
+    assert len(current) == 2
+    assert sum(row["node_id"] == old_id for row in current) == 1
+    assert {row["status"] for row in current} == {"active"}
+    assert ambiguity_events == 0
