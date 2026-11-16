@@ -1,34 +1,60 @@
 {
   "query": "Манера речи тестового персонажа и параллельные демографические модели",
   "task": "Проверить покрытие речевого аспекта и сохранить две параллельные модели населения раздельно.",
-  "entities": ["Тестовый персонаж", "Магическое население"],
-  "facets": ["VOICE", "DEMOGRAPHY"],
-  "budget_tokens": 3000,
+  "entities": [
+    "Тестовый персонаж",
+    "Магическое население"
+  ],
+  "facets": [
+    "VOICE",
+    "DEMOGRAPHY"
+  ],
+  "budget_tokens": 100,
   "known": [],
   "zones": [],
   "focus": [
     {
       "id": "voice_style",
       "label": "Общий стиль речи",
-      "entities": ["Тестовый персонаж"],
-      "facets": ["VOICE"],
-      "terms": ["стиль речи", "манера речи"],
+      "entities": [
+        "Тестовый персонаж"
+      ],
+      "facets": [
+        "VOICE"
+      ],
+      "terms": [
+        "стиль речи",
+        "манера речи"
+      ],
       "match_mode": "any"
     },
     {
       "id": "population_model",
       "label": "Модель населения",
-      "entities": ["Магическое население"],
-      "facets": ["DEMOGRAPHY"],
-      "terms": ["модель населения"],
+      "entities": [
+        "Магическое население"
+      ],
+      "facets": [
+        "DEMOGRAPHY"
+      ],
+      "terms": [
+        "модель населения"
+      ],
       "match_mode": "any"
     },
     {
       "id": "relationships",
       "label": "Прямые описания отношений",
-      "entities": ["Тестовый персонаж"],
-      "facets": ["RELATIONSHIPS"],
-      "terms": ["взаимодействие", "отношения"],
+      "entities": [
+        "Тестовый персонаж"
+      ],
+      "facets": [
+        "RELATIONSHIPS"
+      ],
+      "terms": [
+        "взаимодействие",
+        "отношения"
+      ],
       "match_mode": "any"
     }
   ]
