@@ -4,21 +4,35 @@
   "title": "Normalized SearchAdapter batch",
   "type": "object",
   "additionalProperties": false,
-  "required": ["complete", "inspected_count", "candidates"],
+  "required": [
+    "complete",
+    "inspected_count",
+    "candidates"
+  ],
   "properties": {
     "complete": {
       "type": "boolean",
       "description": "True only when all pages within the configured retrieval policy have been inspected. Reaching an adapter cap means false."
     },
     "cursor": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Internal adapter cursor. The public search_vault request has no continuation cursor in MVP."
     },
-    "inspected_count": { "type": "integer", "minimum": 0 },
-    "truncated_by_limit": { "type": "boolean" },
+    "inspected_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "truncated_by_limit": {
+      "type": "boolean"
+    },
     "candidates": {
       "type": "array",
-      "items": { "$ref": "#/$defs/retrievalCandidate" }
+      "items": {
+        "$ref": "#/$defs/retrievalCandidate"
+      }
     }
   },
   "$defs": {
@@ -36,20 +50,41 @@
         "match_type"
       ],
       "properties": {
-        "node_id": { "type": "string", "minLength": 1 },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "source_path": {
           "type": "string",
           "minLength": 1,
           "description": "Vault-relative path. Normalized separator is /; preserve case and Unicode."
         },
-        "node_type": { "type": ["string", "null"] },
-        "parent_node_id": { "type": ["string", "null"] },
+        "node_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parent_node_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "heading_path": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
-        "line_start": { "type": "integer", "minimum": 1 },
-        "line_end": { "type": "integer", "minimum": 1 },
+        "line_start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line_end": {
+          "type": "integer",
+          "minimum": 1
+        },
         "content_hash": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
@@ -59,14 +94,26 @@
           "description": "Complete original structural node returned by get_node for the exact node_id + content_hash. Not the search excerpt."
         },
         "match_excerpt": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Optional Executor 2 excerpt used only as a search hint. Never use as Included raw_text."
         },
-        "match_type": { "type": "string", "minLength": 1 },
+        "match_type": {
+          "type": "string",
+          "minLength": 1
+        },
         "relevance": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": false,
-          "required": ["tier", "bm25"],
+          "required": [
+            "tier",
+            "bm25"
+          ],
           "properties": {
             "tier": {
               "type": "integer",
@@ -82,11 +129,15 @@
         },
         "match_reasons": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "unmapped_match_reasons": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "score": {
           "type": "number",
@@ -94,60 +145,142 @@
         },
         "score_direction": {
           "type": "string",
-          "enum": ["asc", "desc"],
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "description": "Mandatory whenever score is supplied; Context Builder must not guess the direction."
         },
-        "zone": { "type": ["string", "null"] },
-        "has_author_notes": { "type": ["boolean", "null"] },
+        "zone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "has_author_notes": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "signals": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "entity_exact": { "type": "boolean" },
-            "document_name_match": { "type": "boolean" },
-            "heading_match": { "type": "boolean" },
-            "path_or_heading_name": { "type": "boolean" },
-            "exact_terms": { "type": "boolean" },
-            "morphology": { "type": "boolean" },
-            "facet_match": { "type": "boolean" }
+            "entity_exact": {
+              "type": "boolean"
+            },
+            "document_name_match": {
+              "type": "boolean"
+            },
+            "heading_match": {
+              "type": "boolean"
+            },
+            "path_or_heading_name": {
+              "type": "boolean"
+            },
+            "exact_terms": {
+              "type": "boolean"
+            },
+            "morphology": {
+              "type": "boolean"
+            },
+            "facet_match": {
+              "type": "boolean"
+            }
           }
         },
         "matched_focus_ids": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "matched_entities": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "matched_facets": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "matched_terms": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "preservation": {
           "type": "string",
-          "enum": ["required", "normal"]
+          "enum": [
+            "required",
+            "normal"
+          ]
         },
         "required_with": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
-        "parent_context_required": { "type": "boolean" },
-        "overlap_group_id": { "type": ["string", "null"] },
-        "overlap_hint": { "type": ["string", "null"] },
-        "index_generation": { "type": ["integer", "null"], "minimum": 0 },
+        "parent_context_required": {
+          "type": "boolean"
+        },
+        "overlap_group_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "overlap_hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "index_generation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
         "document_hash": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^(sha256:[0-9a-f]{64})?$"
         }
       },
       "dependentRequired": {
-        "score": ["score_direction"]
-      }
+        "score": [
+          "score_direction"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "parent_context_required": {
+                "const": true
+              }
+            },
+            "required": [
+              "parent_context_required"
+            ]
+          },
+          "then": {
+            "required": [
+              "parent_node_id"
+            ]
+          }
+        }
+      ]
     }
   }
 }
