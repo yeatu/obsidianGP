@@ -161,13 +161,15 @@ def test_atomic_oversized_block_is_not_cut_into_arbitrary_characters():
     assert not [p for p in parsed.passages if p.owner_node_key == callout.local_key]
 
 
+
 def test_passages_from_nested_list_keep_parent_condition_as_separate_context():
-    source = (
-        "- Условие: ученик должен сохранять концентрацию.\\n"
-        "  - Первый этап испытания: " + ("внимательно наблюдать " * 18) + "\\n"
-        "  - Второй этап испытания: " + ("решить поставленную задачу " * 18) + "\\n"
-        "  - Третий этап испытания: " + ("подтвердить полученный результат " * 18) + "\\n"
-    )
+    source = "\n".join([
+        "- Условие: ученик должен сохранять концентрацию.",
+        "  - Первый этап испытания: " + ("внимательно наблюдать " * 18),
+        "  - Второй этап испытания: " + ("решить поставленную задачу " * 18),
+        "  - Третий этап испытания: " + ("подтвердить полученный результат " * 18),
+        "",
+    ])
     parsed = parse_markdown(source, "nested-condition.md", max_passage_words=20)
     items = nodes_of(parsed, "list_item")
     parent_item = items[0]
