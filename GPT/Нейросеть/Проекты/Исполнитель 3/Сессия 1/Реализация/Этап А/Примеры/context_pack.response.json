@@ -167,7 +167,7 @@
     "focus_count": 3,
     "coverage_available_ratio": 0.6667,
     "coverage_included_ratio": 0.3333,
-    "budget_tokens": 3000,
+    "budget_tokens": 100,
     "tokens_used": 82,
     "response_tokens_estimated": 410,
     "token_counter": {
