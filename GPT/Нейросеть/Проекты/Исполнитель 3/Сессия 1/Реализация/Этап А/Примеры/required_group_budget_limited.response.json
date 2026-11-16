@@ -1,0 +1,107 @@
+{
+  "schema_version": "sfra.context_pack.v1",
+  "status": "budget_limited",
+  "query": "Найти правило A с его зависимым исключением",
+  "task": null,
+  "search_complete": true,
+  "Included": [],
+  "Coverage": [
+    {
+      "aspect_id": "rule_A",
+      "label": "Правило A и исключение B",
+      "status": "deferred",
+      "included_node_ids": [],
+      "known_node_ids": [],
+      "deferred_node_ids": [
+        "fixture_rule_A",
+        "fixture_rule_B"
+      ],
+      "basis": [
+        "adapter_match"
+      ],
+      "diagnostic_note": "Неделимая обязательная группа A+B превышает бюджет; частичное включение запрещено."
+    }
+  ],
+  "Deferred": [
+    {
+      "node_id": "fixture_rule_A",
+      "source_path": "fixtures/правила.md",
+      "heading_path": [
+        "Правила",
+        "Ограничение A"
+      ],
+      "line_start": 1,
+      "line_end": 1,
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "index_generation": 1,
+      "document_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "estimated_tokens": 700,
+      "reason": "required_group_budget_limit",
+      "preservation": "required",
+      "required_with": [
+        "fixture_rule_B"
+      ]
+    },
+    {
+      "node_id": "fixture_rule_B",
+      "source_path": "fixtures/правила.md",
+      "heading_path": [
+        "Правила",
+        "Исключение B"
+      ],
+      "line_start": 2,
+      "line_end": 2,
+      "content_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "index_generation": 1,
+      "document_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "estimated_tokens": 600,
+      "reason": "required_group_budget_limit",
+      "preservation": "normal",
+      "required_with": []
+    }
+  ],
+  "Parallel Sources": [],
+  "Known": [],
+  "Version Changes": [],
+  "Statistics": {
+    "retrieved_count": 2,
+    "included_count": 0,
+    "deferred_count": 2,
+    "known_count": 0,
+    "rejected_count": 0,
+    "not_found_aspect_count": 0,
+    "focus_count": 1,
+    "coverage_available_ratio": 1,
+    "coverage_included_ratio": 0,
+    "budget_tokens": 500,
+    "tokens_used": 0,
+    "response_tokens_estimated": 180,
+    "token_counter": {
+      "name": "tiktoken",
+      "version": "0.14.0",
+      "encoding": "o200k_base",
+      "exact_for_encoding": true,
+      "exact_for_client_model": false
+    },
+    "example_counts_are_illustrative": true
+  },
+  "Diagnostics": [
+    {
+      "code": "required_group_budget_limit",
+      "severity": "warning",
+      "message": "Группа fixture_rule_A + fixture_rule_B целиком отложена: обязательные зависимости не разделяются.",
+      "node_ids": [
+        "fixture_rule_A",
+        "fixture_rule_B"
+      ],
+      "details": {
+        "group_node_ids": [
+          "fixture_rule_A",
+          "fixture_rule_B"
+        ],
+        "estimated_tokens": 1300,
+        "budget_tokens": 500
+      }
+    }
+  ]
+}
