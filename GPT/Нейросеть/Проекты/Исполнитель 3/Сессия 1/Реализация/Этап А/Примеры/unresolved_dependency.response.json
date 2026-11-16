@@ -1,0 +1,86 @@
+{
+  "schema_version": "sfra.context_pack.v1",
+  "status": "partial",
+  "query": "Правило A с обязательным узлом M",
+  "task": null,
+  "search_complete": true,
+  "Included": [],
+  "Coverage": [
+    {
+      "aspect_id": "rule_A",
+      "label": "Правило A и зависимый материал",
+      "status": "deferred",
+      "included_node_ids": [],
+      "known_node_ids": [],
+      "deferred_node_ids": [
+        "fixture_rule_A"
+      ],
+      "basis": [
+        "adapter_match"
+      ],
+      "diagnostic_note": "Узел M не был найден в SearchBatch и не разрешился через SourceReader."
+    }
+  ],
+  "Deferred": [
+    {
+      "node_id": "fixture_rule_A",
+      "source_path": "fixtures/правила.md",
+      "heading_path": [
+        "Правила",
+        "Правило A"
+      ],
+      "line_start": 1,
+      "line_end": 1,
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "match_type": "exact",
+      "estimated_tokens": 90,
+      "reason": "unresolved_required_dependency",
+      "preservation": "required",
+      "required_with": [
+        "fixture_missing_M"
+      ]
+    }
+  ],
+  "Parallel Sources": [],
+  "Known": [],
+  "Version Changes": [],
+  "Statistics": {
+    "retrieved_count": 1,
+    "included_count": 0,
+    "deferred_count": 1,
+    "known_count": 0,
+    "rejected_count": 0,
+    "not_found_aspect_count": 0,
+    "focus_count": 1,
+    "coverage_available_ratio": 1,
+    "coverage_included_ratio": 0,
+    "budget_tokens": 1000,
+    "tokens_used": 0,
+    "response_tokens_estimated": 180,
+    "token_counter": {
+      "name": "tiktoken",
+      "version": "0.14.0",
+      "encoding": "o200k_base",
+      "exact_for_encoding": true,
+      "exact_for_client_model": false
+    },
+    "example_counts_are_illustrative": true
+  },
+  "Diagnostics": [
+    {
+      "code": "unresolved_required_dependency",
+      "severity": "error",
+      "message": "Обязательная зависимость fixture_missing_M не разрешилась; зависимый узел не включён без неё.",
+      "node_ids": [
+        "fixture_rule_A",
+        "fixture_missing_M"
+      ],
+      "details": {
+        "missing_node_ids": [
+          "fixture_missing_M"
+        ],
+        "snapshot_generation": 1
+      }
+    }
+  ]
+}
