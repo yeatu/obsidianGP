@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/read_source.request.schema.json",
+  "title": "read_source request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["node_id", "expected_hash", "scope"],
+  "properties": {
+    "node_id": { "type": "string", "minLength": 1 },
+    "expected_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-fA-F]{64}$"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["node", "parent", "neighbors", "document"]
+    },
+    "budget_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Optional hard limit for the complete requested scope. Source text is never truncated."
+    }
+  }
+}
