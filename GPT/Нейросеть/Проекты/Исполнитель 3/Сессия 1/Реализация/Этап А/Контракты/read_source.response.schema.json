@@ -66,6 +66,7 @@
         "budget_tokens": { "type": ["integer", "null"] },
         "tokens_used": { "type": "integer", "minimum": 0 },
         "response_tokens_estimated": { "type": "integer", "minimum": 0 },
+        "example_counts_are_illustrative": { "type": "boolean" },
         "token_counter": {
           "type": "object",
           "required": ["name", "version", "encoding", "exact_for_encoding", "exact_for_client_model"],
