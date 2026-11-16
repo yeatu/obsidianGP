@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/read_source.response.schema.json",
+  "title": "read_source response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "requested", "target_source", "fragments", "token_accounting", "trust_label", "diagnostics"],
+  "properties": {
+    "schema_version": { "const": "sfra.read_source.v1" },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "stale", "not_found", "budget_exceeded", "source_unavailable", "integrity_error"]
+    },
+    "requested": {
+      "type": "object",
+      "required": ["node_id", "expected_hash", "scope"],
+      "properties": {
+        "node_id": { "type": "string" },
+        "expected_hash": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+        "scope": { "type": "string", "enum": ["node", "parent", "neighbors", "document"] },
+        "budget_tokens": { "type": ["integer", "null"] }
+      }
+    },
+    "target_source": {
+      "type": ["object", "null"],
+      "properties": {
+        "node_id": { "type": "string" },
+        "content_hash": { "type": "string" },
+        "source_path": { "type": "string" },
+        "heading_path": { "type": "array", "items": { "type": "string" } },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "document_hash": { "type": ["string", "null"] },
+        "index_generation": { "type": ["integer", "null"] }
+      }
+    },
+    "fragments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "source_path", "content_hash", "raw_text"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["target", "parent_context", "previous_neighbor", "next_neighbor", "document"]
+          },
+          "node_id": { "type": ["string", "null"] },
+          "source_path": { "type": "string" },
+          "heading_path": { "type": "array", "items": { "type": "string" } },
+          "line_start": { "type": ["integer", "null"], "minimum": 1 },
+          "line_end": { "type": ["integer", "null"], "minimum": 1 },
+          "content_hash": { "type": "string" },
+          "raw_text": {
+            "type": "string",
+            "description": "Verbatim original source text; no summarization, sanitization, or truncation."
+          },
+          "token_count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "token_accounting": {
+      "type": "object",
+      "required": ["budget_tokens", "tokens_used", "response_tokens_estimated", "token_counter"],
+      "properties": {
+        "budget_tokens": { "type": ["integer", "null"] },
+        "tokens_used": { "type": "integer", "minimum": 0 },
+        "response_tokens_estimated": { "type": "integer", "minimum": 0 },
+        "token_counter": {
+          "type": "object",
+          "required": ["name", "version", "encoding", "exact_for_encoding", "exact_for_client_model"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "encoding": { "type": "string" },
+            "exact_for_encoding": { "type": "boolean" },
+            "exact_for_client_model": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "trust_label": { "const": "untrusted_source_data" },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+          "message": { "type": "string" },
+          "expected_hash": { "type": ["string", "null"] },
+          "actual_hash": { "type": ["string", "null"] },
+          "retry_hint": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
