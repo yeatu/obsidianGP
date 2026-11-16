@@ -49,9 +49,9 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
         connection.execute("CREATE VIRTUAL TABLE temp.sfra_fts5_probe USING fts5(value)")
         connection.execute("DROP TABLE temp.sfra_fts5_probe")
 
-        connection.execute("DROP TABLE IF EXISTS temp.sfra_search_fts")
+        connection.execute("DROP TABLE IF EXISTS sfra_search_fts")
         connection.execute(
-            """CREATE VIRTUAL TABLE temp.sfra_search_fts USING fts5(
+            """CREATE VIRTUAL TABLE sfra_search_fts USING fts5(
                 source_path UNINDEXED,
                 node_id UNINDEXED,
                 content_hash UNINDEXED,
@@ -76,7 +76,7 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
         ).fetchall()
 
         connection.executemany(
-            """INSERT INTO temp.sfra_search_fts(
+            """INSERT INTO sfra_search_fts(
                 source_path, node_id, content_hash, node_type,
                 node_status, heading_path, raw_text
             ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -101,8 +101,8 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
             """SELECT source_path, node_id, content_hash, node_type, node_status,
                       heading_path, raw_text,
                       snippet(sfra_search_fts, 6, '【', '】', ' … ', 18) AS excerpt
-               FROM temp.sfra_search_fts
-               WHERE temp.sfra_search_fts MATCH ?
+               FROM sfra_search_fts
+               WHERE sfra_search_fts MATCH ?
                ORDER BY bm25(sfra_search_fts)
                LIMIT 20""",
             (phrase,),
@@ -150,7 +150,7 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
             )
 
         fts_rows = connection.execute(
-            "SELECT COUNT(*) FROM temp.sfra_search_fts"
+            "SELECT COUNT(*) FROM sfra_search_fts"
         ).fetchone()[0]
         summary = {
             "documents_seen": index_result.documents_seen,
