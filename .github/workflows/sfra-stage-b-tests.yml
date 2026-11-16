@@ -64,4 +64,5 @@ jobs:
           assert len(parallel_sources) == 2, parallel_sources
           connection.close()
           PY
-          git diff --exit-code -- ГП
+          git -C "$GITHUB_WORKSPACE" diff --exit-code -- "ГП"
+          test -z "$(git -C "$GITHUB_WORKSPACE" status --porcelain -- "ГП")"
