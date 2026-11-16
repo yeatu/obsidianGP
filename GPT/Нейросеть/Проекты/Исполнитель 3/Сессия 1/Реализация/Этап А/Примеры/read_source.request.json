@@ -1,0 +1,6 @@
+{
+  "node_id": "fixture_voice_001",
+  "expected_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
+  "scope": "node",
+  "budget_tokens": 2500
+}
