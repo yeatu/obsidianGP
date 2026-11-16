@@ -327,14 +327,21 @@ def test_stage_b_database_migrates_and_seeds_ids_hashes_and_version_one(tmp_path
         migrated.close()
 
 
+
 def test_parent_context_resolves_duplicate_heading_key_without_false_ambiguity(tmp_path):
     vault = tmp_path / "vault"
     vault.mkdir()
     file = vault / "note.md"
-    file.write_text(
-        "# Alpha\\n\\n## Repeated\\nOld body A.\\n\\n# Beta\\n",
-        encoding="utf-8",
-    )
+    source_before = "\n".join([
+        "# Alpha",
+        "",
+        "## Repeated",
+        "Old body A.",
+        "",
+        "# Beta",
+        "",
+    ])
+    file.write_text(source_before, encoding="utf-8")
     first = index_vault(vault, tmp_path / "sidecar")
     with open_db(first) as connection:
         old_id = connection.execute(
@@ -342,11 +349,19 @@ def test_parent_context_resolves_duplicate_heading_key_without_false_ambiguity(t
             "AND metadata_json LIKE '%Repeated%' AND stale_generation IS NULL"
         ).fetchone()[0]
 
-    file.write_text(
-        "# Alpha\\n\\n## Repeated\\nChanged body A.\\n\\n"
-        "# Beta\\n\\n## Repeated\\nNew body B.\\n",
-        encoding="utf-8",
-    )
+    source_after = "\n".join([
+        "# Alpha",
+        "",
+        "## Repeated",
+        "Changed body A.",
+        "",
+        "# Beta",
+        "",
+        "## Repeated",
+        "New body B.",
+        "",
+    ])
+    file.write_text(source_after, encoding="utf-8")
     second = index_vault(vault, tmp_path / "sidecar")
     with open_db(second) as connection:
         current = connection.execute(
