@@ -1,0 +1,59 @@
+{
+  "schema_version": "sfra.context_pack.v1",
+  "status": "partial",
+  "query": "Прямые описания отношений персонажа",
+  "task": null,
+  "search_complete": false,
+  "Included": [],
+  "Coverage": [
+    {
+      "aspect_id": "relationships",
+      "label": "Прямые описания отношений",
+      "status": "not_found_in_retrieval",
+      "included_node_ids": [],
+      "known_node_ids": [],
+      "deferred_node_ids": [],
+      "basis": [],
+      "diagnostic_note": "Аспект не обнаружен среди обработанных результатов. SearchAdapter сообщил complete=false; это не свидетельствует об отсутствии информации в Vault."
+    }
+  ],
+  "Deferred": [],
+  "Parallel Sources": [],
+  "Known": [],
+  "Version Changes": [],
+  "Statistics": {
+    "retrieved_count": 4,
+    "included_count": 0,
+    "deferred_count": 0,
+    "known_count": 0,
+    "rejected_count": 0,
+    "not_found_aspect_count": 0,
+    "focus_count": 1,
+    "coverage_available_ratio": 0,
+    "coverage_included_ratio": 0,
+    "budget_tokens": 1000,
+    "tokens_used": 0,
+    "response_tokens_estimated": 180,
+    "token_counter": {
+      "name": "tiktoken",
+      "version": "0.14.0",
+      "encoding": "o200k_base",
+      "exact_for_encoding": true,
+      "exact_for_client_model": false
+    },
+    "example_counts_are_illustrative": true
+  },
+  "Diagnostics": [
+    {
+      "code": "search_result_truncated",
+      "severity": "warning",
+      "message": "SearchAdapter достиг настроенного лимита результатов; поиск не исчерпал доступную выдачу.",
+      "node_ids": [],
+      "details": {
+        "complete": false,
+        "truncated_by_limit": true,
+        "cursor_available": true
+      }
+    }
+  ]
+}
