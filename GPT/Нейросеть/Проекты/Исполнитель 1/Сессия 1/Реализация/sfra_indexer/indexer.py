@@ -95,6 +95,9 @@ def index_vault(vault_path: str | Path, index_dir: str | Path) -> IndexResult:
             if row["source_path"] not in active_paths:
                 mark_document_deleted(connection, int(row["document_pk"]))
 
+        empty_documents = connection.execute(
+            "SELECT COUNT(*) FROM documents WHERE status = 'active' AND source_size_bytes = 0"
+        ).fetchone()[0]
         connection.commit()
     finally:
         connection.close()
