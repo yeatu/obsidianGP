@@ -4,7 +4,9 @@
   "title": "search_vault request",
   "type": "object",
   "additionalProperties": false,
-  "required": ["query"],
+  "required": [
+    "query"
+  ],
   "properties": {
     "query": {
       "type": "string",
@@ -17,12 +19,18 @@
     },
     "entities": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "default": []
     },
     "facets": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "default": []
     },
     "budget_tokens": {
@@ -33,20 +41,30 @@
     },
     "known": {
       "type": "array",
-      "items": { "$ref": "#/$defs/knownNode" },
+      "items": {
+        "$ref": "#/$defs/knownNode"
+      },
       "default": []
     },
     "zones": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "description": "Optional explicit zone filter. Omitted or empty means no zone restriction."
     },
     "focus": {
       "type": "array",
       "items": {
         "oneOf": [
-          { "type": "string", "minLength": 1 },
-          { "$ref": "#/$defs/focusAspect" }
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "$ref": "#/$defs/focusAspect"
+          }
         ]
       },
       "default": [],
@@ -57,9 +75,15 @@
     "knownNode": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["node_id", "content_hash"],
+      "required": [
+        "node_id",
+        "content_hash"
+      ],
       "properties": {
-        "node_id": { "type": "string", "minLength": 1 },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "content_hash": {
           "type": "string",
           "pattern": "^sha256:[0-9a-fA-F]{64}$"
@@ -69,29 +93,51 @@
     "focusAspect": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "label"],
+      "required": [
+        "id",
+        "label"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "label": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
         "entities": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "default": []
         },
         "facets": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "default": []
         },
         "terms": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "default": []
         },
         "match_mode": {
           "type": "string",
-          "enum": ["any", "all"],
-          "default": "any"
+          "enum": [
+            "any",
+            "all"
+          ],
+          "default": "any",
+          "description": "any = at least one non-empty category (entities, facets, terms) matches; all = every non-empty category matches. Within each category any listed value may match. Empty categories are ignored."
         }
       }
     }
