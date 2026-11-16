@@ -1,0 +1,61 @@
+name: SFRA FTS5 search kernel smoke test
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  search-kernel:
+    if: >-
+      github.event.issue.user.login == 'yeatu' &&
+      startsWith(github.event.issue.title, '[SFRA-SEARCH-KERNEL]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the test harness from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: harness
+          persist-credentials: false
+
+      - name: Check out the structural indexer implementation
+        uses: actions/checkout@v4
+        with:
+          ref: executor-1/sfra-indexer-session-1
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the Stage-B/C indexer and test dependencies
+        working-directory: source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements-dev.txt
+
+      - name: Run structural-indexer regression tests
+        working-directory: source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация
+        run: python -m pytest
+
+      - name: Index the real Vault, build FTS5, search, and verify source integrity
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          GITHUB_ISSUE_TITLE: ${{ github.event.issue.title }}
+          GITHUB_ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          python "harness/Тест/sfra_search_kernel.py" \
+            --vault "source/ГП" \
+            --index-dir "$RUNNER_TEMP/sfra-search-index"
+          git -C source diff --exit-code -- ГП
