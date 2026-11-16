@@ -52,7 +52,7 @@ def walk_tokens(tokens: list[Any]):
 def extract_blocks(source: str) -> list[dict[str, Any]]:
     # gfm-like2 includes tables, task lists and GitHub-style alerts. Obsidian
     # callouts use the same blockquote shape and are detected from source text.
-    md = MarkdownIt("gfm-like2")
+    md = MarkdownIt("commonmark").enable(["table", "strikethrough"])
     tokens = md.parse(source)
     starts = make_line_starts(source)
     found: list[dict[str, Any]] = []
