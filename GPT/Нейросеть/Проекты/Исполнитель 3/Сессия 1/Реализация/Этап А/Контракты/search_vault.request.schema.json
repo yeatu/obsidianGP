@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/search_vault.request.schema.json",
+  "title": "search_vault request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["query"],
+  "properties": {
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Search query passed to the external retrieval adapter."
+    },
+    "task": {
+      "type": "string",
+      "description": "Optional original task text. It is carried for traceability and is not automatically decomposed."
+    },
+    "entities": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "facets": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "budget_tokens": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3000,
+      "description": "Token budget for Included source material and its provenance metadata."
+    },
+    "known": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/knownNode" },
+      "default": []
+    },
+    "zones": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Optional explicit zone filter. Omitted or empty means no zone restriction."
+    },
+    "focus": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1 },
+          { "$ref": "#/$defs/focusAspect" }
+        ]
+      },
+      "default": [],
+      "description": "Explicit coverage aspects. No automatic task decomposition is performed."
+    }
+  },
+  "$defs": {
+    "knownNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "content_hash"],
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1 },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "focusAspect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "entities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "facets": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "terms": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "match_mode": {
+          "type": "string",
+          "enum": ["any", "all"],
+          "default": "any"
+        }
+      }
+    }
+  }
+}
