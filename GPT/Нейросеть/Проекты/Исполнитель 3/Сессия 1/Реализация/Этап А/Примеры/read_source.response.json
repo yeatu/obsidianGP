@@ -14,7 +14,7 @@
     "heading_path": ["Общий стиль речи"],
     "line_start": 10,
     "line_end": 10,
-    "document_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "document_hash": "sha256:bf60faff3a2af8846d6cbd82feb8b3ff2c71e184ee56dd34a1611c10a6f01048",
     "index_generation": 1
   },
   "fragments": [
@@ -32,8 +32,9 @@
   ],
   "token_accounting": {
     "budget_tokens": 2500,
-    "tokens_used": 19,
+    "tokens_used": 43,
     "response_tokens_estimated": 130,
+    "example_counts_are_illustrative": true,
     "token_counter": {
       "name": "tiktoken",
       "version": "0.14.0",
