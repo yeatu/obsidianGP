@@ -5,6 +5,7 @@ on:
     branches:
       - executor-1/sfra-indexer-session-1
     paths:
+      - "ГП/**"
       - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-state-persistence.yml"
   workflow_dispatch:
