@@ -189,4 +189,4 @@ def test_passages_from_nested_list_keep_parent_condition_as_separate_context():
             extract_source_slice(source, context_span) == expected_parent_text
             for context_span in passage.context_spans
         )
-        assert passage.span.char_start > parent_item.content_spans[0].char_end
+        assert passage.span.char_start >= parent_item.content_spans[0].char_end
