@@ -1,64 +1,52 @@
-# SFRA Search — функциональный прототип Исполнителя 2
+# SFRA Search — Исполнитель 2
 
-В этой папке находятся архитектурная основа, архив исходного кода, инструкции и фактический отчёт о проверке.
+**Контрольная точка:** этап 1 дополнения координатора опубликован для проверки аналитиком. Одноразовый GitHub Actions workflow и полный прогон нового runtime на Vault относятся к этапу 2 и пока не заявляются выполненными.
 
-## Состав публикации
+## Состав
 
-- `Проектное решение.md` — архитектурное решение Этапа А.
-- `sfra-search-prototype.tar.xz.part00` … `part05` — шесть частей одного архива с исходниками и тестами.
-- `README.md` — этот файл.
-- `Результат.md` — сводка реализации, тестов и ограничений.
-- `Уточнения после аналитической проверки.md` — решения по замечаниям аналитика и совместимости с Executor 3.
+- `Проектное решение.md` — исходная архитектура.
+- `sfra-search-prototype.tar.xz.part00` … `part06` — семь частей архива с исходным кодом и тестами.
+- `README.md` — эта инструкция.
+- `Результат.md` — подробный отчёт о текущем этапе, проверках и ограничениях.
+- `Уточнения после аналитической проверки.md` — исторические заметки по предыдущему аудиту и API Executor 3.
 
-Архив содержит Python-пакет `sfra_search`, зависимости, миграции/схему SQLite, Node v1 JSON Schema, JSONL фикстуры, конфигурацию сущностей, CLI, README, отчёт и pytest-тесты. Рабочая SQLite-база и кэши Python в архив не включены.
+## Сборка архива
 
-## Сборка архива из частей
-
-Части — бинарные фрагменты одного файла. Скачайте все шесть файлов в одну папку, не меняя имена и порядок.
+Скачайте все семь частей в одну папку, сохранив имена и порядок.
 
 Linux / macOS:
 
 ```bash
-cat sfra-search-prototype.tar.xz.part00 sfra-search-prototype.tar.xz.part01 sfra-search-prototype.tar.xz.part02 sfra-search-prototype.tar.xz.part03 sfra-search-prototype.tar.xz.part04 sfra-search-prototype.tar.xz.part05 > sfra-search-prototype.tar.xz
+cat sfra-search-prototype.tar.xz.part00 sfra-search-prototype.tar.xz.part01 sfra-search-prototype.tar.xz.part02 sfra-search-prototype.tar.xz.part03 sfra-search-prototype.tar.xz.part04 sfra-search-prototype.tar.xz.part05 sfra-search-prototype.tar.xz.part06 > sfra-search-prototype.tar.xz
 tar -xJf sfra-search-prototype.tar.xz
 ```
 
 Windows CMD:
 
 ```bat
-copy /b sfra-search-prototype.tar.xz.part00+sfra-search-prototype.tar.xz.part01+sfra-search-prototype.tar.xz.part02+sfra-search-prototype.tar.xz.part03+sfra-search-prototype.tar.xz.part04+sfra-search-prototype.tar.xz.part05 sfra-search-prototype.tar.xz
+copy /b sfra-search-prototype.tar.xz.part00+sfra-search-prototype.tar.xz.part01+sfra-search-prototype.tar.xz.part02+sfra-search-prototype.tar.xz.part03+sfra-search-prototype.tar.xz.part04+sfra-search-prototype.tar.xz.part05+sfra-search-prototype.tar.xz.part06 sfra-search-prototype.tar.xz
 tar -xJf sfra-search-prototype.tar.xz
 ```
 
-## Установка и первый запуск
+## Этап 1: что добавлено
 
-После распаковки перейдите в корень распакованного проекта:
+Отдельный пакет `sfra_search` получил read-only адаптер к SQLite Исполнителя 1 и одноразовый runtime. Команда `sfra run-once --source-db PATH --query QUERY` читает текущие структурные узлы из существующей БД, строит FTS5 в памяти, выполняет поиск и выводит JSON с исходными `node_id` и `content_hash`.
 
-```bash
-python -m pip install -e ".[dev]"
-sfra init
-sfra import-nodes --jsonl fixtures/nodes.sample.jsonl --manifest fixtures/import-manifest.json
-sfra search "18 518"
-sfra search "Генрих Фауст"
-sfra show node_00421
-sfra check
-python -m pytest -q
-```
+Идентификаторы не генерируются и не переписываются. Исходная БД открывается с `mode=ro` и `PRAGMA query_only=ON`. Для получения первоисточника предусмотрена команда `sfra get-source --source-db PATH --node-id ID --content-hash HASH`, возвращающая полный точный `raw_text` и координаты. Постоянный поисковый сервер и файл поисковой БД не создаются.
 
-Требуется Python 3.11+ и SQLite с FTS5. Инициализация проверяет FTS5 явно. Основной морфологический путь — pymorphy3 с русским словарём. Если pymorphy3 недоступен при установке, пакет использует резервный NLTK Snowball и записывает выбранный движок в метаданные базы.
+В модуле также реализованы русский морфологический поиск, Entity Registry и алиасы, числовая нормализация через `Decimal`, ранжирование и API предыдущего прототипа.
 
-## Результаты локальной проверки
+## Проверки этапа 1
 
-- `python -m pytest -q`: **47 passed**.
+- `python -m pytest -q`: **56 passed**.
 - `python -m compileall -q src tests`: успешно.
-- CLI smoke test: init → импорт трёх искусственных Node v1 узлов → поиск `18 518` → `sfra check`; проверка БД сообщает `integrity=ok`, отсутствующих FTS-записей — 0, потерянных ссылок на текущую версию — 0.
-- Фактический прогон использовал NLTK Snowball fallback: среда не имела доступа к PyPI и не смогла установить pymorphy3.
-- Тестовые данные искусственные. Реальный экспорт Исполнителя 1 и полный Vault не импортировались.
+- Проверены read-only поведение, неизменность входной БД, поиск и извлечение исходного узла по паре ID/hash, отсутствие файла постоянной поисковой БД.
+- Архив ZIP и TAR.XZ проверен локально; SHA-256 TAR.XZ: `cadc03980b8685a22d85fc55270ccd23f892dc66983e4027a1ebb0b231f8c4b5`.
 
-## Интерфейс для Executor 3
+Тесты интеграционного адаптера используют SQLite с опубликованной схемой Исполнителя 1, но не саму полную БД Vault. В Issue №4 отдельно зафиксирован более ранний эксперимент на реальном Vault (66 документов, 9 080 узлов); он проверял прежний smoke harness, а не новый модуль.
 
-`search()` возвращает поисковый hit с ограниченным `excerpt`. Это не первоисточник. Для получения точной версии следующий компонент вызывает `get_node(node_id, content_hash)`, который возвращает полный `raw_text`, координаты, `index_generation` и `document_hash`.
+## Ограничения и следующий этап
 
-Если источник не передал SHA-256 всего Markdown-документа, `document_hash` будет `null`. Хеш структурного узла нельзя выдавать за хеш всего документа. Контракт Executor 1 / Executor 3 требует согласовать передачу этого поля либо разрешить null до появления экспорта целого документа.
+В изолированной локальной среде не удалось установить `pymorphy3` из PyPI; 56 тестов проходили с резервным NLTK Snowball. Основной путь `pymorphy3` должен быть дополнительно проверен в Actions с доступом к зависимостям.
 
-**Статус:** функциональный автономный прототип опубликован для независимой проверки аналитиком. Задание не объявляется окончательно принятым до проверки аналитиком, теста штатного пути pymorphy3 и интеграции с реальным экспортом структурного индексатора.
+На этапе 2 будет добавлен отдельный workflow, который запускает индексатор Исполнителя 1 в `$RUNNER_TEMP`, устанавливает поисковый пакет и вызывает `sfra run-once`. Затем новый runtime будет проверен на полном Vault с контролем SHA-256 и отсутствия изменений исходников. До этого этап 1 считается только промежуточной точкой, а задача в целом не объявляется принятой.
