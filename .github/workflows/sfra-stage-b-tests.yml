@@ -27,3 +27,7 @@ jobs:
         run: python -m pytest
       - name: Check CLI
         run: sfra-index --help
+      - name: Parse the real repository Vault snapshot
+        run: |
+          sfra-index index --vault ../../../../../../ГП --index-dir /tmp/sfra-vault-sidecar
+          sfra-index info --db /tmp/sfra-vault-sidecar/structure.sqlite3
