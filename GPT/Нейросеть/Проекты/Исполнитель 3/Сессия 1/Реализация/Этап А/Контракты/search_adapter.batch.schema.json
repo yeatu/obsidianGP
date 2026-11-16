@@ -277,7 +277,13 @@
           "then": {
             "required": [
               "parent_node_id"
-            ]
+            ],
+            "properties": {
+              "parent_node_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         }
       ]
