@@ -16,7 +16,9 @@ def test_sqlite_schema_stores_document_tree_and_passages(tmp_path):
     try:
         document_pk = save_parsed_document(connection, parsed)
         assert document_pk > 0
-        docs = connection.execute("SELECT source_path, source_size_bytes FROM documents").fetchall()
+        docs = [tuple(row) for row in connection.execute(
+            "SELECT source_path, source_size_bytes FROM documents"
+        ).fetchall()]
         assert docs == [("note.md", len(source.encode("utf-8")))]
         nodes = connection.execute(
             "SELECT node_type, parent_node_pk, raw_text FROM structural_nodes ORDER BY node_pk"
@@ -26,7 +28,13 @@ def test_sqlite_schema_stores_document_tree_and_passages(tmp_path):
         assert connection.execute("SELECT COUNT(*) FROM passages").fetchone()[0] > 1
         assert connection.execute(
             "SELECT node_id FROM structural_nodes WHERE node_type='heading'"
-        ).fetchone()[0] is None
+        ).fetchone()[0].startswith("node_")
+        assert connection.execute(
+            "SELECT COUNT(*) FROM node_versions"
+        ).fetchone()[0] == len(nodes)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM node_match_events"
+        ).fetchone()[0] == len(nodes)
         names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "fts" not in " ".join(names).lower()
     finally:
@@ -56,9 +64,9 @@ def test_index_vault_indexes_empty_files_and_never_modifies_sources(tmp_path):
 
     connection = sqlite3.connect(result.database_path)
     try:
-        rows = connection.execute(
+        rows = [tuple(row) for row in connection.execute(
             "SELECT source_path, source_size_bytes FROM documents ORDER BY source_path"
-        ).fetchall()
+        ).fetchall()]
         assert rows[0] == ("empty.md", 0)
         assert rows[1][0] == "nested/unicode.md"
         raw = connection.execute(
