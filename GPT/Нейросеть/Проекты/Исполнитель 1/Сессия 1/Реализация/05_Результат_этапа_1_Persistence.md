@@ -39,3 +39,23 @@
 - Реализация API get_node_by_id(..., expected_hash) не входит в этот этап.
 - Интеграционный тест двух независимых runner не входит в этот этап.
 - Схема SQLite v2 и код этапов B/C не изменяются.
+
+
+## Фактический результат реализации
+
+**Коммит реализации:** \`d20c87ccf38981cff1388e002af0a6bcce06f477\`.
+
+**Созданная production state-ветка:** \`sfra-state\`, root commit \`927e340b7ba2c60bab0edc2c6cfe15afbe138202\`. Git Data API подтвердил \`parents: []\`. Полное дерево root commit содержит только \`README.md\`. Workflow дополнительно повторно проверил orphan-root и allowlist на GitHub Actions.
+
+### CI
+
+- [Run 43980073213 — SFRA structural indexer stages B and C](https://github.com/yeatu/obsidianGP/actions/runs/43980073213): success; **28 passed in 1.55s**; CLI help прошёл; реальный Vault — 66 Markdown, 9 080 узлов, 21 Passage, 2 пустых документа; второй проход пропустил все 66 неизменённых документов; Git-проверка исходной папки Vault успешна.
+- [Run 43980073444 — SFRA persistent SQLite state](https://github.com/yeatu/obsidianGP/actions/runs/43980073444): success; проверка checkout orphan-ветки и allowlist прошла; workflow корректно пропустил restore/index/snapshot/push, поскольку production state branch пока содержит только README и запуск не имел флага первичной инициализации.
+
+### Что ещё не подтверждено Actions
+
+Рабочая SQLite ещё не опубликована в \`sfra-state\`, а production restore/snapshot/push пока не выполнялся. Это сознательное fail-closed поведение: первый запуск необходимо явно выполнить через GitHub Actions → **SFRA persistent SQLite state** → **Run workflow** с \`initialize_state=true\`. После этого обычные push запускают режим восстановления существующей базы.
+
+Локальные тесты проверили backup из SQLite WAL, manifest hash, отказ при несовпадении контрольной суммы и отказ при повреждённой базе. Они не заменяют подтверждение полного production round-trip через GitHub branch.
+
+API \`get_node_by_id(..., expected_hash)\`, ветка \`sfra-state-test\` и два независимых тестовых runner остаются следующими отдельными этапами.
