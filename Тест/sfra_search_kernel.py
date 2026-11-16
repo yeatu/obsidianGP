@@ -31,6 +31,32 @@ def post_issue_comment(body: str) -> str:
     return result.get("html_url", "comment-created")
 
 
+def select_most_specific(hits: list[dict]) -> list[dict]:
+    """Hide a matching ancestor when a more specific nested node also matches."""
+    selected = []
+    for hit in sorted(hits, key=lambda item: (
+        item["source_path"],
+        item["char_end"] - item["char_start"],
+        item["char_start"],
+    )):
+        is_ancestor_of_another_hit = any(
+            other["source_path"] == hit["source_path"]
+            and other["node_id"] != hit["node_id"]
+            and other["char_start"] >= hit["char_start"]
+            and other["char_end"] <= hit["char_end"]
+            and (
+                other["char_start"] > hit["char_start"]
+                or other["char_end"] < hit["char_end"]
+            )
+            for other in hits
+        )
+        if not is_ancestor_of_another_hit:
+            selected.append(hit)
+    return sorted(selected, key=lambda item: (
+        item["source_path"], item["char_start"], item["char_end"]
+    ))
+
+
 def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str) -> str:
     # Import after the workflow installs the actual Stage-B/C implementation.
     from sfra_indexer.indexer import index_vault
@@ -45,7 +71,6 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
     connection = sqlite3.connect(index_result.database_path)
     connection.row_factory = sqlite3.Row
     try:
-        # Probe the runner's SQLite build before relying on FTS5.
         connection.execute("CREATE VIRTUAL TABLE temp.sfra_fts5_probe USING fts5(value)")
         connection.execute("DROP TABLE temp.sfra_fts5_probe")
 
@@ -57,6 +82,8 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
                 content_hash UNINDEXED,
                 node_type UNINDEXED,
                 node_status UNINDEXED,
+                char_start UNINDEXED,
+                char_end UNINDEXED,
                 heading_path,
                 raw_text,
                 tokenize='unicode61 remove_diacritics 0'
@@ -65,7 +92,8 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
 
         current_nodes = connection.execute(
             """SELECT d.source_path, n.node_id, n.content_hash, n.node_type,
-                      n.status, n.heading_path_json, n.raw_text
+                      n.status, n.char_start, n.char_end,
+                      n.heading_path_json, n.raw_text
                FROM structural_nodes AS n
                JOIN documents AS d ON d.document_pk = n.document_pk
                WHERE d.status = 'active'
@@ -77,9 +105,9 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
 
         connection.executemany(
             """INSERT INTO sfra_search_fts(
-                source_path, node_id, content_hash, node_type,
-                node_status, heading_path, raw_text
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                source_path, node_id, content_hash, node_type, node_status,
+                char_start, char_end, heading_path, raw_text
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     row["source_path"],
@@ -87,6 +115,8 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
                     row["content_hash"],
                     row["node_type"],
                     row["status"],
+                    row["char_start"],
+                    row["char_end"],
                     row["heading_path_json"] or "",
                     row["raw_text"] or "",
                 )
@@ -99,8 +129,8 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
         phrase = '"' + query.replace('"', '""') + '"'
         matches = connection.execute(
             """SELECT source_path, node_id, content_hash, node_type, node_status,
-                      heading_path, raw_text,
-                      snippet(sfra_search_fts, 6, '【', '】', ' … ', 18) AS excerpt
+                      char_start, char_end, heading_path, raw_text,
+                      snippet(sfra_search_fts, 8, '【', '】', ' … ', 18) AS excerpt
                FROM sfra_search_fts
                WHERE sfra_search_fts MATCH ?
                ORDER BY bm25(sfra_search_fts)
@@ -116,7 +146,7 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
             source_file = vault_path / row["source_path"]
             source_text = source_file.read_bytes().decode("utf-8")
             node_row = connection.execute(
-                """SELECT char_start, char_end, raw_text
+                """SELECT char_start, char_end, line_start, line_end, raw_text
                    FROM structural_nodes
                    WHERE node_id = ? AND content_hash = ?""",
                 (row["node_id"], row["content_hash"]),
@@ -138,15 +168,23 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
                 "node_type": row["node_type"],
                 "node_status": row["node_status"],
                 "heading_path": json.loads(row["heading_path"] or "[]"),
+                "char_start": node_row["char_start"],
+                "char_end": node_row["char_end"],
+                "line_start": node_row["line_start"],
+                "line_end": node_row["line_end"],
                 "excerpt": row["excerpt"],
             })
 
-        expected_hits = [item for item in verified if item["source_path"] == expected.as_posix()]
+        selected = select_most_specific(verified)
+        expected_hits = [
+            item for item in selected
+            if item["source_path"] == expected.as_posix()
+        ]
         if not expected_hits:
-            found_paths = sorted({item["source_path"] for item in verified})
+            found_paths = sorted({item["source_path"] for item in selected})
             raise AssertionError(
-                f"Phrase found, but expected source {expected.as_posix()!r} was absent. "
-                f"Returned paths: {found_paths}"
+                f"Phrase found, but expected source {expected.as_posix()!r} was absent "
+                f"after ancestor suppression. Returned paths: {found_paths}"
             )
 
         fts_rows = connection.execute(
@@ -158,10 +196,12 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
             "documents_skipped": index_result.documents_skipped,
             "nodes_current": len(current_nodes),
             "fts_rows": fts_rows,
-            "matches_returned": len(verified),
+            "raw_matches": len(verified),
+            "selected_specific_matches": len(selected),
+            "suppressed_matching_ancestors": len(verified) - len(selected),
             "verified_source_slices": len(verified),
             "expected_source": expected.as_posix(),
-            "expected_source_matches": len(expected_hits),
+            "expected_source_selected_matches": len(expected_hits),
             "query": query,
         }
 
@@ -172,27 +212,28 @@ def run_search(vault_path: Path, index_dir: Path, query: str, expected_path: str
             "",
             "The real Vault was structurally indexed, loaded into temporary SQLite FTS5, searched, and the returned source slices and SHA-256 hashes were verified.",
             "",
-            "### Index and search metrics",
+            "### Index, search, and de-duplication metrics",
             "",
             fence + "json",
             json.dumps(summary, ensure_ascii=False, indent=2),
             fence,
             "",
-            "### Verified search hits",
+            "### Selected specific search hits",
             "",
         ]
-        for item in verified[:8]:
+        for item in selected[:8]:
             lines.extend([
                 f"- **{item['source_path']}**",
                 "  - Node ID: " + tick + item["node_id"] + tick,
                 "  - Content Hash: " + tick + item["content_hash"] + tick,
                 "  - Node type/status: " + tick + item["node_type"] + "/" + item["node_status"] + tick,
+                f"  - Source lines: {item['line_start']}-{item['line_end']}",
                 "  - Heading path: " + (" → ".join(item["heading_path"]) or "(none)"),
                 "  - Original-source excerpt: " + item["excerpt"],
             ])
         lines.extend([
             "",
-            "Integrity checks passed: every returned node matched its exact source slice and SHA-256.",
+            "Integrity checks passed: every raw FTS hit matched its exact source slice and SHA-256. Matching ancestors were suppressed where a more specific nested node also matched.",
             "The original Vault was read-only; the SQLite database and FTS5 table were created under the runner's temporary directory.",
         ])
         return "\n".join(lines)
