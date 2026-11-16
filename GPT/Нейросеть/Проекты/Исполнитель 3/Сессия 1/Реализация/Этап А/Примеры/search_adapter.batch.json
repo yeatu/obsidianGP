@@ -68,14 +68,8 @@
         "bm25": -2.9
       },
       "match_reasons": [],
-      "unmapped_match_reasons": [
-        "body_exact"
-      ],
       "zone": "иное",
       "has_author_notes": false,
-      "signals": {
-        "exact_terms": true
-      },
       "matched_focus_ids": [
         "population_model"
       ],
@@ -108,14 +102,8 @@
         "bm25": -2.3
       },
       "match_reasons": [],
-      "unmapped_match_reasons": [
-        "body_exact"
-      ],
       "zone": "разобрать",
       "has_author_notes": true,
-      "signals": {
-        "exact_terms": true
-      },
       "matched_focus_ids": [
         "population_model"
       ],
