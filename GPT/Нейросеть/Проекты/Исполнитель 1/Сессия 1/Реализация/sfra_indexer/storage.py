@@ -247,18 +247,17 @@ def _migrate(connection: sqlite3.Connection) -> None:
                 (source_hash, document_pk),
             )
 
-    rows = connection.execute(
+    cursor = connection.execute(
         """SELECT node_pk, node_id, document_pk, local_key, node_type,
                   parent_node_pk, heading_path_json, line_start, line_end,
                   char_start, char_end, byte_start, byte_end, content_spans_json,
                   raw_text, metadata_json, warnings_json, content_hash,
                   created_generation, updated_generation
            FROM structural_nodes ORDER BY node_pk"""
-    ).fetchall()
-    row_names = [item[1] for item in connection.execute(
-        "PRAGMA table_info(structural_nodes)"
-    ).fetchall()]
-    records = [dict(zip(row_names, row)) for row in rows]
+    )
+    selected_columns = [item[0] for item in cursor.description]
+    rows = cursor.fetchall()
+    records = [dict(zip(selected_columns, row)) for row in rows]
     by_pk = {int(row["node_pk"]): row for row in records}
 
     for row in records:
