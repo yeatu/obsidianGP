@@ -96,10 +96,8 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "index_generation": {
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer",
+          "minimum": 0
         }
       },
       "required": [
@@ -336,6 +334,28 @@
           },
           "fragments": {
             "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "not_found"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "target_source": {
+            "type": "null"
+          },
+          "fragments": {
+            "maxItems": 0
           }
         }
       }
