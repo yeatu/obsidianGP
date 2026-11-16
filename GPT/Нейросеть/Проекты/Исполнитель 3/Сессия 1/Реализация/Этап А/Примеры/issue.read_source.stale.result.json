@@ -1,0 +1,48 @@
+{
+  "schema_version": "sfra.issue.v1",
+  "request_id": "c5ca2fca-68cc-4fda-8a6e-276d2fd176a2",
+  "issue_number": 322,
+  "operation": "read_source",
+  "status": "DONE",
+  "source_snapshot": {
+    "vault_commit_sha": "3fc8923fb3a2738feba869076167869d92b7759c",
+    "sidecar_branch": "sfra-index-state",
+    "sidecar_commit_sha": "aabbccddeeff00112233445566778899aabbccdd",
+    "index_generation": 8
+  },
+  "result": {
+    "schema_version": "sfra.read_source.v1",
+    "status": "stale",
+    "requested": {
+      "node_id": "node_00421",
+      "expected_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "scope": "node",
+      "budget_tokens": 2500
+    },
+    "target_source": {
+      "node_id": "node_00421",
+      "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "source_path": "персонажи/Генрих Фауст.md",
+      "heading_path": [
+        "Поведение",
+        "Конфликтное поведение"
+      ],
+      "line_start": 310,
+      "line_end": 337,
+      "document_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "index_generation": 8
+    },
+    "fragments": [],
+    "trust_label": "untrusted_source_data",
+    "diagnostics": [
+      {
+        "code": "expected_hash_stale",
+        "severity": "warning",
+        "message": "Запрошенный Content Hash отличается от текущей версии Node ID; текст не подменён.",
+        "expected_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "actual_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "retry_hint": "Выполнить новый search_vault и создать новое Issue для актуальной версии."
+      }
+    ]
+  }
+}
