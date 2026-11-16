@@ -323,23 +323,41 @@ def estimate_words(text: str) -> int:
 
 
 def _context_for(node: StructuralNode, document: ParsedDocument) -> tuple[str, tuple[SourceSpan, ...]]:
-    if not node.heading_path:
-        return "", ()
-    # Context uses exact heading-line slices but is not part of raw_text/offsets.
-    spans: list[SourceSpan] = []
+    """Return source-backed ancestor context without extending the Passage span.
+
+    Heading ancestors contribute their own heading line. List-item ancestors
+    contribute only their direct content_spans, never their complete subtree.
+    This keeps a nested branch intelligible when returned independently while
+    avoiding accidental inclusion of sibling or descendant list items.
+    """
+    context_spans: list[SourceSpan] = []
     cursor = node
     while cursor.node_type != "document":
         if cursor.node_type == "heading" and cursor.content_spans:
-            spans.append(cursor.content_spans[0])
+            context_spans.extend(cursor.content_spans[:1])
+        elif cursor.node_type == "list_item":
+            context_spans.extend(cursor.content_spans)
+
         if cursor.parent_key is None:
             break
         try:
             cursor = document.get_node(cursor.parent_key)
         except KeyError:
             break
-    spans.reverse()
-    parts = [document.raw_text[span.char_start:span.char_end].rstrip("\r\n") for span in spans]
-    return "\n".join(parts), tuple(spans)
+
+    # Keep source order and avoid duplicate spans if a parser extension causes
+    # overlapping ancestry metadata.
+    unique_by_range = {
+        (span.char_start, span.char_end): span for span in context_spans
+    }
+    ordered_spans = tuple(
+        unique_by_range[key] for key in sorted(unique_by_range)
+    )
+    parts = [
+        document.raw_text[span.char_start:span.char_end].rstrip("\r\n")
+        for span in ordered_spans
+    ]
+    return "\n".join(part for part in parts if part), ordered_spans
 
 
 def build_passages(document: ParsedDocument, *, max_words: int = 900) -> list[Passage]:
