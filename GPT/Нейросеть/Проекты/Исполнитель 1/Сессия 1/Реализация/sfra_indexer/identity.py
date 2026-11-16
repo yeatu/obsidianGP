@@ -192,6 +192,20 @@ def build_match_plan(old_nodes: list[dict[str, Any]],
             if child.parent_key == parent_key and child.local_key in plan.matches:
                 queue.append(child.local_key)
 
+    # A candidate may have been resolved by a stronger local-parent match
+    # after an earlier global duplicate-heading warning. Remove any old IDs
+    # already consumed by a different unambiguous new node before finalizing
+    # the remaining ambiguous groups.
+    for local_key, candidates in list(plan.ambiguous_candidates.items()):
+        remaining = [
+            candidate for candidate in candidates
+            if int(candidate["node_pk"]) not in used_old
+        ]
+        if remaining:
+            plan.ambiguous_candidates[local_key] = remaining
+        else:
+            plan.ambiguous_candidates.pop(local_key, None)
+
     # Final states. A candidate list is an explicit warning, not permission to
     # reuse any of those previous IDs.
     for node in new_nodes:
