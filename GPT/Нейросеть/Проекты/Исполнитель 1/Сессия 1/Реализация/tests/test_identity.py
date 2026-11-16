@@ -4,7 +4,7 @@ import hashlib
 import json
 import sqlite3
 
-from sfra_indexer import index_vault
+from sfra_indexer import connect_database, index_vault
 
 
 def open_db(index_result):
@@ -305,9 +305,7 @@ def test_stage_b_database_migrates_and_seeds_ids_hashes_and_version_one(tmp_path
     connection.commit()
     connection.close()
 
-    migrated = sqlite3.connect(db)
-    migrated.row_factory = sqlite3.Row
-    migrated = __import__("sfra_indexer").connect_database(db)
+    migrated = connect_database(db)
     try:
         rows = migrated.execute(
             "SELECT node_id, content_hash FROM structural_nodes ORDER BY node_pk"
