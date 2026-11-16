@@ -159,3 +159,32 @@ def test_atomic_oversized_block_is_not_cut_into_arbitrary_characters():
     assert callout.raw_text == source
     assert any("oversized_unsplittable" in warning for warning in callout.warnings)
     assert not [p for p in parsed.passages if p.owner_node_key == callout.local_key]
+
+
+def test_passages_from_nested_list_keep_parent_condition_as_separate_context():
+    source = (
+        "- Условие: ученик должен сохранять концентрацию.\\n"
+        "  - Первый этап испытания: " + ("внимательно наблюдать " * 18) + "\\n"
+        "  - Второй этап испытания: " + ("решить поставленную задачу " * 18) + "\\n"
+        "  - Третий этап испытания: " + ("подтвердить полученный результат " * 18) + "\\n"
+    )
+    parsed = parse_markdown(source, "nested-condition.md", max_passage_words=20)
+    items = nodes_of(parsed, "list_item")
+    parent_item = items[0]
+    nested_list = next(child for child in parent_item.children if child.node_type == "list")
+    passages = [
+        passage for passage in parsed.passages
+        if passage.owner_node_key == nested_list.local_key
+    ]
+
+    assert len(passages) >= 2
+    expected_parent_text = extract_source_slice(source, parent_item.content_spans[0])
+    for passage in passages:
+        assert "ученик должен сохранять концентрацию" in passage.context_text
+        assert passage.raw_text == source[passage.span.char_start:passage.span.char_end]
+        assert "ученик должен сохранять концентрацию" not in passage.raw_text
+        assert any(
+            extract_source_slice(source, context_span) == expected_parent_text
+            for context_span in passage.context_spans
+        )
+        assert passage.span.char_start > parent_item.content_spans[0].char_end
