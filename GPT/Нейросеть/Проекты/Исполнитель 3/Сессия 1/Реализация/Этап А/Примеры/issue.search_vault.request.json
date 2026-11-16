@@ -1,0 +1,32 @@
+{
+  "protocol_version": "sfra.issue.v1",
+  "request_id": "6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14",
+  "operation": "search_vault",
+  "payload": {
+    "query": "Особенности речи Генриха Фауста",
+    "entities": [
+      "Генрих Фауст"
+    ],
+    "facets": [
+      "VOICE"
+    ],
+    "budget_tokens": 3000,
+    "known": [],
+    "focus": [
+      {
+        "id": "voice_style",
+        "label": "Общий стиль речи",
+        "entities": [
+          "Генрих Фауст"
+        ],
+        "facets": [
+          "VOICE"
+        ],
+        "terms": [
+          "общий стиль речи"
+        ],
+        "match_mode": "any"
+      }
+    ]
+  }
+}
