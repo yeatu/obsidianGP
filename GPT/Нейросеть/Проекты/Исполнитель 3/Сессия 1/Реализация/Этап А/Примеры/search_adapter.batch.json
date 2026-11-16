@@ -1,0 +1,79 @@
+{
+  "complete": true,
+  "cursor": null,
+  "inspected_count": 3,
+  "candidates": [
+    {
+      "node_id": "fixture_voice_001",
+      "source_path": "fixtures/персонажи/Тестовый персонаж.md",
+      "heading_path": ["Общий стиль речи"],
+      "line_start": 10,
+      "line_end": 10,
+      "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
+      "raw_text": "Тестовый фрагмент: персонаж избегает прямых угроз и отвечает коротко.",
+      "score": 0.92,
+      "match_type": "exact",
+      "zone": "персонажи",
+      "has_author_notes": false,
+      "signals": {
+        "entity_exact": true,
+        "path_or_heading_name": true,
+        "exact_terms": true,
+        "morphology": false,
+        "facet_match": true
+      },
+      "matched_focus_ids": ["voice_style"],
+      "preservation": "normal",
+      "required_with": [],
+      "overlap_group_id": null
+    },
+    {
+      "node_id": "fixture_demography_a",
+      "source_path": "fixtures/иное/Демография.md",
+      "heading_path": ["Демографическая модель"],
+      "line_start": 1,
+      "line_end": 1,
+      "content_hash": "sha256:a96b93526c589190794ada612c3ff441874cfccd6e6f5ecd9aab79074146dfbb",
+      "raw_text": "Демонстрационная модель населения A. Предпосылки и расчёты из тестового набора.",
+      "score": 0.71,
+      "match_type": "phrase",
+      "zone": "иное",
+      "has_author_notes": false,
+      "signals": {
+        "entity_exact": false,
+        "path_or_heading_name": false,
+        "exact_terms": true,
+        "morphology": false,
+        "facet_match": false
+      },
+      "matched_focus_ids": ["population_model"],
+      "preservation": "normal",
+      "required_with": [],
+      "overlap_group_id": "fixture_demography_overlap"
+    },
+    {
+      "node_id": "fixture_demography_b",
+      "source_path": "fixtures/разобрать/Демография.md",
+      "heading_path": ["Расширенная демографическая модель"],
+      "line_start": 1,
+      "line_end": 1,
+      "content_hash": "sha256:55b70fb6e66a1baeb1fec144e9d3c02e1ae2ace4b3bb45b0e50fc8595fe20f83",
+      "raw_text": "Демонстрационная модель населения B. Иной набор предпосылок и расчётов из тестового набора.",
+      "score": 0.69,
+      "match_type": "phrase",
+      "zone": "разобрать",
+      "has_author_notes": true,
+      "signals": {
+        "entity_exact": false,
+        "path_or_heading_name": false,
+        "exact_terms": true,
+        "morphology": false,
+        "facet_match": false
+      },
+      "matched_focus_ids": ["population_model"],
+      "preservation": "normal",
+      "required_with": [],
+      "overlap_group_id": "fixture_demography_overlap"
+    }
+  ]
+}
