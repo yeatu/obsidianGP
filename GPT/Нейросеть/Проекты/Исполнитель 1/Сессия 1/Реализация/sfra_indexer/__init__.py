@@ -1,4 +1,4 @@
-"""Stage-B structural parser for Source-First Retrieval Architecture."""
+"""Source-preserving structural indexer for SFRA stages B and C."""
 
 from .identity import MatchPlan, build_match_plan, content_hash
 from .indexer import IndexResult, get_database_summary, index_vault, read_markdown_file
