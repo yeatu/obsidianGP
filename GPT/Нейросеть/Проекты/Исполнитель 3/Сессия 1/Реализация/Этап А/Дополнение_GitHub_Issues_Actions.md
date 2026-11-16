@@ -209,17 +209,20 @@ GitHub указывает для события issues, что оно имеет
 
 Комментарии с результатом используют:
 
-    <!-- sfra:request:<request_id>:part:<index>/<total> -->
+    <!-- sfra:request:<request_id>:attempt:<attempt_no>:part:<index>/<total> -->
 
 Status comment содержит:
 - protocol_version;
 - request_id;
-- issue_number;
-- operation;
+- issue_number и operation;
 - транспортный status;
+- attempt_no и max_attempts=3;
+- lease_expires_at (не null только в RUNNING);
 - source snapshot (commit SHA, index_generation, document/index manifest);
 - result_manifest или error;
 - workflow run id и время обновления.
+
+Result manifest дополнительно содержит attempt_no. Каждая часть результата публикуется как JSON-объект по схеме `sfra.issue.result-part.schema.json`: protocol_version, request_id, attempt_no, part_index, parts_total, encoding, marker и content. Поле content — очередная UTF-8-safe строка компактного JSON-результата; отдельная часть сама по себе не обязана быть валидным JSON. Сборка выполняется только после соединения content по порядку и проверки длины и SHA-256.
 
 Payload comments содержат сериализованный результат. Для небольшого ответа весь компактный JSON помещается в одну часть. Для большого ответа:
 - компактный JSON сериализуется в UTF-8 без форматирующих переносов;
@@ -230,7 +233,7 @@ Payload comments содержат сериализованный результ�
 
 Такой механизм не обрезает исходный raw_text и не меняет контракт Context Pack/SourceReadResult. Если часть комментариев не опубликована, запрос не переводится в DONE.
 
-При повторном запуске существующий status comment обновляется, а payload comments переиспользуются по marker. Если предыдущая попытка завершилась до DONE, результат собирается заново; если есть terminal DONE/FAILED, повторный запуск становится no-op.
+При повторе статусный комментарий с тем же request_id обновляется. Маркеры частей включают attempt_no, поэтому старые части другой попытки не могут попасть в сборку нового результата. DONE и FAILED с retryable=false являются терминальными и дают no-op. FAILED с retryable=true может быть повторён recovery workflow с тем же request_id после retry_after и только пока не исчерпан max_attempts. Для повторной попытки создаётся новая группа result-part comments с новым attempt_no; status comment указывает только на manifest текущей попытки.
 
 ## 5. Идемпотентность и защита от потери запросов
 
