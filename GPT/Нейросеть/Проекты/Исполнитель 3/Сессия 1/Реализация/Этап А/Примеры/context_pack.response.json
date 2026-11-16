@@ -1,6 +1,6 @@
 {
   "schema_version": "sfra.context_pack.v1",
-  "status": "partial",
+  "status": "budget_limited",
   "query": "Особенности речи и конфликтного поведения тестового персонажа",
   "task": "Подготовить короткую сцену конфликта, не добавляя неизвестных фактов о персонаже.",
   "search_complete": true,
@@ -8,7 +8,9 @@
     {
       "node_id": "fixture_voice_001",
       "source_path": "fixtures/персонажи/Тестовый персонаж.md",
-      "heading_path": ["Общий стиль речи"],
+      "heading_path": [
+        "Общий стиль речи"
+      ],
       "line_start": 10,
       "line_end": 10,
       "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
@@ -23,10 +25,14 @@
         "morphology": false,
         "facet_match": true
       },
-      "matched_focus_ids": ["voice_style"],
+      "matched_focus_ids": [
+        "voice_style"
+      ],
       "raw_text": "Тестовый фрагмент: персонаж избегает прямых угроз и отвечает коротко.",
       "trust_label": "untrusted_source_data",
-      "token_count": 19
+      "token_count": 19,
+      "inclusion_reason": "retrieval_candidate",
+      "is_required_dependency": false
     }
   ],
   "Coverage": [
@@ -34,10 +40,14 @@
       "aspect_id": "voice_style",
       "label": "Общий стиль речи",
       "status": "found",
-      "included_node_ids": ["fixture_voice_001"],
+      "included_node_ids": [
+        "fixture_voice_001"
+      ],
       "known_node_ids": [],
       "deferred_node_ids": [],
-      "basis": ["adapter_match"],
+      "basis": [
+        "adapter_match"
+      ],
       "diagnostic_note": null
     },
     {
@@ -46,8 +56,13 @@
       "status": "deferred",
       "included_node_ids": [],
       "known_node_ids": [],
-      "deferred_node_ids": ["fixture_demography_a", "fixture_demography_b"],
-      "basis": ["adapter_match"],
+      "deferred_node_ids": [
+        "fixture_demography_a",
+        "fixture_demography_b"
+      ],
+      "basis": [
+        "adapter_match"
+      ],
       "diagnostic_note": "Кандидаты есть, но не вошли в Included по ограничению бюджета."
     },
     {
@@ -65,7 +80,9 @@
     {
       "node_id": "fixture_demography_a",
       "source_path": "fixtures/иное/Демография.md",
-      "heading_path": ["Демографическая модель"],
+      "heading_path": [
+        "Демографическая модель"
+      ],
       "line_start": 1,
       "line_end": 1,
       "content_hash": "sha256:a96b93526c589190794ada612c3ff441874cfccd6e6f5ecd9aab79074146dfbb",
@@ -80,7 +97,9 @@
         "morphology": false,
         "facet_match": false
       },
-      "matched_focus_ids": ["population_model"],
+      "matched_focus_ids": [
+        "population_model"
+      ],
       "estimated_tokens": 22,
       "reason": "budget_limit",
       "preservation": "normal",
@@ -89,7 +108,9 @@
     {
       "node_id": "fixture_demography_b",
       "source_path": "fixtures/разобрать/Демография.md",
-      "heading_path": ["Расширенная демографическая модель"],
+      "heading_path": [
+        "Расширенная демографическая модель"
+      ],
       "line_start": 1,
       "line_end": 1,
       "content_hash": "sha256:55b70fb6e66a1baeb1fec144e9d3c02e1ae2ace4b3bb45b0e50fc8595fe20f83",
@@ -104,7 +125,9 @@
         "morphology": false,
         "facet_match": false
       },
-      "matched_focus_ids": ["population_model"],
+      "matched_focus_ids": [
+        "population_model"
+      ],
       "estimated_tokens": 24,
       "reason": "budget_limit",
       "preservation": "normal",
@@ -154,14 +177,18 @@
       "exact_for_encoding": true,
       "exact_for_client_model": false
     },
-    "example_counts_are_illustrative": true
+    "example_counts_are_illustrative": true,
+    "rejected_count": 0
   },
   "Diagnostics": [
     {
       "code": "parallel_sources_preserved",
       "severity": "info",
       "message": "Потенциально пересекающиеся источники не объединялись и не ранжировались по каноничности.",
-      "node_ids": ["fixture_demography_a", "fixture_demography_b"],
+      "node_ids": [
+        "fixture_demography_a",
+        "fixture_demography_b"
+      ],
       "details": {
         "relationship_is_not_a_conflict_judgement": true
       }
