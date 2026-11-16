@@ -39,9 +39,6 @@
       "matched_entities": [
         "Тестовый персонаж"
       ],
-      "matched_facets": [
-        "VOICE"
-      ],
       "matched_terms": [
         "общий стиль речи"
       ],
@@ -65,15 +62,15 @@
       "content_hash": "sha256:a96b93526c589190794ada612c3ff441874cfccd6e6f5ecd9aab79074146dfbb",
       "raw_text": "Демонстрационная модель населения A. Предпосылки и расчёты из тестового набора.",
       "match_excerpt": "модель населения A",
-      "match_type": "exact_body",
+      "match_type": "exact",
       "relevance": {
         "tier": 4,
         "bm25": -2.9
       },
-      "match_reasons": [
+      "match_reasons": [],
+      "unmapped_match_reasons": [
         "body_exact"
       ],
-      "unmapped_match_reasons": [],
       "zone": "иное",
       "has_author_notes": false,
       "signals": {
@@ -81,12 +78,6 @@
       },
       "matched_focus_ids": [
         "population_model"
-      ],
-      "matched_entities": [
-        "Магическое население"
-      ],
-      "matched_facets": [
-        "DEMOGRAPHY"
       ],
       "matched_terms": [
         "модель населения"
@@ -111,15 +102,15 @@
       "content_hash": "sha256:55b70fb6e66a1baeb1fec144e9d3c02e1ae2ace4b3bb45b0e50fc8595fe20f83",
       "raw_text": "Демонстрационная модель населения B. Иной набор предпосылок и расчётов из тестового набора.",
       "match_excerpt": "модель населения B",
-      "match_type": "exact_body",
+      "match_type": "exact",
       "relevance": {
         "tier": 4,
         "bm25": -2.3
       },
-      "match_reasons": [
+      "match_reasons": [],
+      "unmapped_match_reasons": [
         "body_exact"
       ],
-      "unmapped_match_reasons": [],
       "zone": "разобрать",
       "has_author_notes": true,
       "signals": {
@@ -127,12 +118,6 @@
       },
       "matched_focus_ids": [
         "population_model"
-      ],
-      "matched_entities": [
-        "Магическое население"
-      ],
-      "matched_facets": [
-        "DEMOGRAPHY"
       ],
       "matched_terms": [
         "модель населения"
