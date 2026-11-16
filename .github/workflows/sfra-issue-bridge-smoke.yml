@@ -2,7 +2,7 @@ name: SFRA issue bridge smoke test
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 permissions: {}
 
@@ -35,7 +35,8 @@ jobs:
           expected = "SFRA_BRIDGE_PROBE=1"
           author = os.environ["ISSUE_AUTHOR"]
           title = os.environ["ISSUE_TITLE"]
-          payload = (os.environ.get("ISSUE_BODY") or "").strip()
+          payload_lines = (os.environ.get("ISSUE_BODY") or "").splitlines()
+          payload_ok = any(line.strip() == expected for line in payload_lines)
 
           status = "SFRA_BRIDGE_OK"
           details = [
@@ -50,7 +51,7 @@ jobs:
           elif not title.startswith("[SFRA-BRIDGE-TEST]"):
               status = "SFRA_BRIDGE_REJECTED"
               details.append("- Title check: failed")
-          elif payload != expected:
+          elif not payload_ok:
               status = "SFRA_BRIDGE_BAD_PAYLOAD"
               details.append("- Payload check: failed")
           else:
