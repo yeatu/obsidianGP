@@ -74,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "database_path": result.database_path,
                 "documents_seen": result.documents_seen,
+                "documents_indexed": result.documents_indexed,
+                "documents_skipped": result.documents_skipped,
                 "nodes_saved": result.nodes_saved,
                 "passages_saved": result.passages_saved,
                 "empty_documents": result.empty_documents,
