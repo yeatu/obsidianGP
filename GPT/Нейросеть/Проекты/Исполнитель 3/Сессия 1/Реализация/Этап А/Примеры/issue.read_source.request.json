@@ -1,0 +1,11 @@
+{
+  "protocol_version": "sfra.issue.v1",
+  "request_id": "c5ca2fca-68cc-4fda-8a6e-276d2fd176a2",
+  "operation": "read_source",
+  "payload": {
+    "node_id": "node_00421",
+    "expected_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "scope": "parent",
+    "budget_tokens": 2500
+  }
+}
