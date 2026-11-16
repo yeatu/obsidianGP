@@ -89,37 +89,22 @@
           ],
           "properties": {
             "vault_commit_sha": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": "string",
               "pattern": "^[0-9a-f]{40}$"
             },
             "sidecar_branch": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             },
             "sidecar_commit_sha": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": "string",
               "pattern": "^[0-9a-f]{40}$"
             },
             "index_generation": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "minimum": 0
             },
             "manifest_sha256": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": "string",
               "pattern": "^sha256:[0-9a-f]{64}$"
             }
           }
