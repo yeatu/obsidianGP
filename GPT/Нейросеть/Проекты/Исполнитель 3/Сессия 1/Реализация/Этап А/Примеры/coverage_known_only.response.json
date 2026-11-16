@@ -1,0 +1,57 @@
+{
+  "schema_version": "sfra.context_pack.v1",
+  "status": "complete",
+  "query": "Манера речи тестового персонажа",
+  "task": null,
+  "search_complete": true,
+  "Included": [],
+  "Coverage": [
+    {
+      "aspect_id": "voice_style",
+      "label": "Общий стиль речи",
+      "status": "found",
+      "included_node_ids": [],
+      "known_node_ids": [
+        "fixture_voice_001"
+      ],
+      "deferred_node_ids": [],
+      "basis": [
+        "adapter_match"
+      ],
+      "diagnostic_note": "Источник известен клиенту по той же паре Node ID + Content Hash; raw_text не повторялся."
+    }
+  ],
+  "Deferred": [],
+  "Parallel Sources": [],
+  "Known": [
+    {
+      "node_id": "fixture_voice_001",
+      "content_hash": "sha256:5c9885ccd2d50533271516a2dd15f398bea97ad994aec2373d7ed03298c36a86",
+      "delivery": "already_known_not_repeated"
+    }
+  ],
+  "Version Changes": [],
+  "Statistics": {
+    "retrieved_count": 1,
+    "included_count": 0,
+    "deferred_count": 0,
+    "known_count": 1,
+    "rejected_count": 0,
+    "not_found_aspect_count": 0,
+    "focus_count": 1,
+    "coverage_available_ratio": 1,
+    "coverage_included_ratio": 0,
+    "budget_tokens": 1000,
+    "tokens_used": 0,
+    "response_tokens_estimated": 180,
+    "token_counter": {
+      "name": "tiktoken",
+      "version": "0.14.0",
+      "encoding": "o200k_base",
+      "exact_for_encoding": true,
+      "exact_for_client_model": false
+    },
+    "example_counts_are_illustrative": true
+  },
+  "Diagnostics": []
+}
