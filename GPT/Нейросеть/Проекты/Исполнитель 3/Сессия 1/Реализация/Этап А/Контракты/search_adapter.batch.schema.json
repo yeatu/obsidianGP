@@ -1,17 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sfra.local/schemas/search_adapter.batch.schema.json",
-  "title": "SearchAdapter batch",
+  "title": "Normalized SearchAdapter batch",
   "type": "object",
   "additionalProperties": false,
   "required": ["complete", "inspected_count", "candidates"],
   "properties": {
     "complete": {
       "type": "boolean",
-      "description": "True only when the adapter has exhausted the result set it is configured to return."
+      "description": "True only when all pages within the configured retrieval policy have been inspected. Reaching an adapter cap means false."
     },
-    "cursor": { "type": ["string", "null"] },
+    "cursor": {
+      "type": ["string", "null"],
+      "description": "Internal adapter cursor. The public search_vault request has no continuation cursor in MVP."
+    },
     "inspected_count": { "type": "integer", "minimum": 0 },
+    "truncated_by_limit": { "type": "boolean" },
     "candidates": {
       "type": "array",
       "items": { "$ref": "#/$defs/retrievalCandidate" }
@@ -29,7 +33,6 @@
         "line_end",
         "content_hash",
         "raw_text",
-        "score",
         "match_type"
       ],
       "properties": {
@@ -37,8 +40,10 @@
         "source_path": {
           "type": "string",
           "minLength": 1,
-          "description": "Vault-relative path. Proposed separator is /."
+          "description": "Vault-relative path. Normalized separator is /; preserve case and Unicode."
         },
+        "node_type": { "type": ["string", "null"] },
+        "parent_node_id": { "type": ["string", "null"] },
         "heading_path": {
           "type": "array",
           "items": { "type": "string" }
@@ -47,14 +52,51 @@
         "line_end": { "type": "integer", "minimum": 1 },
         "content_hash": {
           "type": "string",
-          "pattern": "^sha256:[0-9a-fA-F]{64}$"
+          "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "raw_text": {
           "type": "string",
-          "description": "Verbatim original Markdown slice. Never summarized, cleaned, or reconstructed."
+          "description": "Complete original structural node returned by get_node for the exact node_id + content_hash. Not the search excerpt."
         },
-        "score": { "type": "number" },
+        "match_excerpt": {
+          "type": ["string", "null"],
+          "description": "Optional Executor 2 excerpt used only as a search hint. Never use as Included raw_text."
+        },
         "match_type": { "type": "string", "minLength": 1 },
+        "relevance": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["tier", "bm25"],
+          "properties": {
+            "tier": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "description": "Executor 2 priority tier. Lower tier is better; sort ascending."
+            },
+            "bm25": {
+              "type": "number",
+              "description": "SQLite FTS5 BM25 secondary rank; lower value is better; sort ascending within tier."
+            }
+          }
+        },
+        "match_reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unmapped_match_reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "score": {
+          "type": "number",
+          "description": "Compatibility score for non-Executor-2 adapters only."
+        },
+        "score_direction": {
+          "type": "string",
+          "enum": ["asc", "desc"],
+          "description": "Mandatory whenever score is supplied; Context Builder must not guess the direction."
+        },
         "zone": { "type": ["string", "null"] },
         "has_author_notes": { "type": ["boolean", "null"] },
         "signals": {
@@ -62,6 +104,8 @@
           "additionalProperties": false,
           "properties": {
             "entity_exact": { "type": "boolean" },
+            "document_name_match": { "type": "boolean" },
+            "heading_match": { "type": "boolean" },
             "path_or_heading_name": { "type": "boolean" },
             "exact_terms": { "type": "boolean" },
             "morphology": { "type": "boolean" },
@@ -69,6 +113,18 @@
           }
         },
         "matched_focus_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "matched_entities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "matched_facets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "matched_terms": {
           "type": "array",
           "items": { "type": "string" }
         },
@@ -80,15 +136,17 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "parent_node_id": { "type": ["string", "null"] },
         "parent_context_required": { "type": "boolean" },
         "overlap_group_id": { "type": ["string", "null"] },
         "overlap_hint": { "type": ["string", "null"] },
-        "index_generation": { "type": ["integer", "null"] },
+        "index_generation": { "type": ["integer", "null"], "minimum": 0 },
         "document_hash": {
           "type": ["string", "null"],
-          "pattern": "^(sha256:[0-9a-fA-F]{64})?$"
+          "pattern": "^(sha256:[0-9a-f]{64})?$"
         }
+      },
+      "dependentRequired": {
+        "score": ["score_direction"]
       }
     }
   }
