@@ -201,8 +201,6 @@ class ContextBuilder:
                     is_required_dependency=member.node_id in group.referenced_ids,
                 ))
             proposed_ids = included_ids | {member.node_id for member in new_members}
-            proposed_deferred = set(deferred_reason) - proposed_ids
-            proposed_coverage = coverage_for(proposed_ids, proposed_deferred)
             cost = included_tokens(proposed_entries, self._token_counter)
             if cost <= normalized_request.budget_tokens:
                 included_entries = proposed_entries
