@@ -65,7 +65,7 @@
 
 | ID | Исполнитель | Работа | Статус | Что блокирует / следующий шаг |
 |---|---|---|---|---|
-| SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **ANALYST_COMPLETE_UNREVIEWED** | Аналитическая проверка завершена на HEAD `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`; весь текущий спектр E1 передан координатору на пакетный аудит. E3 response adapter не является блокером E1. |
+| SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **ANALYST_COMPLETE_UNREVIEWED** | Аналитическая проверка повторена после sync на HEAD `433a474147b9353afdd4dee4af205a79dc21253d`; E1 scope завершён (`ANALYST_SCOPE_COMPLETE`), передан координатору на пакетный аудит. PR #11 открыт, mergeable, не объединён. |
 | SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency metadata и E1 API adapter | **WAITING_FOR_IMPLEMENTATION** | Response adapter E1/E3 и real smoke уже работают; остаются E3-side parent/sibling cross-checks, adversarial tests, очистка resolver diagnostics между запусками, обновление README/PR description и синхронизация ветки с `main`. B1 policy defaults разрешены как defaults, не как source annotations. |
 | SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack | **WAITING_FOR_ANALYST** | Manual run `44020916667` успешен на E3 HEAD `dfe8877` и E1 HEAD `a5456c4`; аналитик должен проверить доказательства. Итог был `budget_limited` (1 included, 2 deferred), а не `complete`; финальная приёмка зависит от закрытия C1 integrity checks. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **COORDINATOR_ACCEPTED_NOT_MERGED** | Повторная реализация не требуется; PR #7 ещё открыт. |
@@ -78,50 +78,59 @@
 
 ### PR #11 — E1
 
-- [PR #11 — E1 source-verified structural node lookup API](https://github.com/yeatu/obsidianGP/pull/11)
-- Текущий HEAD: `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`
-- Состояние: open, not merged.
-- Ветка `executor-1/e1-source-read-api-mainline`: **ahead 8 / behind 8** относительно текущего `main`.
-- CI на текущем HEAD:
-  - [Run 44019577613 — E1 / Context Builder tests](https://github.com/yeatu/obsidianGP/actions/runs/44019577613): workflow success; job `e1-source-api-tests` success, включая проверку атомарного Source Scope API на изолированной копии production snapshot и запуск набора E1 tests. Отдельный job `unit-tests` имеет conclusion **skipped**. Поэтому это успех целевых E1-проверок, а не утверждение, что абсолютно все jobs прошли.
-  - [Run 44019577558 — structural indexer stages B/C](https://github.com/yeatu/obsidianGP/actions/runs/44019577558): success, **88 passed**; реальный Vault — 66 документов, 9 080 узлов, 21 Passage, 2 пустых документа.
+- [PR #11 — E1 atomic Source Scope API and current-node resolver](https://github.com/yeatu/obsidianGP/pull/11)
+- Проверенный HEAD: `433a474147b9353afdd4dee4af205a79dc21253d`
+- Состояние: open, not merged, mergeable.
+- Ветка `executor-1/e1-source-read-api-mainline`: **ahead 9 / behind 0** относительно текущего `main`.
+- Synchronization commit: [`433a474`](https://github.com/yeatu/obsidianGP/commit/433a474147b9353afdd4dee4af205a79dc21253d), merge parents: предыдущий E1 HEAD и актуальный main HEAD `f6dd4de6e6a697b9224abca97a46e4278fa06c79`. Force-push не использовался.
 
-**Что подтверждено в текущей реализации E1:**
-- Публичные `read_source_scope(..., scope, snapshot_id)` и `resolve_current_node(..., snapshot_id)` экспортированы из `sfra_indexer`.
-- Четыре режима: node / parent / neighbors / document.
-- Один read-only SQLite connection и одна read-транзакция на каждый scope; один безопасный read Markdown-файла для фрагментов scope.
-- Ответы — `SourceScopeResult` и `CurrentNodeAddress`, то есть типизированные dataclass-типы с `to_dict()`.
-- Публикуются `document_hash`, `index_generation`, исходная metadata; ошибки не возвращают partial fragments.
-- CI на копии production `sfra-state` подтверждает вызов всех четырёх scope. Production SQLite/Vault не используются как writable targets.
+**CI на синхронизированном HEAD**
+- [Run 44023253396 — E1 source API](https://github.com/yeatu/obsidianGP/actions/runs/44023253396): `e1-source-api-tests` success, **88 passed**. Все integration steps прошли. Отдельный job `unit-tests` имеет conclusion **skipped**, не success и не failure.
+- [Run 44023253416 — structural indexer](https://github.com/yeatu/obsidianGP/actions/runs/44023253416): success, **88 passed**.
 
-**Что требуется от аналитика E1:**
-1. Проверить именно HEAD `a5456c4...`, не переносить галочки с `ebb5c92...`.
-2. Подтвердить атомарность, все четыре scope, resolver, fail-closed ошибки, snapshot echo и неизменность sidecar/Vault.
-3. Проверить, что текущая документация E1 соответствует dataclass response shape и новым полям.
-4. Отдельно отметить пропущенный `unit-tests` job; не формулировать результат как «все CI jobs успешны».
-5. Проверить синхронизацию ветки с актуальным `main` перед окончательной приёмкой/слиянием; после синхронизации прогнать CI на новом HEAD.
+**Что подтверждено в реализации E1**
+- Публичные `read_source_scope(db_path, vault_root, node_id, expected_hash, *, scope, snapshot_id)` и `resolve_current_node(db_path, node_id, *, snapshot_id)` экспортированы из `sfra_indexer`.
+- Все четыре scope: `node`, `parent`, `neighbors`, `document`.
+- Один SQLite connection и одна read-транзакция на каждый `read_source_scope`; SQL-чтения выполняются в этой транзакции.
+- Для каждого фрагмента проверяются current lifecycle/version, document identity/generation, source path, Content Hash и coordinates. Возвращаются exact raw text, `document_hash` и `index_generation`.
+- Исходный файл читается один раз на scope-вызов через существующие secure path/symlink и file-integrity проверки. `document` возвращает полный Markdown без truncation.
+- Fail-closed результат: при ошибке `fragments=[]`, content fields отсутствуют.
+- `resolve_current_node()` возвращает только exact active/unambiguous Node ID и актуальный Content Hash; fuzzy/historical fallback отсутствует.
+- Старые публичные `get_*_by_id` — wrappers единого API; типизированные результаты документированы в README и API spec.
+- В E1 не добавлены budget и синтезированные policy metadata; SQLite schema v2 не изменялась.
+
+**Production snapshot / Vault integration**
+- Production `sfra-state` проверен через checkout с `persist-credentials=false` и read-only token scope. Manifest и SQLite скопированы в `/tmp/e1-production-snapshot`; integrity verification и все четыре scope + resolver исполнялись на копии.
+- Manifest source ref: `executor-1/sfra-indexer-session-1`; Vault commit: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`.
+- Opaque snapshot ID: `sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`.
+- Real Vault: 66 документов, 9 080 узлов, 21 Passage, 2 пустых документа. Re-index skip: 66 unchanged documents; stale/ambiguous: 0. Diff/status guards Vault прошли.
+- Production SQLite не использовалась как writable target; SQLite API проверялся на изолированной копии. Workflow не сохраняет credentials для `sfra-state`.
+
+**Граница snapshot-контракта**
+- E1 принимает opaque `snapshot_id` и echo-ит его в success/error result.
+- Проверка соответствия Snapshot ID manifest/Git/Vault, включая snapshot mismatch, относится к E3 Snapshot binder. Это не дефект и не отрицательный тест E1; E1 не выполняет Git/manifest validation.
 
 #### Чек-лист аналитика E1
 
-- [ ] Проверен текущий HEAD `a5456c4...` и diff PR #11.
-- [ ] Подтверждены один SQLite connection и одна read-транзакция для каждого scope.
-- [ ] Проверены node / parent / neighbors / document.
-- [ ] Проверены `document_hash`, `index_generation`, source path, coordinates и exact raw_text.
-- [ ] Проверены fail-closed статусы и пустые fragments при ошибках.
-- [ ] Проверен `resolve_current_node()` и отсутствие fuzzy/historical fallback.
-- [ ] Проверен snapshot echo.
-- [ ] Проверены CI runs 44019577613 и 44019577558; отдельно отмечен skipped `unit-tests`.
-- [ ] Подтверждено отсутствие изменений production Vault и `sfra-state`.
-- [ ] Проверена актуальность PR body/README и синхронизация с текущим `main`.
+- [x] Проверен текущий HEAD `433a474147b9353afdd4dee4af205a79dc21253d` и diff PR #11.
+- [x] Подтверждены один SQLite connection и одна read-транзакция для каждого scope.
+- [x] Проверены node / parent / neighbors / document.
+- [x] Проверены `document_hash`, `index_generation`, source path, coordinates и exact raw_text.
+- [x] Проверены fail-closed статусы и пустые fragments при ошибках.
+- [x] Проверен `resolve_current_node()` и отсутствие fuzzy/historical fallback.
+- [x] Проверен snapshot echo; snapshot binding/mismatch оставлены E3 согласно контракту.
+- [x] Проверены CI runs 44023253396 и 44023253416; отдельно отмечен skipped `unit-tests`.
+- [x] Проверены read-only checkout/copy процедуры для production `sfra-state` и clean Vault guards.
+- [x] Проверена актуальность PR body/README/API spec и синхронизация с текущим `main`; CI повторён после sync.
 
 **Итог аналитика**
-- [ ] Аналитик считает SFRA-E1-01 выполненной в рамках утверждённого контракта.
-- [ ] Если это закрывает весь текущий спектр E1, выставлен `ANALYST_SCOPE_COMPLETE`.
-- [ ] Если обнаружено архитектурное ограничение, выставлен `ANALYST_BLOCKED_NEEDS_COORDINATOR` с конкретным вопросом.
+- [x] Аналитик считает SFRA-E1-01 выполненной в рамках утверждённого контракта.
+- [x] Весь текущий спектр E1 завершён: `ANALYST_SCOPE_COMPLETE`.
+- [ ] `ANALYST_BLOCKED_NEEDS_COORDINATOR` не выставлен: архитектурного ограничения в согласованном E1 scope не обнаружено.
 
-HEAD аналитика: `не указан`  
-Дата проверки: `не указана`  
-Отчёт / артефакты: `не указаны`
+HEAD аналитика: `433a474147b9353afdd4dee4af205a79dc21253d`  
+Дата проверки: `2026-11-17`  
+Отчёт / артефакты: [PR verification comment](https://github.com/yeatu/obsidianGP/pull/11#issuecomment-6939402215); [E1 CI run](https://github.com/yeatu/obsidianGP/actions/runs/44023253396); [structural CI run](https://github.com/yeatu/obsidianGP/actions/runs/44023253416)
 
 ### PR #10 — E3 C1
 
