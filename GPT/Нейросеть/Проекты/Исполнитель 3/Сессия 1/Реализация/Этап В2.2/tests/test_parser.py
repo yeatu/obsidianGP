@@ -114,7 +114,7 @@ def test_parser_enforces_issue_metadata_exactly(changes: dict, expected_code: st
 
 
 @pytest.mark.parametrize(
-    ("request", "expected_code"),
+    ("envelope_data", "expected_code"),
     [
         ({**envelope(), "extra": True}, "extra_fields"),
         ({**envelope(), "protocol_version": "sfra.issue.v2"}, "unsupported_protocol"),
@@ -126,9 +126,9 @@ def test_parser_enforces_issue_metadata_exactly(changes: dict, expected_code: st
         ({**envelope(), "operation": []}, "unsupported_operation"),
     ],
 )
-def test_parser_rejects_invalid_envelope_and_search_payload(request: dict, expected_code: str) -> None:
+def test_parser_rejects_invalid_envelope_and_search_payload(envelope_data: dict, expected_code: str) -> None:
     with pytest.raises(IssueRequestError) as error:
-        IssueRequestParser().parse(issue_record(json.dumps(request)))
+        IssueRequestParser().parse(issue_record(json.dumps(envelope_data)))
     assert error.value.code == expected_code
 
 
