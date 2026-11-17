@@ -1,9 +1,10 @@
 # Этап В1 — E3 C1 и E3-02 integration
 
 **Область:** E2 SearchAdapter → E3 Context Builder → E1 public Source Scope API.  
-**Implementation HEAD:** 5105f9c92b19b3eb9372286e11603eaa9582af31.  
-**Base main:** aaf85dd3854bfbd200ad79b8883829847dff8f18; branch ahead 31 / behind 0.  
-**Статус:** implementation и real negative matrix подтверждены. PR #10 остаётся draft до независимой аналитической приёмки.
+**Accepted E3 code HEAD:** a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe.  
+**Main sync merge commit:** 722b77d5f4bb2d07ce9b75ff7ab10220690ae39b.  
+**Main at sync:** 33dfdd9d894a7bedd822168ba479c0989e889211; branch ahead 37 / behind 0.  
+**Статус:** C1 и E3-02 приняты аналитиком и координатором: `COORDINATOR_ACCEPTED_NOT_MERGED`. PR #10 остаётся open / Draft / not merged.
 
 ## 1. SearchAdapter
 
@@ -134,3 +135,21 @@ PR #10 не содержит GitHub Issue worker, recovery sweep или MCP adap
 - PR #10 remains open / Draft / not merged. No analyst or coordinator acceptance is claimed by E3.
 
 The CI and real integration runs above target this code-under-review HEAD. Documentation-only registry sync did not alter E3 implementation files. PR body and handoff identify the exact tested commit and evidence.
+
+
+---
+
+## 8. Финальная проверка после sync с main — 2026-11-17
+
+- E3 code under review remains the accepted implementation tree from `a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe`.
+- Sync merge commit: `722b77d5f4bb2d07ce9b75ff7ab10220690ae39b`, with previous E3 HEAD and main `33dfdd9d894a7bedd822168ba479c0989e889211` as parents.
+- Branch compare after sync: ahead 37 / behind 0.
+- [C1 CI 44035881585](https://github.com/yeatu/obsidianGP/actions/runs/44035881585): success, **45 B1 + 56 C1 passed**.
+- [Real E1/E2/E3 integration 44035881339](https://github.com/yeatu/obsidianGP/actions/runs/44035881339): success, including report upload and checkout cleanup.
+- Real integration artifact: ID `14306793519`; ZIP SHA-256 `sha256:ec7192b98c31ff9f5febb363678c49d0b52cd1538455207aaa08a7a57ba6c690`.
+- Artifact records E3 `722b77d5f4bb2d07ce9b75ff7ab10220690ae39b` and E1 `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`.
+- All four scopes and real parent dependency succeeded. Negative matrix again confirmed stale hash, not_found, corrupt source, ambiguous/deleted disposable lifecycle, snapshot echo/request mismatch, document hash mismatch and generation mismatch. All failure paths were fail-closed.
+- Context Pack remains `budget_limited`, 1 included / 2 deferred. One-token source scope is `budget_exceeded`, with no partial fragments.
+- Production SQLite, manifest, sidecar tree, Vault tree and HEADs remained unchanged; both checkouts clean.
+
+The run above validates the synchronized merge commit. The following commit, if any, only updates this README/handoff documentation and does not alter E3 implementation code. PR #10 remains open / Draft / not merged.
