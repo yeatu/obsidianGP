@@ -4,7 +4,7 @@
 >
 > **Координатора вызывают только по сигналу аналитика:** весь его спектр задач завершён либо возникло ограничение, требующее архитектурного решения или нового указания. Координатор не обновляет файл после каждого промежуточного отчёта.
 >
-> Последняя координаторская проверка E3: **2026-11-17**, PR #10 финальный проверенный HEAD `9c67641b2407f2ccb954bba564e8a682ac896baf`; sync merge `722b77d5f4bb2d07ce9b75ff7ab10220690ae39b`; E1 API HEAD `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`; main на момент final CI `33dfdd9d894a7bedd822168ba479c0989e889211`.
+> Последняя координаторская актуализация: **2026-11-17**. Основной контур E1/E2/E3 объединён в main на `d3e41965f916746225cb8f76fd4c96fc9e95486c`; PR #10 → `5e274fc`, PR #11 → `d654bdc`, PR #7 → `d3e4196`.
 
 ## 1. Роли и статусы
 
@@ -65,10 +65,11 @@
 
 | ID | Исполнитель | Работа | Статус | Что блокирует / следующий шаг |
 |---|---|---|---|---|
-| SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **COORDINATOR_ACCEPTED_NOT_MERGED** | Приёмка координатора сохранена по implementation tree `433a474147b9353afdd4dee4af205a79dc21253d`; аналитик завершил спектр. PR #11 HEAD `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`, open / non-draft. На момент сверки ahead 12 / behind 4 относительно main `aaf85dd3854bfbd200ad79b8883829847dff8f18`; входящие коммиты изменяли только реестры. CI [44026684195](https://github.com/yeatu/obsidianGP/actions/runs/44026684195): E1 job 88 passed, `unit-tests` skipped; [44026684168](https://github.com/yeatu/obsidianGP/actions/runs/44026684168): structural 88 passed. Перед merge синхронизировать registry drift; код E1 не возвращать на реализацию. |
-| SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency resolver, E1 adapter и Snapshot binding | **COORDINATOR_ACCEPTED_NOT_MERGED** | Финальная post-sync проверка на PR HEAD `9c67641b2407f2ccb954bba564e8a682ac896baf`. C1 PR CI [44036521942](https://github.com/yeatu/obsidianGP/actions/runs/44036521942) и push CI [44036515614](https://github.com/yeatu/obsidianGP/actions/runs/44036515614): каждый 45 B1 + 56 C1 passed. Runtime tree соответствует принятому code HEAD `a100239`; merge `722b77d5f4bb2d07ce9b75ff7ab10220690ae39b` подтянул main, docs-only commit `9c67641` освежил README/handoff. На момент проверки ahead 38 / behind 0 относительно main `33dfdd9d894a7bedd822168ba479c0989e889211`. PR #10 open / Draft / not merged. |
-| SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **COORDINATOR_ACCEPTED_NOT_MERGED** | Final PR integration [44036522448](https://github.com/yeatu/obsidianGP/actions/runs/44036522448), artifact `14306669437`, digest `sha256:81a402be4949fcf3528a368593e3715ccb23a692541838afc6d8502380fca997`; push run [44036515582](https://github.com/yeatu/obsidianGP/actions/runs/44036515582), artifact `14306674023`, digest `sha256:7d76980bc3935e431cb7d157ceaa9c135af2083d2894d44a52c057c55a0b9675`. Оба success на E3 `9c67641b2407f2ccb954bba564e8a682ac896baf` и E1 `a9ba344`. Подтверждены 4 scope, настоящая parent dependency, stale/not_found/corrupt/ambiguous/deleted/snapshot/document/generation negative matrix, fail-closed и production read-only guards. Ambiguous/deleted воспроизведены на disposable E1 indexes, mismatch cases — fault injection на E3 boundary. Context Pack `budget_limited` (1 included / 2 deferred), scope budget `budget_exceeded`; pack не `complete`. PR открыт, Draft, не объединён. |
-| SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **COORDINATOR_ACCEPTED_NOT_MERGED** | Приёмка сохраняется на проверенном HEAD `af4469d3badf0aa902568ae1926f5b5309a70655`; PR #7 открыт и не объединён. Повторная реализация E2 не требуется. |
+| SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **DONE** | PR [#11](https://github.com/yeatu/obsidianGP/pull/11) merged: `d654bdc009c566608e76d5d25ba219a3d6c2b6ed`. Финальные E1 API tests: 88 passed; structural CI: 88 passed. Отдельный `unit-tests` job был skipped и не считается успешным. Код интегрирован; повторная реализация не требуется. |
+| SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency resolver, E1 adapter и Snapshot binding | **DONE** | PR [#10](https://github.com/yeatu/obsidianGP/pull/10) merged: `5e274fc85d2d5f9f9fc3a4faaa48657cd7a2b7ec`; проверенный HEAD `4b446c3`. Финальный C1 CI [44038459416](https://github.com/yeatu/obsidianGP/actions/runs/44038459416): 45 B1 + 56 C1 passed. Runtime code принят и находится в main. |
+| SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **DONE** | PR #10 merged. Финальная real integration [44038459427](https://github.com/yeatu/obsidianGP/actions/runs/44038459427): success; artifact `14308411701`, SHA-256 `6b096d78395e23a6aadd904a449da0cb48a94131c0c3b03fb17c53108057524a`. Все четыре scope, parent dependency, negative matrix и read-only guards подтверждены. Context Pack остаётся `budget_limited` (1 included / 2 deferred), не `complete`. |
+| SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **DONE** | PR [#7](https://github.com/yeatu/obsidianGP/pull/7) merged: `d3e41965f916746225cb8f76fd4c96fc9e95486c`. Post-merge workflow [44041253438](https://github.com/yeatu/obsidianGP/actions/runs/44041253438): success, 64 passed / 0 failures / 0 errors / 0 skipped; artifact `14309710985`. |
+| SFRA-E3-V2.1 | E3 | Transport-independent SearchVaultService / ReadSourceService application services | **WAITING_FOR_IMPLEMENTATION** | Следующий этап после объединения E1/E2/E3. Отдельный application/services слой поверх принятых E2/E3/E1 API; без GitHub SDK, Issue comments, recovery, доступа к внутренней SQLite или публикации source text. Обязательны typed contracts и unit/contract tests. Архитектурная основа — PR #12. |
 
 ---
 
@@ -220,3 +221,46 @@ Pinned snapshot:
 Только свои чек-листы, итоговое решение, архитектурные указания и новые зависимости/критерии, если они действительно изменились. Аналитик продолжает быть владельцем текущих рабочих статусов и своих отметок.
 
 **Главный принцип SFRA:** поисковый индекс ускоряет обнаружение, но не становится второй базой знаний. В Context Pack попадает только проверенный текст первоисточника, связанный с актуальным индексным snapshot.
+
+---
+
+## 7. Координаторская актуализация — 2026-11-17, основной контур объединён
+
+### Состояние GitHub
+
+- Текущий main: `d3e41965f916746225cb8f76fd4c96fc9e95486c`.
+- PR [#10 / E3](https://github.com/yeatu/obsidianGP/pull/10) merged в 07:36:29 UTC, merge commit `5e274fc85d2d5f9f9fc3a4faaa48657cd7a2b7ec`. Финальный проверенный HEAD: `4b446c39d40cc7337960e71bb0a1efa5a9359b46`.
+- PR [#11 / E1](https://github.com/yeatu/obsidianGP/pull/11) merged в 07:43:42 UTC, merge commit `d654bdc009c566608e76d5d25ba219a3d6c2b6ed`. Проверенный HEAD: `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`.
+- PR [#7 / E2](https://github.com/yeatu/obsidianGP/pull/7) merged в 07:46:12 UTC, merge commit `d3e41965f916746225cb8f76fd4c96fc9e95486c`. Проверенный HEAD: `af4469d3badf0aa902568ae1926f5b5309a70655`.
+
+### Доказательства после merge
+
+- E3 C1 CI [44038459416](https://github.com/yeatu/obsidianGP/actions/runs/44038459416): success, 45 B1 + 56 C1 passed на финальном E3 HEAD.
+- E3 real integration [44038459427](https://github.com/yeatu/obsidianGP/actions/runs/44038459427): success на E3 HEAD `4b446c3` и E1 API `a9ba344`; artifact `14308411701`, SHA-256 `6b096d78395e23a6aadd904a449da0cb48a94131c0c3b03fb17c53108057524a`.
+- E1 API CI [44026684195](https://github.com/yeatu/obsidianGP/actions/runs/44026684195): целевой job success, 88 passed; отдельный unit-tests job skipped. Structural CI [44026684168](https://github.com/yeatu/obsidianGP/actions/runs/44026684168): 88 passed.
+- E2 post-merge workflow [44041253438](https://github.com/yeatu/obsidianGP/actions/runs/44041253438): success на main merge commit `d3e4196`. 64 tests passed, 0 failures/errors/skipped; SQLite integrity `ok`; 66/66 документов и 9 080/9 080 допустимых узлов; три оригинальных источника SHA-256 verified; Vault digest, E1 SQLite и `sfra-state` остались неизменными. Artifact `14309710985`, SHA-256 `05d4a755d4a2ce72e9840a354ca9301ef42e444f1cc08edfbe58bc1422d872c5`.
+
+**Координаторское решение:** E1-01, E2-01, E3-01 и E3-02 закрыты (`DONE`). Основной retrieval/context контур интегрирован в main. В merge-процессах не делались новые изменения Vault или production sidecar.
+
+### Следующий этап: SFRA-E3-V2.1
+
+Начать с transport-independent application services:
+- `SearchVaultService` поверх E2 SearchAdapter и E3 ContextIntegrationPipeline/ContextBuilder;
+- `ReadSourceService` поверх публичных E1 `read_source_scope()` и `resolve_current_node()`;
+- typed request/result contracts и unit/contract tests;
+- отсутствие зависимости от GitHub Issues, comments, workflow SDK, прямого SQL к E1 и transport state;
+- один SnapshotRef, provenance и существующая E3 budget policy остаются обязательными.
+
+PR [#12](https://github.com/yeatu/obsidianGP/pull/12) остаётся Draft proposal, не production worker. V2.1 может реализовываться независимо от GitHub transport; PR #12 не даёт разрешения включать worker/recovery.
+
+### Решения координатора по V2 transport gates
+
+1. **Публичная публикация:** deny by default. Нельзя помещать `raw_text`, цитаты, фрагменты, заголовки или source paths из Vault в публичные Issue/comments. На начальном этапе допускаются только операционные статусы и безопасные агрегированные метаданные. Исключение возможно позже только для corpus, явно включённого владельцем в public-export allowlist, и отдельного maintainer approval на Issue. До такой приёмки публикация source content отключена.
+2. **Авторизация:** начальный allowlist — только точный GitHub login `yeatu`; пустой или отсутствующий allowlist означает fail-closed. Расширение — отдельное решение.
+3. **Схема:** request envelope сохраняется как `sfra.issue.v1`. Добавить `status_schema_version: 2` и обязательные `request_body_sha256` + `worker_commit_sha` в transport status. Не менять request schema ради полей transport state.
+4. **Лимиты:** request body ≤ 32 KiB UTF-8; result chunk ≤ 45 KiB; aggregate serialized result ≤ 256 KiB; worker timeout 30 минут; RUNNING lease 35 минут.
+5. **Recovery/retry:** interval 5 минут; max-parallel 5; max attempts 3; backoff 5 и 15 минут. Concurrency per Issue без cancel-in-progress; worker повторно валидирует Issue, body hash, status и SnapshotRef на каждом запуске.
+6. **Budget:** только существующая E3 token budget policy; transport не может повышать бюджет, усекать source text или подменять `budget_limited` на `complete`.
+7. **Операционное владение:** первоначальный владелец — владелец/администратор репозитория `yeatu`; отключение worker workflow и удаление ошибочно опубликованных комментариев — maintainer action.
+
+Production Issue worker, recovery и публикация source content не разрешены до отдельной security/readiness проверки V2.2–V2.4. MCP остаётся optional и не является зависимостью V2 MVP.
