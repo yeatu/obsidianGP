@@ -68,15 +68,15 @@ jobs:
 
           path = Path(".github/workflows/sfra-stage-b-tests.yml")
           # Ignore YAML comments; only executable workflow content is scanned.
-          executable = "\\n".join(
+          executable = "\n".join(
               line.split("#", 1)[0]
               for line in path.read_text(encoding="utf-8").splitlines()
           )
           forbidden = {
-              "real index command": r"\\bsfra-index\\s+index\\b",
-              "production state ref": r"(?m)^\\s*ref:\\s*sfra-state\\s*$",
-              "Vault sparse checkout": r"(?m)^\\s*sparse-checkout:\\s*ГП\\s*$",
-              "production state checkout path": r"(?m)^\\s*path:\\s*(_state_source|production-state-source|state-repo|vault)\\s*$",
+              "real index command": r"\bsfra-index\s+index\b",
+              "production state ref": r"(?m)^\s*ref:\s*sfra-state\s*$",
+              "Vault sparse checkout": r"(?m)^\s*sparse-checkout:\s*ГП\s*$",
+              "production state checkout path": r"(?m)^\s*path:\s*(_state_source|production-state-source|state-repo|vault)\s*$",
           }
           failures = [name for name, pattern in forbidden.items() if re.search(pattern, executable)]
           if failures:
