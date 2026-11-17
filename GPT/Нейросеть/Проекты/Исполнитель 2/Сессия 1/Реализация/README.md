@@ -11,7 +11,7 @@
 - [Исходный пакет sfra_search](./source/)
 - [Fixture-тесты адаптера](./source/tests/test_structural_runtime.py)
 - [Read-only структурный адаптер](./source/src/sfra_search/structural.py)
-- [Интеграционный workflow](../../../.github/workflows/sfra-search-integration.yml)
+- [Интеграционный workflow в PR-ветке](https://github.com/yeatu/obsidianGP/blob/e2/active-node-source-filter/.github/workflows/sfra-search-integration.yml)
 
 ## Что изменено в E2
 
@@ -47,6 +47,6 @@ E2 не пытается разрешать неоднозначность и н
 
 ## Результат
 
-Подробные версии SHA, запросов, адресов и проверок находятся в [Результат.md](./Результат.md). Машинные результаты и отчёт пр приложены к Actions artifact.
+Подробные версии SHA, запросов, адресов и проверок находятся в [Результат.md](./Результат.md). Машинные результаты и отчёт приложены к Actions artifact.
 
 **Следующий шаг:** независимое ревью Аналитика 2 по PR №7. Автоматическая успешная проверка не является автоматической приёмкой. Слияние в main не выполнялось.
