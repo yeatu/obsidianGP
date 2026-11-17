@@ -1,12 +1,12 @@
 # Этап A — проектирование API адресного чтения структурного узла
 
-Статус: **спецификация уточнена по пяти замечаниям аналитика; ожидает повторной приёмки. Реализация не начиналась.**  
+Статус: **этап A принят; E1 API реализован в отдельной PR-ветке и передан аналитику на проверку.**  
 Рабочая ветка: `executor-1/sfra-indexer-session-1`.  
 Базовая версия кода: этапы B/C и Persistence, принятые ранее; SQLite schema v2.
 
 ## 1. Цель и границы API
 
-Предлагается добавить в публичный пакет `sfra_indexer` функцию:
+В публичном пакете `sfra_indexer` реализована функция:
 
 ```python
 get_node_by_id(
@@ -484,3 +484,39 @@ API не должен вызывать `connect_database()`: эта функци
 - Предложен тестовый набор на все семь статусов и запрет утечки raw_text при ошибке.
 
 **Код, SQLite schema v2, production/test ветки состояния, GitHub Actions workflow и исходный Vault не изменялись. Тесты реализации API на этом этапе не запускались, поскольку реализация запрещена до вердикта аналитика.**
+
+
+## 14. Фактическая реализация E1
+
+Модуль реализации: `sfra_indexer/lookup.py`.
+
+Публичные экспорты:
+- `get_node_by_id(db_path, node_id, expected_hash, vault_root)`;
+- `NodeLookupResult`;
+- `NodeLookupStatus`;
+- `NodeRecord`.
+
+Возвращаемый `raw_text` берётся исключительно из `source_text[char_start:char_end]` текущего файла. `structural_nodes.raw_text` не используется как ответ: он участвует только в DB-only проверке сохранённого Content Hash и сверке с последним снимком `node_versions`.
+
+Безопасное открытие использует Linux `openat2` с ограничением корнем и запретом symlink; при недоступности syscall применяется POSIX descriptor-relative обход с `O_NOFOLLOW`. Открытый объект проверяется через `fstat` до/после чтения, его путь сверяется с canonical Vault root (когда доступен `/proc/self/fd`), а путь повторно открывается и сравнивается по device/inode. Если платформенные гарантии недоступны, запрос завершается fail-closed.
+
+Тесты E1 находятся в `tests/test_lookup.py`. Workflow `sfra-stage-b-tests.yml` запускает полный pytest набор и проверку реального Vault как для push в рабочую ветку, так и для pull request в `main`; checkout в PR закрепляется на SHA самого PR head.
+
+### Явная идентичность Vault
+
+Persistence workflow принимает параметр `vault_ref`; его значение по умолчанию — `executor-1/sfra-indexer-session-1`, а не `main`. Исходные заметки извлекаются отдельным checkout в `vault/ГП`. Фактический commit фиксируется через `git rev-parse HEAD`.
+
+Новые manifest содержат:
+- `vault_ref` — явно выбранную ветку, тег или commit ref;
+- `vault_commit_sha` — фактический commit SHA checkout;
+- `source_branch` и `source_commit` — совместимые алиасы для существующих readers.
+
+Формат manifest остаётся version 1; чтение ранее созданных manifest с `source_branch/source_commit` сохранено. Выбор Vault ref не выводится из ветки реализации и не переключается автоматически на `main`.
+
+### Фактические границы реализации
+
+- SQLite schema v2 не изменена.
+- Модули `parser.py`, `identity.py`, `storage.py` и `indexer.py` не переписывались.
+- `get_node_by_id` открывает только существующую SQLite в read-only/query-only режиме.
+- Тесты не используют production `sfra-state` и не изменяют Vault.
+- Production Persistence workflow остаётся ограниченным своей рабочей веткой; E1 changes are prepared in a separate PR branch to avoid unintended production publication before review.

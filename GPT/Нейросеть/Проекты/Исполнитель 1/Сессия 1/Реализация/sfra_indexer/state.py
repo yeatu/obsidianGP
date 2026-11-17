@@ -95,6 +95,31 @@ def verify_state_directory(state_dir: str | Path) -> dict[str, Any]:
     if manifest.get("database") != DATABASE_RELATIVE_PATH:
         raise StateError("Manifest database path is not the approved state database path")
 
+    # New snapshots write explicit Vault provenance. Older format-v1 manifests
+    # remain readable through the legacy source_branch/source_commit aliases.
+    vault_ref = manifest.get("vault_ref", manifest.get("source_branch"))
+    vault_commit_sha = manifest.get("vault_commit_sha", manifest.get("source_commit"))
+    if not isinstance(vault_ref, str) or not vault_ref.strip():
+        raise StateError("Manifest vault_ref is missing or malformed")
+    if (
+        not isinstance(vault_commit_sha, str)
+        or len(vault_commit_sha) not in {40, 64}
+        or any(char not in "0123456789abcdef" for char in vault_commit_sha.lower())
+    ):
+        raise StateError("Manifest vault_commit_sha is missing or malformed")
+    if (
+        "vault_ref" in manifest
+        and "source_branch" in manifest
+        and manifest["vault_ref"] != manifest["source_branch"]
+    ):
+        raise StateError("Manifest Vault ref aliases are inconsistent")
+    if (
+        "vault_commit_sha" in manifest
+        and "source_commit" in manifest
+        and manifest["vault_commit_sha"] != manifest["source_commit"]
+    ):
+        raise StateError("Manifest Vault commit aliases are inconsistent")
+
     expected_digest = manifest.get("database_sha256")
     if (
         not isinstance(expected_digest, str)
@@ -143,11 +168,20 @@ def create_state_snapshot(
     state_dir: str | Path,
     *,
     source_repository: str,
-    source_branch: str,
-    source_commit: str,
+    vault_ref: str,
+    vault_commit_sha: str,
     workflow_run_id: str | int,
 ) -> dict[str, Any]:
     """Create a consistent SQLite Backup API snapshot and its integrity manifest."""
+    if not isinstance(vault_ref, str) or not vault_ref.strip():
+        raise StateError("vault_ref must be a non-empty branch, tag, or commit ref")
+    if (
+        not isinstance(vault_commit_sha, str)
+        or len(vault_commit_sha) not in {40, 64}
+        or any(char not in "0123456789abcdef" for char in vault_commit_sha.lower())
+    ):
+        raise StateError("vault_commit_sha must be a 40- or 64-character Git object SHA")
+
     source_path = Path(db_path).expanduser().resolve()
     if not source_path.is_file():
         raise StateError(f"Source SQLite database does not exist: {source_path}")
@@ -187,8 +221,11 @@ def create_state_snapshot(
             "database_sha256": final_digest,
             "sqlite_schema_version": final_schema_version,
             "source_repository": source_repository,
-            "source_branch": source_branch,
-            "source_commit": source_commit,
+            "vault_ref": vault_ref,
+            "vault_commit_sha": vault_commit_sha,
+            # Backward-compatible aliases for consumers of manifest format v1.
+            "source_branch": vault_ref,
+            "source_commit": vault_commit_sha,
             "indexer_version": "0.2.0",
             "workflow_run_id": str(workflow_run_id),
             "updated_at": datetime.now(timezone.utc).isoformat(),

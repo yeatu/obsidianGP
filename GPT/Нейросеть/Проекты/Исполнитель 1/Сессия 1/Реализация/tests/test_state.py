@@ -34,8 +34,8 @@ def test_snapshot_manifest_and_database_are_verified(tmp_path):
         source_db,
         state_dir,
         source_repository="yeatu/obsidianGP",
-        source_branch="executor-1/sfra-indexer-session-1",
-        source_commit="abc123",
+        vault_ref="executor-1/sfra-indexer-session-1",
+        vault_commit_sha="a" * 40,
         workflow_run_id=42,
     )
 
@@ -44,6 +44,10 @@ def test_snapshot_manifest_and_database_are_verified(tmp_path):
     assert manifest["database_sha256"].startswith("sha256:")
     assert manifest["sqlite_schema_version"] == 2
     assert manifest["workflow_run_id"] == "42"
+    assert manifest["vault_ref"] == "executor-1/sfra-indexer-session-1"
+    assert manifest["vault_commit_sha"] == "a" * 40
+    assert manifest["source_branch"] == manifest["vault_ref"]
+    assert manifest["source_commit"] == manifest["vault_commit_sha"]
     assert verify_state_directory(state_dir) == manifest
 
     snapshot = sqlite3.connect(state_dir / "state/structure.sqlite3")
@@ -60,8 +64,8 @@ def test_manifest_hash_mismatch_is_rejected_before_restore(tmp_path):
         source_db,
         state_dir,
         source_repository="yeatu/obsidianGP",
-        source_branch="executor-1/sfra-indexer-session-1",
-        source_commit="abc123",
+        vault_ref="executor-1/sfra-indexer-session-1",
+        vault_commit_sha="a" * 40,
         workflow_run_id="test",
     )
 
@@ -81,8 +85,8 @@ def test_sqlite_corruption_is_rejected_even_when_manifest_hash_matches(tmp_path)
         source_db,
         state_dir,
         source_repository="yeatu/obsidianGP",
-        source_branch="executor-1/sfra-indexer-session-1",
-        source_commit="abc123",
+        vault_ref="executor-1/sfra-indexer-session-1",
+        vault_commit_sha="a" * 40,
         workflow_run_id="test",
     )
 
@@ -131,3 +135,26 @@ def test_backup_api_captures_committed_wal_data(tmp_path):
 def test_missing_state_is_not_treated_as_an_empty_database(tmp_path):
     with pytest.raises(StateError, match="incomplete"):
         verify_state_directory(tmp_path / "missing-state")
+
+
+def test_legacy_manifest_source_branch_aliases_remain_readable(tmp_path):
+    source_db = _indexed_database(tmp_path)
+    state_dir = tmp_path / "state-repository"
+    create_state_snapshot(
+        source_db,
+        state_dir,
+        source_repository="yeatu/obsidianGP",
+        vault_ref="executor-1/sfra-indexer-session-1",
+        vault_commit_sha="b" * 40,
+        workflow_run_id="legacy",
+    )
+
+    manifest_path = state_dir / "state/manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("vault_ref")
+    manifest.pop("vault_commit_sha")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    verified = verify_state_directory(state_dir)
+    assert verified["source_branch"] == "executor-1/sfra-indexer-session-1"
+    assert verified["source_commit"] == "b" * 40

@@ -81,6 +81,44 @@ sfra-index info --db /path/outside/Vault/.sfra-index/structure.sqlite3
 
 The index directory must be outside the source Vault. The parser reads UTF-8 with `newline=""` and preserves source LF/CRLF. Empty Markdown files are represented as documents with zero bytes and a document-root node. Deleted source files remain in SQLite with document status `deleted`, and their former active nodes become `stale`.
 
+## Source-verified exact node lookup (E1)
+
+The public API `get_node_by_id` returns a current Structural Node only after verifying it against the original Markdown file. The database path is explicit; no package-level global database configuration is used.
+
+```python
+from pathlib import Path
+from sfra_indexer import NodeLookupStatus, get_node_by_id
+
+result = get_node_by_id(
+    db_path=Path("/path/to/restored-index/structure.sqlite3"),
+    node_id="node_<UUID4>",
+    expected_hash="sha256:<64 lowercase hex>",
+    vault_root=Path("/path/to/checkout/ГП"),
+)
+
+if result.status is NodeLookupStatus.OK:
+    print(result.node.raw_text)  # exact slice from the current Markdown file
+else:
+    print(result.status.value, result.error_code)
+    assert result.node is None
+```
+
+The successful response includes `node_id`, `content_hash`, `source_path`, `node_type`, `parent_node_id`, `heading_path`, exact `raw_text`, line/character/UTF-8-byte coordinates and the verified whole-file `source_sha256`. `NodeLookupResult.to_dict()` emits `{"status": "...", "node": null}` for every unsuccessful status.
+
+Possible statuses:
+
+- `ok`: the active node and its exact source slice were verified.
+- `stale_source`: the current file is missing/changed, or the requested Hash is no longer current.
+- `deleted`: the indexed document or node address was deleted.
+- `ambiguous`: matching history does not identify one safe current node.
+- `not_found`: the Node ID is absent from the index.
+- `invalid_request`: malformed Node ID/Hash, database path, or Vault root.
+- `integrity_error`: damaged SQLite/history, unsafe stored path, invalid coordinates, unsupported secure-open semantics, or inconsistent stored data.
+
+The API opens SQLite in read-only/query-only mode and never calls the schema-creating `connect_database()`. It checks the complete event history, saved-text and latest-version integrity before resolving terminal statuses. For an active node it then opens the source under the supplied Vault root using descriptor-relative no-follow resolution, checks file identity before/after reading, hashes the whole file, reconstructs the exact slice using Python character offsets, cross-checks UTF-8 byte and line offsets, and compares the slice SHA-256 with both the stored Content Hash and `expected_hash`. No text is returned for a failed status. The stored `raw_text` is only a consistency witness, never the returned source.
+
+The current schema stores a relative path, not the Git ref. The caller must therefore pass the intended Vault checkout root explicitly. The persistence workflow records that checkout's ref and actual commit SHA in the manifest as described below.
+
 ## Structural model
 
 - Headings H1–H6 form nested section nodes. A heading's `raw_text` and span include descendant sections up to the next heading of equal or higher rank. Its `content_spans` separately list its own heading line and direct block content, excluding child heading sections.
@@ -164,5 +202,7 @@ The \`sfra-state\` branch is a true orphan branch with one root commit and no pa
 The first production initialization is explicit: run \`SFRA persistent SQLite state\` with \`initialize_state=true\`. Normal pushes never silently replace missing state with a new database. Subsequent runs restore the previous database and use a regular fast-forward push after checking the remote branch head. A concurrency group serializes writers.
 
 The state branch separates files and Git history from the source Vault but does not restrict repository access. SQLite includes source text in current and historical node snapshots. Anyone who can read the repository and this branch can read that content.
+
+Each persistence run checks out an explicit `vault_ref` input (default: `executor-1/sfra-indexer-session-1`; never an implicit switch to `main`), resolves its actual `vault_commit_sha` using `git rev-parse HEAD`, indexes only that checkout's `ГП/` tree, and stores both values in `state/manifest.json`. Legacy `source_branch` and `source_commit` keys remain as aliases so existing manifest readers continue to work. When manually dispatching the workflow, choose the Vault ref deliberately; the implementation branch and Vault source ref are separate concepts.
 
 The independent-run integration test will use its own fixture Vault, SQLite database, and \`sfra-state-test\` branch. It must never write test data to production \`sfra-state\`.

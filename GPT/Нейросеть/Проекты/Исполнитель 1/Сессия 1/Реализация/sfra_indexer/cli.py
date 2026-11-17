@@ -40,8 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
     state_snapshot_cmd.add_argument("--db", required=True, type=Path)
     state_snapshot_cmd.add_argument("--state-dir", required=True, type=Path)
     state_snapshot_cmd.add_argument("--source-repository", required=True)
-    state_snapshot_cmd.add_argument("--source-branch", required=True)
-    state_snapshot_cmd.add_argument("--source-commit", required=True)
+    state_snapshot_cmd.add_argument(
+        "--vault-ref", "--source-branch", dest="vault_ref", required=True,
+        help="Exact Vault branch, tag, or commit ref that was checked out",
+    )
+    state_snapshot_cmd.add_argument(
+        "--vault-commit-sha", "--source-commit", dest="vault_commit_sha", required=True,
+        help="Actual checked-out Vault Git commit SHA",
+    )
     state_snapshot_cmd.add_argument("--workflow-run-id", required=True)
 
     return parser
@@ -115,8 +121,8 @@ def main(argv: list[str] | None = None) -> int:
             args.db,
             args.state_dir,
             source_repository=args.source_repository,
-            source_branch=args.source_branch,
-            source_commit=args.source_commit,
+            vault_ref=args.vault_ref,
+            vault_commit_sha=args.vault_commit_sha,
             workflow_run_id=args.workflow_run_id,
         )
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

@@ -2,6 +2,7 @@
 
 from .identity import MatchPlan, build_match_plan, content_hash
 from .indexer import IndexResult, get_database_summary, index_vault, read_markdown_file
+from .lookup import NodeLookupResult, NodeLookupStatus, NodeRecord, get_node_by_id
 from .models import ParsedDocument, Passage, SourceSpan, StructuralNode
 from .parser import (
     build_passages,
@@ -20,6 +21,10 @@ from .storage import connect_database, save_parsed_document
 
 __all__ = [
     "IndexResult",
+    "NodeLookupResult",
+    "NodeLookupStatus",
+    "NodeRecord",
+    "get_node_by_id",
     "MatchPlan",
     "build_match_plan",
     "content_hash",
