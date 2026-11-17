@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfra-context-builder"
+version = "0.1.0"
+description = "Transport-independent SFRA Context Builder core"
+requires-python = ">=3.11"
+dependencies = [
+  "tiktoken==0.14.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0,<10.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
