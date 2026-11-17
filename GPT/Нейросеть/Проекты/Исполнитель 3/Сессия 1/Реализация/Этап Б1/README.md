@@ -12,7 +12,7 @@
 - разрешение required_with / parent_context_required через узкий DependencyResolver;
 - SCC для циклов и неделимые dependency groups;
 - Known, Version Changes, Coverage и Parallel Sources;
-- атомарное бюджетирование целых узлов/групп без усечения;
+- атомарное бюджетирование целых узлов/групп без усечения: `budget_tokens` учитывает Included и provenance, а служебные Coverage/Deferred/Diagnostics входят в `response_tokens_estimated`;
 - Context Pack по контракту Этапа А.
 
 ## Установка и тесты
