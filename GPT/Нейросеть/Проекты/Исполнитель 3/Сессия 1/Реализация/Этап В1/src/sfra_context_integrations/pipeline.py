@@ -1,4 +1,4 @@
-"""Fixture-testable orchestration for E2 search, B1 assembly and E1 source reads."""
+"""Orchestrate E2 retrieval, B1 Context Pack building and E1 source reads."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from typing import Any
 from sfra_context_builder import ContextBuilder
 from sfra_context_builder.models import DependencyResolver, SearchRequest, SnapshotRef
 
+from .dependency_resolver import E1DependencyResolver
 from .search_adapter import E2SearchAdapter, SearchAdapterResult
 from .snapshot import PinnedSnapshot
-from .source_protocol import SourceReader
-from .source_reader import SourceReaderContractError, SCOPES
+from .source_reader import E1SourceReader, SourceReaderContractError, SCOPES
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,13 +32,7 @@ class ContextIntegrationResult:
 
 
 class ContextIntegrationPipeline:
-    """Run search → SearchBatch → ContextPack → explicit source scope reads.
-
-    The pipeline owns no persistence and performs no direct SQL/Markdown parsing.
-    The exact same SnapshotRef is passed to the search adapter, B1 dependency
-    resolver and every SourceReader call. A pipeline cannot be wired to adapters
-    created for a different sidecar/Vault checkout.
-    """
+    """One immutable snapshot through search, dependency resolution and source reads."""
 
     def __init__(
         self,
@@ -46,20 +40,26 @@ class ContextIntegrationPipeline:
         pinned_snapshot: PinnedSnapshot,
         search_adapter: E2SearchAdapter,
         context_builder: ContextBuilder,
-        source_reader: SourceReader,
+        source_reader: E1SourceReader,
         dependency_resolver: DependencyResolver | None = None,
     ) -> None:
         if not isinstance(pinned_snapshot, PinnedSnapshot):
             raise TypeError("pinned_snapshot must be a PinnedSnapshot")
         if search_adapter.pinned_snapshot.ref != pinned_snapshot.ref:
             raise ValueError("SearchAdapter and pipeline use different SnapshotRef values")
+        if source_reader.pinned_snapshot.ref != pinned_snapshot.ref:
+            raise ValueError("SourceReader and pipeline use different SnapshotRef values")
         if search_adapter.source_reader is not source_reader:
             raise ValueError("SearchAdapter and pipeline must share the same SourceReader instance")
         self._pinned = pinned_snapshot
         self._search = search_adapter
         self._builder = context_builder
         self._source_reader = source_reader
-        self._dependency_resolver = dependency_resolver
+        self._dependency_resolver = (
+            dependency_resolver
+            if dependency_resolver is not None
+            else E1DependencyResolver(source_reader)
+        )
 
     def run(
         self,
@@ -67,7 +67,6 @@ class ContextIntegrationPipeline:
         *,
         source_reads: Sequence[SourceReadRequest] = (),
     ) -> ContextIntegrationResult:
-        """Build one Context Pack, then execute the explicitly requested reads."""
         if not isinstance(request, SearchRequest):
             raise TypeError("request must be a SearchRequest")
 
@@ -79,6 +78,10 @@ class ContextIntegrationPipeline:
             self._dependency_resolver,
             snapshot=snapshot,
         )
+
+        dependency_diagnostics = getattr(self._dependency_resolver, "diagnostics", ())
+        if dependency_diagnostics:
+            pack["Diagnostics"].extend(dict(item) for item in dependency_diagnostics)
 
         read_results: list[Mapping[str, Any]] = []
         for index, read_request in enumerate(source_reads):

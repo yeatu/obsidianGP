@@ -1,4 +1,4 @@
-"""Deterministic E1 source-scope fixture. It uses prebuilt records, not Markdown parsing."""
+"""Deterministic fake of the agreed public E1 API. No SQL or Markdown parsing."""
 
 from __future__ import annotations
 
@@ -16,13 +16,27 @@ def snapshot() -> SnapshotRef:
     return SnapshotRef("a" * 40, "b" * 40, "sha256:" + "c" * 64)
 
 
-class FixtureE1ScopeAPI:
-    """Fake public E1 API with explicit precomputed parent/sibling/document records."""
+class FixtureTokenCounter:
+    def count(self, text: str) -> int:
+        return len(text.split())
 
-    def __init__(self, expected_snapshot: SnapshotRef | None = None, *, token_counter=None):
+    def metadata(self):
+        return {
+            "name": "fixture-whitespace",
+            "version": "1",
+            "encoding": "words",
+            "exact_for_encoding": True,
+            "exact_for_client_model": False,
+        }
+
+
+class FixtureE1ScopeAPI:
+    """Fake public E1 read_source_scope/resolve_current_node implementation."""
+
+    def __init__(self, expected_snapshot: SnapshotRef | None = None):
         self.expected_snapshot = expected_snapshot or snapshot()
-        self.token_counter = token_counter or (lambda text: len(text.split()))
-        self.calls = []
+        self.scope_calls = []
+        self.resolve_calls = []
         self.document_text = (
             "# Test document\n"
             "Parent source fragment.\n"
@@ -102,6 +116,8 @@ class FixtureE1ScopeAPI:
             "role": role,
             "node_id": node["node_id"],
             "source_path": node["source_path"],
+            "node_type": node["node_type"],
+            "parent_node_id": node["parent_node_id"],
             "heading_path": list(node["heading_path"]),
             "line_start": node["line_start"],
             "line_end": node["line_end"],
@@ -111,10 +127,46 @@ class FixtureE1ScopeAPI:
             "index_generation": node["index_generation"],
         }
 
-    def read_scope(self, node_id, expected_hash, scope, budget_tokens, snapshot):
-        self.calls.append((node_id, expected_hash, scope, budget_tokens, snapshot))
-        target = self.records.get(node_id)
-        if snapshot != self.expected_snapshot:
+    def resolve_current_node(self, db_path, node_id, *, snapshot_id):
+        self.resolve_calls.append((db_path, node_id, snapshot_id))
+        if snapshot_id != self.expected_snapshot.snapshot_id:
+            return {
+                "status": "integrity_error",
+                "snapshot_id": self.expected_snapshot.snapshot_id,
+                "address": None,
+                "error": {"code": "snapshot_mismatch"},
+            }
+        status = self.status_overrides.get(node_id)
+        if status:
+            return {
+                "status": status,
+                "snapshot_id": snapshot_id,
+                "address": None,
+                "error": {"code": status},
+            }
+        record = self.records.get(node_id)
+        if record is None:
+            return {
+                "status": "not_found",
+                "snapshot_id": snapshot_id,
+                "address": None,
+                "error": {"code": "node_not_found"},
+            }
+        address = {key: value for key, value in record.items() if key != "raw_text"}
+        return {"status": "ok", "snapshot_id": snapshot_id, "address": address}
+
+    def read_source_scope(
+        self,
+        db_path,
+        vault_root,
+        node_id,
+        expected_hash,
+        *,
+        scope,
+        snapshot_id,
+    ):
+        self.scope_calls.append((db_path, vault_root, node_id, expected_hash, scope, snapshot_id))
+        if snapshot_id != self.expected_snapshot.snapshot_id:
             return {
                 "status": "integrity_error",
                 "snapshot_id": self.expected_snapshot.snapshot_id,
@@ -122,19 +174,20 @@ class FixtureE1ScopeAPI:
                 "fragments": [],
                 "diagnostics": [{"code": "snapshot_mismatch"}],
             }
-        override = self.status_overrides.get(node_id)
-        if override:
+        status = self.status_overrides.get(node_id)
+        if status:
             return {
-                "status": override,
-                "snapshot_id": snapshot.snapshot_id,
+                "status": status,
+                "snapshot_id": snapshot_id,
                 "target_source": None,
                 "fragments": [],
-                "diagnostics": [{"code": override}],
+                "diagnostics": [{"code": status}],
             }
+        target = self.records.get(node_id)
         if target is None:
             return {
                 "status": "not_found",
-                "snapshot_id": snapshot.snapshot_id,
+                "snapshot_id": snapshot_id,
                 "target_source": None,
                 "fragments": [],
                 "diagnostics": [{"code": "node_not_found"}],
@@ -142,16 +195,13 @@ class FixtureE1ScopeAPI:
         if target["content_hash"] != expected_hash:
             return {
                 "status": "stale_source",
-                "snapshot_id": snapshot.snapshot_id,
+                "snapshot_id": snapshot_id,
                 "target_source": None,
                 "fragments": [],
                 "diagnostics": [{"code": "expected_hash_mismatch"}],
             }
 
-        target_source = {
-            key: value for key, value in target.items()
-            if key not in {"raw_text"}
-        }
+        target_source = {key: value for key, value in target.items() if key != "raw_text"}
         if scope == "node":
             fragments = [self._fragment(target, "target")]
         elif scope == "parent":
@@ -159,6 +209,8 @@ class FixtureE1ScopeAPI:
             parent_id = target["parent_node_id"]
             if parent_id is not None and parent_id in self.records:
                 fragments.append(self._fragment(self.records[parent_id], "parent_context"))
+            elif parent_id is None:
+                pass
         elif scope == "neighbors":
             fragments = [self._fragment(target, "target")]
             previous_id, next_id = self.sibling_ids.get(node_id, (None, None))
@@ -171,6 +223,8 @@ class FixtureE1ScopeAPI:
                 "role": "document",
                 "node_id": None,
                 "source_path": target["source_path"],
+                "node_type": "document",
+                "parent_node_id": None,
                 "heading_path": [],
                 "line_start": 1,
                 "line_end": self.document_text.count("\n"),
@@ -182,7 +236,7 @@ class FixtureE1ScopeAPI:
         else:
             return {
                 "status": "invalid_request",
-                "snapshot_id": snapshot.snapshot_id,
+                "snapshot_id": snapshot_id,
                 "target_source": None,
                 "fragments": [],
                 "diagnostics": [{"code": "unsupported_scope"}],
@@ -191,40 +245,24 @@ class FixtureE1ScopeAPI:
         if scope != "node" and target["document_hash"] is None:
             return {
                 "status": "integrity_error",
-                "snapshot_id": snapshot.snapshot_id,
-                "target_source": target_source,
+                "snapshot_id": snapshot_id,
+                "target_source": None,
                 "fragments": [],
                 "diagnostics": [{"code": "document_hash_unavailable"}],
             }
-
-        tokens_used = sum(self.token_counter(item["raw_text"]) for item in fragments)
-        if budget_tokens is not None and tokens_used > budget_tokens:
-            return {
-                "status": "budget_exceeded",
-                "snapshot_id": snapshot.snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "token_accounting": {
-                    "budget_tokens": budget_tokens,
-                    "tokens_used": tokens_used,
-                },
-                "diagnostics": [{"code": "scope_budget_exceeded"}],
-            }
+        diagnostics = []
+        if scope == "parent" and target["parent_node_id"] is None:
+            diagnostics.append({"code": "parent_not_present"})
 
         return {
             "status": "ok",
-            "snapshot_id": snapshot.snapshot_id,
+            "snapshot_id": snapshot_id,
             "requested": {
                 "node_id": node_id,
                 "expected_hash": expected_hash,
                 "scope": scope,
-                "budget_tokens": budget_tokens,
             },
             "target_source": target_source,
             "fragments": fragments,
-            "token_accounting": {
-                "budget_tokens": budget_tokens,
-                "tokens_used": tokens_used,
-            },
-            "diagnostics": [],
+            "diagnostics": diagnostics,
         }

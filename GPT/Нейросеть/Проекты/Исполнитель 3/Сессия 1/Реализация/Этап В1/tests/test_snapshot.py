@@ -5,10 +5,7 @@ import json
 
 import pytest
 
-from sfra_context_integrations.snapshot import (
-    SnapshotBindingError,
-    bind_pinned_snapshot,
-)
+from sfra_context_integrations.snapshot import SnapshotBindingError, bind_pinned_snapshot
 
 
 def _sha(data: bytes) -> str:
@@ -16,8 +13,8 @@ def _sha(data: bytes) -> str:
 
 
 def _fixture(tmp_path, *, source_commit="a" * 40):
-    root = tmp_path / "sidecar"
-    state = root / "state"
+    sidecar = tmp_path / "sidecar"
+    state = sidecar / "state"
     state.mkdir(parents=True)
     database = state / "structure.sqlite3"
     database.write_bytes(b"immutable sqlite fixture")
@@ -32,83 +29,90 @@ def _fixture(tmp_path, *, source_commit="a" * 40):
         "sqlite_schema_version": 2,
     }
     manifest_path = state / "manifest.json"
-    # Deliberately use non-canonical whitespace: SnapshotRef hashes exact bytes.
     raw = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     manifest_path.write_bytes(raw)
-    vault = tmp_path / "vault"
-    vault.mkdir()
-    return root, vault, manifest, raw, database
+    vault_git = tmp_path / "vault-git"
+    vault_root = vault_git / "ГП"
+    vault_root.mkdir(parents=True)
+    return sidecar, vault_git, vault_root, manifest, raw, database
 
 
-def test_binds_snapshot_to_manifest_source_commit_and_exact_manifest_bytes(tmp_path):
-    root, vault, manifest, raw, database = _fixture(tmp_path)
-    verifier_calls = []
+def _binder(sidecar, vault_git, vault_root, manifest, *, sidecar_sha="b" * 40, vault_sha="a" * 40, dirty=""):
+    def head_reader(path):
+        return sidecar_sha if path == sidecar.resolve() else vault_sha
 
-    def verify_state(state_root):
-        verifier_calls.append(state_root)
-        return manifest
-
-    pinned = bind_pinned_snapshot(
-        vault_commit_sha=manifest["source_commit"],
-        sidecar_commit_sha="b" * 40,
-        sidecar_root=root,
-        vault_root=vault,
-        state_verifier=verify_state,
+    return bind_pinned_snapshot(
+        sidecar_root=sidecar,
+        vault_git_root=vault_git,
+        vault_root=vault_root,
+        state_verifier=lambda _: manifest,
+        git_head_reader=head_reader,
+        git_status_reader=lambda _: dirty,
     )
+
+
+def test_binds_snapshot_to_actual_git_heads_and_exact_manifest_bytes(tmp_path):
+    sidecar, vault_git, vault_root, manifest, raw, database = _fixture(tmp_path)
+
+    pinned = _binder(sidecar, vault_git, vault_root, manifest)
 
     assert pinned.ref.vault_commit_sha == manifest["source_commit"]
     assert pinned.ref.sidecar_commit_sha == "b" * 40
     assert pinned.ref.manifest_sha256 == _sha(raw)
     assert pinned.database_path == database.resolve()
-    assert pinned.vault_root == vault.resolve()
-    assert verifier_calls == [root.resolve()]
+    assert pinned.vault_git_root == vault_git.resolve()
+    assert pinned.vault_root == vault_root.resolve()
 
 
-def test_rejects_manifest_source_commit_not_equal_to_pinned_vault(tmp_path):
-    root, vault, manifest, _, _ = _fixture(tmp_path)
+def test_rejects_manifest_source_commit_not_equal_to_actual_vault_head(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, _ = _fixture(tmp_path)
     with pytest.raises(SnapshotBindingError, match="manifest.source_commit"):
-        bind_pinned_snapshot(
-            vault_commit_sha="c" * 40,
-            sidecar_commit_sha="b" * 40,
-            sidecar_root=root,
-            vault_root=vault,
-            state_verifier=lambda _: manifest,
-        )
+        _binder(sidecar, vault_git, vault_root, manifest, vault_sha="c" * 40)
+
+
+def test_rejects_dirty_sidecar_or_vault_checkout(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, _ = _fixture(tmp_path)
+    with pytest.raises(SnapshotBindingError, match="dirty"):
+        _binder(sidecar, vault_git, vault_root, manifest, dirty=" M state/manifest.json\n")
 
 
 def test_rejects_database_changed_after_manifest_was_written(tmp_path):
-    root, vault, manifest, _, database = _fixture(tmp_path)
+    sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
     database.write_bytes(b"modified sqlite fixture")
     with pytest.raises(SnapshotBindingError, match="SQLite SHA-256"):
-        bind_pinned_snapshot(
-            vault_commit_sha=manifest["source_commit"],
-            sidecar_commit_sha="b" * 40,
-            sidecar_root=root,
-            vault_root=vault,
-            state_verifier=lambda _: manifest,
-        )
+        _binder(sidecar, vault_git, vault_root, manifest)
 
 
 def test_rejects_manifest_verifier_disagreement(tmp_path):
-    root, vault, manifest, _, _ = _fixture(tmp_path)
-    other = dict(manifest, indexer_version="unexpected")
+    sidecar, vault_git, vault_root, manifest, _, _ = _fixture(tmp_path)
+
     with pytest.raises(SnapshotBindingError, match="verifier result"):
         bind_pinned_snapshot(
-            vault_commit_sha=manifest["source_commit"],
-            sidecar_commit_sha="b" * 40,
-            sidecar_root=root,
-            vault_root=vault,
-            state_verifier=lambda _: other,
+            sidecar_root=sidecar,
+            vault_git_root=vault_git,
+            vault_root=vault_root,
+            state_verifier=lambda _: dict(manifest, indexer_version="unexpected"),
+            git_head_reader=lambda path: (
+                "b" * 40 if path == sidecar.resolve() else "a" * 40
+            ),
+            git_status_reader=lambda _: "",
         )
 
 
 def test_requires_e1_state_verifier(tmp_path):
-    root, vault, manifest, _, _ = _fixture(tmp_path)
-    with pytest.raises(SnapshotBindingError, match="state_verifier"):
+    sidecar, vault_git, vault_root, manifest, _, _ = _fixture(tmp_path)
+    with pytest.raises(SnapshotBindingError, match="verify_state_directory"):
         bind_pinned_snapshot(
-            vault_commit_sha=manifest["source_commit"],
-            sidecar_commit_sha="b" * 40,
-            sidecar_root=root,
-            vault_root=vault,
+            sidecar_root=sidecar,
+            vault_git_root=vault_git,
+            vault_root=vault_root,
             state_verifier=None,
         )
+
+
+def test_rejects_vault_root_outside_pinned_git_checkout(tmp_path):
+    sidecar, vault_git, _, manifest, _, _ = _fixture(tmp_path)
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    with pytest.raises(SnapshotBindingError, match="inside"):
+        _binder(sidecar, vault_git, outside, manifest)

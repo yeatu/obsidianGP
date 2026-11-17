@@ -4,11 +4,11 @@ import hashlib
 import json
 import sqlite3
 
+from sfra_context_builder import TiktokenCounter, parse_search_request
 from sfra_context_integrations.search_adapter import E2SearchAdapter
 from sfra_context_integrations.snapshot import PinnedSnapshot
 from sfra_context_integrations.source_reader import E1SourceReader
-from sfra_context_builder import parse_search_request
-from tests.fixtures.source_reader import FixtureE1ScopeAPI, sha, snapshot
+from tests.fixtures.source_reader import FixtureE1ScopeAPI, FixtureTokenCounter, sha, snapshot
 
 
 def _create_structural_fixture(path, api):
@@ -105,18 +105,21 @@ def test_default_adapter_invokes_real_e2_runtime_and_uses_e1_exact_text(tmp_path
     before = hashlib.sha256(database.read_bytes()).hexdigest()
 
     sidecar = tmp_path / "sidecar"
-    vault = tmp_path / "vault"
+    vault_git = tmp_path / "vault-git"
+    vault = vault_git / "ГП"
     sidecar.mkdir()
-    vault.mkdir()
+    vault.mkdir(parents=True)
+    (sidecar / "state").mkdir()
     pinned = PinnedSnapshot(
         ref=ref,
         sidecar_root=sidecar,
         database_path=database,
-        manifest_path=sidecar / "manifest.json",
+        manifest_path=sidecar / "state" / "manifest.json",
+        vault_git_root=vault_git,
         vault_root=vault,
         manifest={"source_commit": ref.vault_commit_sha},
     )
-    reader = E1SourceReader(api)
+    reader = E1SourceReader(api, pinned, TiktokenCounter("o200k_base"))
     adapter = E2SearchAdapter(
         pinned,
         reader,
@@ -150,7 +153,14 @@ def test_default_adapter_invokes_real_e2_runtime_and_uses_e1_exact_text(tmp_path
     assert candidate.relevance_tier in range(1, 7)
     assert isinstance(candidate.relevance_bm25, float)
     assert candidate.match_type
-    assert api.calls == [
-        ("node_target", source["content_hash"], "node", None, ref)
+    assert api.scope_calls == [
+        (
+            str(pinned.database_path),
+            str(pinned.vault_root),
+            "node_target",
+            source["content_hash"],
+            "node",
+            ref.snapshot_id,
+        )
     ]
     assert hashlib.sha256(database.read_bytes()).hexdigest() == before

@@ -9,6 +9,7 @@ from sfra_context_integrations.pipeline import (
     ContextIntegrationPipeline,
     SourceReadRequest,
 )
+from sfra_context_integrations.dependency_resolver import E1DependencyResolver
 from sfra_context_integrations.search_adapter import E2SearchAdapter
 from sfra_context_integrations.snapshot import PinnedSnapshot
 from sfra_context_integrations.source_reader import E1SourceReader
@@ -29,6 +30,7 @@ def _pinned(tmp_path, ref):
         sidecar_root=sidecar,
         database_path=database,
         manifest_path=manifest,
+        vault_git_root=tmp_path,
         vault_root=vault,
         manifest={"source_commit": ref.vault_commit_sha},
     )
@@ -97,7 +99,7 @@ def _pipeline(tmp_path, *, metadata=None, dependency_resolver=None):
     api = FixtureE1ScopeAPI(ref)
     if metadata is not None:
         api.records["node_target"]["metadata"] = metadata
-    source_reader = E1SourceReader(api)
+    source_reader = E1SourceReader(api, pinned, TiktokenCounter("o200k_base"))
     hit = _engine_hit(api)
 
     def search_call(database, query, *, entities, limit, entity_config):
@@ -154,7 +156,7 @@ def test_end_to_end_search_context_pack_and_all_scope_reads_share_one_snapshot(t
     assert len(result.source_reads) == 4
     assert [item["status"] for item in result.source_reads] == ["ok"] * 4
     assert [item["requested"]["scope"] for item in result.source_reads] == list(scopes)
-    assert all(call[-1] == pinned.ref for call in api.calls)
+    assert all(call[-1] == pinned.ref.snapshot_id for call in api.scope_calls)
     assert all(item["snapshot_id"] == pinned.ref.snapshot_id for item in result.source_reads)
     assert reader is pipeline._source_reader
 
@@ -221,7 +223,7 @@ def test_pipeline_rejects_adapter_bound_to_different_snapshot(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     other_api = FixtureE1ScopeAPI(ref)
-    other_reader = E1SourceReader(other_api)
+    other_reader = E1SourceReader(other_api, pinned, TiktokenCounter("o200k_base"))
     other_ref = type(ref)("d" * 40, "e" * 40, "sha256:" + "f" * 64)
     other_pinned = _pinned(tmp_path / "other", other_ref)
     adapter = E2SearchAdapter(other_pinned, other_reader, search_call=lambda *a, **k: {})
@@ -238,7 +240,7 @@ def test_pipeline_does_not_read_after_e2_runtime_error(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     api = FixtureE1ScopeAPI(ref)
-    reader = E1SourceReader(api)
+    reader = E1SourceReader(api, pinned, TiktokenCounter("o200k_base"))
 
     def fail(*args, **kwargs):
         raise OSError("fixture failure")
@@ -256,4 +258,53 @@ def test_pipeline_does_not_read_after_e2_runtime_error(tmp_path):
             _request(),
             source_reads=(SourceReadRequest("node_target", api.records["node_target"]["content_hash"], "node"),),
         )
-    assert api.calls == []
+    assert api.scope_calls == []
+
+
+def test_default_e1_dependency_resolver_uses_current_address_then_exact_node_read(tmp_path):
+    pipeline, api, pinned, _ = _pipeline(
+        tmp_path,
+        metadata={
+            "preservation": "required",
+            "required_with": ["node_parent"],
+            "parent_context_required": False,
+        },
+    )
+
+    result = pipeline.run(_request())
+
+    included_ids = {entry["node_id"] for entry in result.context_pack["Included"]}
+    assert included_ids == {"node_target", "node_parent"}
+    assert api.resolve_calls == [(
+        str(pinned.database_path),
+        "node_parent",
+        pinned.ref.snapshot_id,
+    )]
+    assert any(
+        call[2:5] == ("node_parent", api.records["node_parent"]["content_hash"], "node")
+        for call in api.scope_calls
+    )
+    assert all(call[-1] == pinned.ref.snapshot_id for call in api.scope_calls)
+
+
+def test_ambiguous_dependency_is_not_replaced_and_is_diagnosed(tmp_path):
+    pipeline, api, pinned, _ = _pipeline(
+        tmp_path,
+        metadata={
+            "preservation": "required",
+            "required_with": ["node_parent"],
+            "parent_context_required": False,
+        },
+    )
+    api.status_overrides["node_parent"] = "ambiguous"
+
+    result = pipeline.run(_request())
+
+    included_ids = {entry["node_id"] for entry in result.context_pack["Included"]}
+    assert included_ids == {"node_target"}
+    assert any(
+        item["code"] == "dependency_current_node_unavailable"
+        and item["details"]["e1_status"] == "ambiguous"
+        for item in result.context_pack["Diagnostics"]
+    )
+    assert all(call[2] != "node_parent" for call in api.scope_calls)

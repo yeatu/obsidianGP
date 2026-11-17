@@ -1,4 +1,8 @@
-"""Public ports for E1 source reads and E3 scope reads."""
+"""Exact public E1 API contracts consumed by E3.
+
+These signatures deliberately mirror the agreed E1 boundary. E3 never opens
+E1 SQLite tables or derives structural relationships from Markdown.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +11,33 @@ from typing import Any, Mapping, Protocol
 from sfra_context_builder.models import SnapshotRef
 
 
+class E1PublicSourceAPI(Protocol):
+    def read_source_scope(
+        self,
+        db_path: str,
+        vault_root: str,
+        node_id: str,
+        expected_hash: str,
+        *,
+        scope: str,
+        snapshot_id: str,
+    ) -> Mapping[str, Any]:
+        """Read one verified node/parent/neighbors/document scope."""
+        ...
+
+    def resolve_current_node(
+        self,
+        db_path: str,
+        node_id: str,
+        *,
+        snapshot_id: str,
+    ) -> Mapping[str, Any]:
+        """Resolve the current exact node address, without returning source text."""
+        ...
+
+
 class E1NodeReader(Protocol):
-    """Exact E1 node lookup used by the E2 SearchAdapter."""
+    """Node-reader shape consumed by SearchAdapter."""
 
     def read_node(
         self,
@@ -16,32 +45,15 @@ class E1NodeReader(Protocol):
         expected_hash: str,
         snapshot: SnapshotRef,
     ) -> Mapping[str, Any]:
-        """Return an exact node envelope or an explicit non-ok status."""
-        ...
-
-
-class E1ScopeAPI(Protocol):
-    """Proposed public E1 operation for all four source scopes.
-
-    Implementations must read from the immutable checkout bound by snapshot.
-    The response echoes snapshot.snapshot_id so the caller can detect accidental
-    routing to another checkout. No E3 code may query E1 SQLite tables itself.
-    """
-
-    def read_scope(
-        self,
-        node_id: str,
-        expected_hash: str,
-        scope: str,
-        budget_tokens: int | None,
-        snapshot: SnapshotRef,
-    ) -> Mapping[str, Any]:
-        """Return a source-scope response with exact original fragments."""
         ...
 
 
 class SourceReader(Protocol):
-    """Transport-independent E3 reader contract."""
+    """Transport-independent E3 source reader."""
+
+    @property
+    def pinned_snapshot(self):
+        ...
 
     def read_scope(
         self,
@@ -52,23 +64,21 @@ class SourceReader(Protocol):
         *,
         budget_tokens: int | None = None,
     ) -> Mapping[str, Any]:
-        """Read one of node/parent/neighbors/document from a pinned snapshot."""
+        ...
+
+    def read_node(
+        self,
+        node_id: str,
+        expected_hash: str,
+        snapshot: SnapshotRef,
+    ) -> Mapping[str, Any]:
         ...
 
 
-class E1DependencyReader(Protocol):
-    """Future E1 current-node resolver required by B1 dependencies.
-
-    A dependency edge contains only Node ID. E1 must resolve the current exact
-    version inside the same pinned snapshot and return its Content Hash. The
-    caller then obtains/verifies original text through read_node. This operation
-    must not silently select a similar or historical node.
-    """
-
-    def resolve_current_node(
+class DependencyResolver(Protocol):
+    def resolve_node(
         self,
         node_id: str,
         snapshot: SnapshotRef,
-    ) -> Mapping[str, Any]:
-        """Return current locator metadata including the producer-issued hash."""
+    ) -> Mapping[str, Any] | None:
         ...

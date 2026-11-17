@@ -1,0 +1,109 @@
+name: SFRA E3 real E1/E2 integration (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      e1_ref:
+        description: E1 ref that implements read_source_scope and resolve_current_node
+        required: true
+        default: executor-1/e1-source-read-api-mainline
+        type: string
+      query:
+        description: Real Vault search query
+        required: true
+        default: реанимация
+        type: string
+      vault_subdir:
+        description: Relative Vault root inside the manifest source checkout
+        required: true
+        default: ГП
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  real-e1-e2-e3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout E3 branch under review
+        uses: actions/checkout@v4
+        with:
+          ref: executor-3/context-integration-stage-c1
+          path: e3
+          persist-credentials: false
+
+      - name: Checkout requested E1 API implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.e1_ref }}
+          path: e1
+          persist-credentials: false
+
+      - name: Checkout immutable production sfra-state snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: sfra-state
+          path: sidecar
+          persist-credentials: false
+
+      - name: Read Vault commit from exact sidecar manifest
+        id: snapshot
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("sidecar/state/manifest.json").read_text(encoding="utf-8"))
+          commit = manifest.get("vault_commit_sha", manifest.get("source_commit"))
+          if not isinstance(commit, str) or len(commit) != 40:
+              raise SystemExit("manifest has no valid Vault commit SHA")
+          print(f"vault_commit_sha={commit}")
+          PY
+
+      - name: Checkout Vault at manifest-pinned commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.snapshot.outputs.vault_commit_sha }}
+          path: vault
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install E1, E2 and E3 packages
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "e1/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+          python -m pip install -e "e3/GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install -e "e3/GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          python -m pip install -e "e3/GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1[test]"
+
+      - name: Require the agreed public E1 API
+        env:
+          PYTHONPATH: e1/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация
+        run: |
+          python - <<'PY'
+          import sfra_indexer
+          required = ("read_source_scope", "resolve_current_node", "verify_state_directory")
+          missing = [name for name in required if not callable(getattr(sfra_indexer, name, None))]
+          if missing:
+              raise SystemExit(
+                  "E1 API is not ready for real E3 integration; missing: " + ", ".join(missing)
+              )
+          PY
+
+      - name: Run real E2 → E3 → E1 → Context Pack integration
+        env:
+          SFRA_E1_ROOT: ${{ github.workspace }}/e1/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация
+          SFRA_SIDECAR_ROOT: ${{ github.workspace }}/sidecar
+          SFRA_VAULT_GIT_ROOT: ${{ github.workspace }}/vault
+          SFRA_VAULT_SUBDIR: ${{ inputs.vault_subdir }}
+          SFRA_QUERY: ${{ inputs.query }}
+        run: |
+          cd e3
+          PYTHONPATH="src:${PYTHONPATH}" python "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/run_real_e1_integration.py"

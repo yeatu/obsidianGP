@@ -37,6 +37,7 @@ def _pinned(tmp_path=None):
         sidecar_root=root,
         database_path=root / "state" / "structure.sqlite3",
         manifest_path=root / "state" / "manifest.json",
+        vault_git_root=root,
         vault_root=root / "ГП",
         manifest={"source_commit": "a" * 40},
     )
