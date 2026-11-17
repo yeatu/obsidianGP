@@ -106,7 +106,7 @@ class FakeSourceReader:
 def _engine(hits, *, status="ok"):
     def call(source_database, query, *, entities, limit, entity_config):
         assert query == "реанимация"
-        assert entities == []
+        assert tuple(entities) == ()
         assert entity_config is None
         return {
             "runtime": "one-shot-memory",
