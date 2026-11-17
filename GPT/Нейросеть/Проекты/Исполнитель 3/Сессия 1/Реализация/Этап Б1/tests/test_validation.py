@@ -47,9 +47,11 @@ def test_invalid_coordinate_order_is_rejected():
         parse_search_batch(make_batch(candidate))
 
 
-def test_score_requires_explicit_direction_without_e2_relevance():
+@pytest.mark.parametrize("with_relevance", [False, True])
+def test_score_requires_explicit_direction_regardless_of_relevance_tier(with_relevance):
     candidate = make_candidate("n1", "text")
-    candidate.pop("relevance")
+    if not with_relevance:
+        candidate.pop("relevance")
     candidate["score"] = 0.7
     with pytest.raises(ContractValidationError, match="score_direction"):
         parse_search_batch(make_batch(candidate))
