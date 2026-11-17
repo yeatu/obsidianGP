@@ -26,6 +26,10 @@ class E1DependencyResolver:
         self._reader = source_reader
         self.diagnostics: list[Mapping[str, Any]] = []
 
+    def begin_request(self) -> None:
+        """Drop diagnostics from previous pipeline requests."""
+        self.diagnostics.clear()
+
     def resolve_node(
         self,
         node_id: str,

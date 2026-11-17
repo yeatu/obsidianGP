@@ -54,6 +54,16 @@ def _git_head(root: str | Path) -> str:
     return completed.stdout.strip()
 
 
+def _git_branch(root: str | Path) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(root), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
 def _git_status(root: str | Path) -> str:
     completed = subprocess.run(
         ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"],
@@ -71,10 +81,12 @@ def bind_pinned_snapshot(
     vault_root: str | Path,
     state_verifier: Callable[[str | Path], Mapping[str, Any]],
     git_head_reader: Callable[[str | Path], str] = _git_head,
+    git_branch_reader: Callable[[str | Path], str] = _git_branch,
     git_status_reader: Callable[[str | Path], str] = _git_status,
     expected_repository: str = "yeatu/obsidianGP",
+    expected_sidecar_branch: str = "sfra-state",
 ) -> PinnedSnapshot:
-    """Verify clean checkout HEADs, E1 manifest bytes and SQLite digest.
+    """Verify clean Git checkouts, exact E1 manifest bytes and SQLite digest.
 
     The actual Git HEAD values are always read by this layer. The only injectable
     readers are for isolated tests; production callers use subprocess git.
@@ -110,6 +122,18 @@ def bind_pinned_snapshot(
         raise SnapshotBindingError("sidecar checkout HEAD is not a 40-character Git SHA")
     if not _SHA_RE.fullmatch(vault_commit_sha):
         raise SnapshotBindingError("Vault checkout HEAD is not a 40-character Git SHA")
+
+    try:
+        actual_sidecar_branch = git_branch_reader(sidecar).strip()
+    except Exception as exc:
+        raise SnapshotBindingError(
+            "Could not verify that the sidecar checkout is on the sfra-state branch"
+        ) from exc
+    if actual_sidecar_branch != expected_sidecar_branch:
+        raise SnapshotBindingError(
+            f"Sidecar checkout branch must be {expected_sidecar_branch!r}, "
+            f"found {actual_sidecar_branch!r}"
+        )
 
     for name, root in (("sidecar", sidecar), ("Vault", vault_git)):
         try:

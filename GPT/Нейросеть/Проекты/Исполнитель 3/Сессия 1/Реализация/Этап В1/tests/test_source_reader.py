@@ -308,3 +308,98 @@ def test_source_reader_accepts_e1_public_result_dataclasses(tmp_path):
     assert scope["status"] == "ok"
     assert scope["fragments"][0]["role"] == "document"
     assert scope["fragments"][0]["raw_text"] == fake.document_text
+
+
+def test_parent_scope_rejects_parent_id_not_equal_to_target_parent_node_id(tmp_path):
+    reader, api, pinned = _reader(tmp_path)
+    original = api.read_source_scope
+
+    def wrong_parent(*args, **kwargs):
+        response = original(*args, **kwargs)
+        if response["status"] == "ok":
+            response["parent"] = dict(api.records["node_next"])
+            response["fragments"] = [
+                dict(response["anchor"]),
+                dict(response["parent"]),
+            ]
+        return response
+
+    api.read_source_scope = wrong_parent
+    with pytest.raises(SourceReaderContractError) as error:
+        reader.read_scope("node_target", _target_hash(api), "parent", pinned.ref)
+    assert error.value.code == "parent_identity_mismatch"
+
+
+def test_neighbors_scope_rejects_sibling_under_another_parent(tmp_path):
+    reader, api, pinned = _reader(tmp_path)
+    original = api.read_source_scope
+
+    def wrong_parent(*args, **kwargs):
+        response = original(*args, **kwargs)
+        if response["status"] == "ok":
+            response["previous"]["parent_node_id"] = "node_other_parent"
+            for fragment in response["fragments"]:
+                if fragment["node_id"] == "node_previous":
+                    fragment["parent_node_id"] = "node_other_parent"
+        return response
+
+    api.read_source_scope = wrong_parent
+    with pytest.raises(SourceReaderContractError) as error:
+        reader.read_scope("node_target", _target_hash(api), "neighbors", pinned.ref)
+    assert error.value.code == "neighbor_parent_mismatch"
+
+
+def test_neighbors_scope_rejects_reversed_source_order(tmp_path):
+    reader, api, pinned = _reader(tmp_path)
+    original = api.read_source_scope
+
+    def reversed_previous(*args, **kwargs):
+        response = original(*args, **kwargs)
+        if response["status"] == "ok":
+            response["previous"]["char_start"] = 200
+            response["previous"]["char_end"] = 210
+            for fragment in response["fragments"]:
+                if fragment["node_id"] == "node_previous":
+                    fragment["char_start"] = 200
+                    fragment["char_end"] = 210
+        return response
+
+    api.read_source_scope = reversed_previous
+    with pytest.raises(SourceReaderContractError) as error:
+        reader.read_scope("node_target", _target_hash(api), "neighbors", pinned.ref)
+    assert error.value.code == "neighbor_source_order_mismatch"
+
+
+def test_neighbors_scope_rejects_duplicate_node_id_across_roles(tmp_path):
+    reader, api, pinned = _reader(tmp_path)
+    original = api.read_source_scope
+
+    def duplicate_next(*args, **kwargs):
+        response = original(*args, **kwargs)
+        if response["status"] == "ok":
+            response["next"] = dict(response["anchor"])
+            response["fragments"] = [
+                dict(response["anchor"]),
+                dict(response["previous"]),
+                dict(response["next"]),
+            ]
+        return response
+
+    api.read_source_scope = duplicate_next
+    with pytest.raises(SourceReaderContractError):
+        reader.read_scope("node_target", _target_hash(api), "neighbors", pinned.ref)
+
+
+def test_source_reader_rejects_wrong_echoed_scope(tmp_path):
+    reader, api, pinned = _reader(tmp_path)
+    original = api.read_source_scope
+
+    def wrong_scope(*args, **kwargs):
+        response = original(*args, **kwargs)
+        response["scope"] = "document"
+        return response
+
+    api.read_source_scope = wrong_scope
+    with pytest.raises(SourceReaderContractError) as error:
+        reader.read_scope("node_target", _target_hash(api), "node", pinned.ref)
+    assert error.value.code == "scope_mismatch"

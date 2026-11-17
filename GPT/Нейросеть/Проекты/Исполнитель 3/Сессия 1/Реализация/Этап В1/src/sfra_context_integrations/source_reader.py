@@ -194,6 +194,11 @@ class E1SourceReader:
 
         response = self._mapping(native, "E1 read_source_scope response")
         self._check_echoed_snapshot(response, snapshot)
+        if response.get("scope") != scope:
+            raise SourceReaderContractError(
+                "E1 response scope does not match the requested scope",
+                code="scope_mismatch",
+            )
         status = response.get("status")
         if status != "ok":
             self._check_error_response(response, status, "read_source_scope")
@@ -497,6 +502,16 @@ class E1SourceReader:
                     "E1 scope error must not contain partial source data",
                     code="partial_error_payload",
                 )
+        elif operation == "resolve_current_node":
+            address_fields = (
+                "node_id", "content_hash", "source_path",
+                "document_hash", "index_generation",
+            )
+            if any(response.get(key) is not None for key in address_fields) or "raw_text" in response:
+                raise SourceReaderContractError(
+                    "E1 current-node error must not contain partial address or source text",
+                    code="partial_error_payload",
+                )
 
     @staticmethod
     def _validate_address(
@@ -564,12 +579,20 @@ class E1SourceReader:
             raise SourceReaderContractError("E3 normalized source fragments must be an array")
 
         roles: set[str] = set()
+        fragments_by_role: dict[str, Mapping[str, Any]] = {}
+        seen_node_ids: set[str] = set()
         for index, raw in enumerate(fragments):
             fragment = self._mapping(raw, f"E3 source fragments[{index}]")
             required = {
                 "role", "source_path", "content_hash", "raw_text",
                 "document_hash", "index_generation",
             }
+            if fragment.get("role") != "document":
+                required.update({
+                    "node_id", "node_type", "parent_node_id", "heading_path",
+                    "line_start", "line_end", "char_start", "char_end",
+                    "byte_start", "byte_end", "source_sha256", "metadata",
+                })
             missing = required - set(fragment)
             if missing:
                 raise SourceReaderContractError(
@@ -581,6 +604,7 @@ class E1SourceReader:
                     f"source fragments[{index}] has an unsupported or duplicate role"
                 )
             roles.add(role)
+            fragments_by_role[role] = fragment
             if fragment["source_path"] != address["source_path"]:
                 raise SourceReaderContractError(
                     "Source fragments do not belong to the target source_path",
@@ -616,24 +640,53 @@ class E1SourceReader:
                         code="document_hash_mismatch",
                     )
             else:
+                node_id_value = fragment.get("node_id")
+                node_type = fragment.get("node_type")
+                parent_node_id = fragment.get("parent_node_id")
+                heading_path = fragment.get("heading_path")
+                line_start, line_end = fragment.get("line_start"), fragment.get("line_end")
+                char_start, char_end = fragment.get("char_start"), fragment.get("char_end")
+                byte_start, byte_end = fragment.get("byte_start"), fragment.get("byte_end")
+                metadata = fragment.get("metadata")
+                source_sha = fragment.get("source_sha256")
                 if (
                     _sha256(raw_text) != content_hash
-                    or fragment.get("node_id") is None
-                    or not isinstance(fragment.get("heading_path"), (list, tuple))
-                    or any(not isinstance(item, str) for item in fragment["heading_path"])
-                    or not isinstance(fragment.get("node_type"), str)
-                    or not fragment["node_type"]
-                    or isinstance(fragment.get("line_start"), bool)
-                    or not isinstance(fragment.get("line_start"), int)
-                    or fragment["line_start"] < 1
-                    or isinstance(fragment.get("line_end"), bool)
-                    or not isinstance(fragment.get("line_end"), int)
-                    or fragment["line_end"] < fragment["line_start"] - 1
+                    or not isinstance(node_id_value, str)
+                    or not node_id_value.strip()
+                    or node_id_value in seen_node_ids
+                    or not isinstance(node_type, str)
+                    or not node_type.strip()
+                    or (parent_node_id is not None and (
+                        not isinstance(parent_node_id, str) or not parent_node_id.strip()
+                    ))
+                    or not isinstance(heading_path, (list, tuple))
+                    or any(not isinstance(item, str) for item in heading_path)
+                    or isinstance(line_start, bool)
+                    or not isinstance(line_start, int)
+                    or line_start < 1
+                    or isinstance(line_end, bool)
+                    or not isinstance(line_end, int)
+                    or line_end < line_start - 1
+                    or isinstance(char_start, bool)
+                    or not isinstance(char_start, int)
+                    or char_start < 0
+                    or isinstance(char_end, bool)
+                    or not isinstance(char_end, int)
+                    or char_end < char_start
+                    or isinstance(byte_start, bool)
+                    or not isinstance(byte_start, int)
+                    or byte_start < 0
+                    or isinstance(byte_end, bool)
+                    or not isinstance(byte_end, int)
+                    or byte_end < byte_start
+                    or not isinstance(metadata, Mapping)
+                    or source_sha != address["document_hash"]
                 ):
                     raise SourceReaderContractError(
                         f"Source fragment {role} failed text/hash/locator validation",
-                        code="content_hash_mismatch",
+                        code="fragment_locator_invalid",
                     )
+                seen_node_ids.add(node_id_value)
             if role == "target" and (
                 fragment.get("node_id") != node_id
                 or fragment.get("content_hash") != expected_hash
@@ -648,12 +701,42 @@ class E1SourceReader:
         if scope == "parent":
             if roles - {"target", "parent_context"} or "target" not in roles:
                 raise SourceReaderContractError("parent scope returned invalid fragment roles")
-            if address.get("parent_node_id") is not None and "parent_context" not in roles:
+            expected_parent_id = address.get("parent_node_id")
+            parent_fragment = fragments_by_role.get("parent_context")
+            if expected_parent_id is not None and parent_fragment is None:
                 raise SourceReaderContractError("parent scope omitted an available parent")
-            if address.get("parent_node_id") is None and "parent_context" in roles:
+            if expected_parent_id is None and parent_fragment is not None:
                 raise SourceReaderContractError("root node parent scope returned a parent")
+            if parent_fragment is not None and parent_fragment.get("node_id") != expected_parent_id:
+                raise SourceReaderContractError(
+                    "Parent fragment Node ID does not match target.parent_node_id",
+                    code="parent_identity_mismatch",
+                )
         if scope == "neighbors":
             if roles - {"target", "previous_neighbor", "next_neighbor"} or "target" not in roles:
                 raise SourceReaderContractError("neighbors scope returned invalid fragment roles")
+            target_fragment = fragments_by_role["target"]
+            target_parent_id = target_fragment.get("parent_node_id")
+            target_order = (target_fragment["char_start"], target_fragment["char_end"])
+            for role in ("previous_neighbor", "next_neighbor"):
+                neighbor = fragments_by_role.get(role)
+                if neighbor is None:
+                    continue
+                if neighbor.get("parent_node_id") != target_parent_id:
+                    raise SourceReaderContractError(
+                        f"{role} is not an immediate sibling under the target parent",
+                        code="neighbor_parent_mismatch",
+                    )
+                neighbor_order = (neighbor["char_start"], neighbor["char_end"])
+                is_ordered = (
+                    neighbor_order < target_order
+                    if role == "previous_neighbor"
+                    else neighbor_order > target_order
+                )
+                if not is_ordered:
+                    raise SourceReaderContractError(
+                        f"{role} is not on the expected side of the target in source order",
+                        code="neighbor_source_order_mismatch",
+                    )
         if scope == "document" and roles != {"document"}:
             raise SourceReaderContractError("document scope must return one complete document fragment")

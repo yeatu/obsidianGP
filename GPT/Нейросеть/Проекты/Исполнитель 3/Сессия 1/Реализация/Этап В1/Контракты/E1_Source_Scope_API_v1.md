@@ -1,129 +1,159 @@
-# Proposal: E1 Source Scope API v1 для Executor 3
+# E1 Source Scope API v1 — интеграционный контракт E1/E3
 
-**Статус:** предложение E3 для согласования с E1 и аналитиком. Ветка E1 PR #11 сейчас реализует точное чтение одного узла; остальные scope в production E1 пока отсутствуют.
+**Статус:** описание синхронизировано с публичным API, реализованным в ветке E1 PR #11. E3 потребляет только публичные экспорты \`sfra_indexer.read_source_scope\` и \`sfra_indexer.resolve_current_node\`. Production end-to-end считается неподтверждённым до отдельного прогона на согласованном snapshot.
 
 ## 1. Публичные операции
 
-Предлагается единая операция scope read:
+\`\`\`python
+read_source_scope(
+    db_path,
+    vault_root,
+    node_id,
+    expected_hash,
+    *,
+    scope,
+    snapshot_id,
+) -> SourceScopeResult
 
-    read_source_scope(
-        db_path,
-        vault_root,
-        node_id: str,
-        expected_hash: str,
-        *,
-        scope: str,  # node | parent | neighbors | document
-        budget_tokens: int | None,
-        snapshot_id: str,
-    ) -> SourceScopeResult
+resolve_current_node(
+    db_path,
+    node_id,
+    *,
+    snapshot_id,
+) -> CurrentNodeAddress
+\`\`\`
 
-Вход адресует точную текущую пару Node ID + Content Hash. Fuzzy lookup, поиск похожего узла, выбор исторической версии вместо текущей и автоматическая подмена новым hash запрещены.
+Разрешённые \`scope\`: \`node\`, \`parent\`, \`neighbors\`, \`document\`.
 
-Для B1 dependency edges, в которых известен только Node ID, необходима отдельная операция:
+У \`read_source_scope\` нет \`budget_tokens\`. E1 возвращает полный проверенный текст; токенный бюджет рассчитывает и применяет E3. E1 не выполняет Git fetch/checkout, не разрешает branch names и не переключает состояние.
 
-    resolve_current_node(
-        db_path,
-        node_id: str,
-        *,
-        snapshot_id: str,
-    ) -> CurrentNodeAddress
+\`resolve_current_node\` возвращает текущий однозначный адрес и producer Content Hash без \`raw_text\`. E3 после этого обязан выполнить exact \`read_source_scope(scope="node", expected_hash=...)\`. Fuzzy matching и historical fallback запрещены.
 
-Она возвращает только current locator: Node ID, Content Hash, source_path, parent, coordinates, document_hash, document-local index_generation и explicit metadata. После этого E3 обязан запросить полный текст отдельным exact read_source_scope(scope="node", expected_hash=...). Нельзя возвращать похожий/исторический узел под другим ID.
+## 2. Snapshot binding
 
-## 2. Snapshot pinning
+E3 до первого E1 вызова формирует \`SnapshotRef\`:
 
-E3 создаёт B1 SnapshotRef до первого вызова:
-- vault_commit_sha — фактический HEAD immutable Vault checkout;
-- sidecar_commit_sha — фактический HEAD immutable sfra-state checkout;
-- manifest_sha256 — SHA-256 точных байтов state/manifest.json.
+- \`vault_commit_sha\` — фактический HEAD чистого immutable Vault checkout;
+- \`sidecar_commit_sha\` — фактический HEAD чистого checkout ветки \`sfra-state\`;
+- \`manifest_sha256\` — SHA-256 точных байтов \`state/manifest.json\`.
 
-Обязательное равенство:
-SnapshotRef.vault_commit_sha == manifest.source_commit == pinned Vault HEAD.
+Проверки E3:
+- \`SnapshotRef.vault_commit_sha == manifest.source_commit\` (либо согласованный \`vault_commit_sha\`) == actual Vault HEAD;
+- sidecar checkout действительно находится на ветке \`sfra-state\`; recorded sidecar SHA равен его HEAD;
+- E1 \`verify_state_directory()\` успешно проверяет manifest/SQLite/schema/FK/integrity;
+- SHA SQLite равен \`manifest.database_sha256\`;
+- SHA manifest считается по raw bytes, а не по повторно сериализованному JSON;
+- оба checkout чистые; Vault root лежит внутри pinned Vault repository.
 
-E1 получает snapshot_id как непрозрачный correlation token и возвращает тот же snapshot_id в каждом ответе. E1 не должен повторно разрешать branch name, делать checkout/fetch или переключать SQLite/Vault path в рамках операции. E3 проверяет SHA и checkout identity до вызова.
+\`snapshot_id\` — \`SnapshotRef.snapshot_id\`. E3 передаёт его в каждый \`read_source_scope()\` и \`resolve_current_node()\`. E1 возвращает его без изменений в каждом success/error result. Echo подтверждает корреляцию запроса, но не заменяет проверки Git/manifest, которые выполняет E3.
 
-Для одной операции scope E1 выполняет чтение из одной SQLite read transaction и одного pinned Vault checkout. Для полного pipeline E3 повторно передаёт тот же SnapshotRef всем операциям.
+## 3. Нативный response shape E1
 
-## 3. Семантика scope
+### SourceScopeResult
 
-| Scope | Fragments | Правило |
+Результат имеет публичный \`to_dict()\` shape:
+
+- \`snapshot_id\`;
+- \`scope\`;
+- \`status\`;
+- \`fragments\`: список \`NodeRecord.to_dict()\` для scope \`node\`, \`parent\`, \`neighbors\`; для \`document\` пустой список;
+- \`anchor\`: exact target \`NodeRecord\` при success;
+- \`parent\`, \`previous\`, \`next\`: соответствующий current relation record или \`null\`;
+- \`document\`: полный \`DocumentRecord.to_dict()\` для scope \`document\`, иначе \`null\`;
+- \`error\`: код и безопасное сообщение при отказе.
+
+На любом non-ok статусе \`fragments\` пуст, \`anchor/parent/previous/next/document\` равны \`null\`. Частичный source payload запрещён.
+
+### NodeRecord
+
+Включает как минимум:
+- \`node_id\`, \`content_hash\`, \`source_path\`;
+- \`node_type\`, \`parent_node_id\`, \`heading_path\`;
+- \`raw_text\`, \`line_start\`, \`line_end\`;
+- \`char_start\`, \`char_end\`, \`byte_start\`, \`byte_end\`;
+- \`source_sha256\`, \`document_hash\`, \`index_generation\`;
+- \`metadata\`.
+
+\`document_hash\` и \`source_sha256\` соответствуют \`documents.source_sha256\`; \`index_generation\` — \`documents.generation\` этого \`source_path\`. Node content hash — SHA-256 точных UTF-8 байтов \`raw_text\`.
+
+### DocumentRecord
+
+Включает:
+- \`source_path\`, \`source_sha256\`, \`document_hash\`, \`index_generation\`;
+- \`size_bytes\`, полный \`raw_text\`;
+- \`anchor_node_id\`, \`anchor_content_hash\`.
+
+Для \`document\` scope E1 возвращает полный оригинальный Markdown. \`document_hash == source_sha256 == SHA-256(raw_text UTF-8)\`. Документ не реконструируется из node versions и не обрезается.
+
+### CurrentNodeAddress
+
+Публичный \`to_dict()\` shape плоский:
+- \`snapshot_id\`, \`status\`;
+- \`node_id\`, \`content_hash\`, \`source_path\`;
+- \`document_hash\`, \`index_generation\`;
+- \`error\` при отказе.
+
+Все address-поля \`null\` при non-ok. \`raw_text\` не возвращается.
+
+## 4. Семантика scope
+
+| Scope | Публичные поля | Семантика |
 |---|---|---|
-| node | target | Только текущий exact Structural Node |
-| parent | target + parent_context | Непосредственный parent из того же structural tree и document generation; если parent отсутствует — target + diagnostic |
-| neighbors | target + optional previous_neighbor / next_neighbor | Immediate siblings под тем же parent, в порядке source coordinates; не descendants |
-| document | один document | Полный оригинальный Markdown-файл, содержащий target; не reconstruction из node_versions |
+| \`node\` | \`anchor\`, \`fragments=[anchor]\` | Текущий exact structural node |
+| \`parent\` | \`anchor\`, optional \`parent\`, fragments target + parent | Непосредственный parent того же документа и поколения; root node возвращает только anchor |
+| \`neighbors\` | \`anchor\`, optional \`previous\`, \`next\`, fragments target + immediate siblings | Соседи под тем же parent, упорядочены по source coordinates; не descendants |
+| \`document\` | \`anchor\`, \`document\`, \`fragments=[]\` | Полный исходный Markdown, содержащий target |
 
-Если запрошенный scope не реализован, вернуть source_unavailable, а не частичный успешный ответ.
+E3 нормализует named relations в роли \`target\`, \`parent_context\`, \`previous_neighbor\`, \`next_neighbor\`, \`document\`. Он проверяет, что native \`fragments\` содержат те же Node IDs/hashes, что и named relation fields; отдельно сверяет parent identity, общий parent у siblings, source order и уникальность Node IDs.
 
-## 4. Response envelope
+## 5. Целостность и статусы
 
-Каждый ответ обязан включать:
-- status;
-- snapshot_id;
-- target_source (для успешных ответов);
-- fragments;
-- diagnostics;
-- token_accounting для budgeted request.
+E1 отвечает за:
+- один SQLite connection и одну read transaction на scope;
+- DB-only integrity preflight;
+- current active/unambiguous records;
+- безопасность source path и чтения Vault;
+- document SHA и точные source slices/coordinates;
+- связи parent/siblings внутри одного документа и поколения;
+- no partial fragments при отказе.
 
-Для каждого node fragment:
-- role, node_id, source_path, node_type, parent_node_id;
-- heading_path, line coordinates;
-- content_hash — SHA-256 точных UTF-8 байтов raw_text;
-- raw_text — дословный проверенный исходный срез;
-- document_hash — E1 documents.source_sha256;
-- index_generation — E1 documents.generation данного source_path.
+E3 дополнительно сверяет:
+- expected target node + content hash;
+- echo snapshot_id и scope;
+- \`source_path\`, \`source_sha256/document_hash\`, \`index_generation\` между native results;
+- SHA-256 raw text фрагмента и полного документа;
+- relation identity/order в нормализованном ответе.
 
-Для document fragment:
-- role="document";
-- полный оригинальный Markdown в raw_text;
-- content_hash == document_hash == SHA-256(full raw_text UTF-8);
-- тот же source_path и document-local generation target.
+Текущие E1 status values: \`ok\`, \`stale_source\`, \`deleted\`, \`ambiguous\`, \`not_found\`, \`invalid_request\`, \`integrity_error\`. E3 сохраняет эти отказы как явные статусы; ошибки контракта и snapshot mismatch также fail closed.
 
-Для scope node document_hash=null допускается, если E1 не располагает whole-document hash. Для parent/neighbors/document null запрещён и приводит к integrity_error + пустому fragments.
+## 6. Token budget — только E3
 
-## 5. Проверки целостности
-
-1. Validate Node ID, expected hash и scope.
-2. E1 DB-only integrity preflight из PR #11.
-3. Текущий active/unambiguous Node ID; no historical fallback.
-4. Безопасный canonical path/symlink check внутри pinned vault_root.
-5. Полный файл SHA-256 против documents.source_sha256.
-6. Координаты и exact source slice.
-7. SHA-256 каждого fragment exact UTF-8.
-8. Для parent/neighbors/document — общий source_path, document_hash и E1 document-local generation.
-9. Все fragments одной scope операции получены в одной read transaction.
-10. Error response всегда содержит fragments=[]; никакого partial raw_text.
-
-E1 document generation — локален для source_path, его нельзя сравнивать между разными документами или использовать как глобальный Vault snapshot ID.
-
-## 6. Статусы и бюджет
-
-Рекомендуемые статусы:
-ok, stale_source, not_found, ambiguous, deleted, invalid_request, source_unavailable, budget_exceeded, integrity_error.
-
-Budget:
-- применяется к полной запрошенной scope;
-- raw_text никогда не обрезается;
-- если полный scope превышает budget — budget_exceeded, fragments=[];
-- TokenCounter/encoding должны быть зафиксированы и согласованы.
+- E1 никогда не принимает и не применяет token budget.
+- E1 возвращает полный точный текст каждого fragment/document.
+- E3 вызывает существующий \`TokenCounterProtocol\` на полном результате.
+- При превышении бюджета E3 возвращает \`budget_exceeded\` с пустыми fragments либо откладывает atomic group в Context Builder.
+- E3 не обрезает \`raw_text\` и не выдаёт partial excerpt за полный источник.
 
 ## 7. Dependency metadata
 
-B1 использует:
-- preservation;
-- required_with;
-- parent_context_required.
+E1 может передавать значения из реально существующего \`NodeRecord.metadata\`. Не следует требовать от структурного индексатора специальных policy-полей, если их источник не определён отдельным контрактом.
 
-E1 должен явно подтвердить источник этих полей и вернуть их verbatim. Если они хранятся в metadata, указать таблицу/поле и гарантии экспорта. Если не существуют, координатор должен определить другой explicit source. E3 не выводит обязательность из Markdown текста, E2 excerpt или поисковых причин.
+Если реальные значения присутствуют, E3 может использовать:
+- \`preservation\`;
+- \`required_with\`;
+- \`parent_context_required\`.
 
-## 8. Вопросы для согласования
+При отсутствии E3 применяет B1 defaults:
+- \`preservation = "normal"\`;
+- \`required_with = ()\`;
+- \`parent_context_required = False\`.
 
-1. Принимается ли neighbors как immediate siblings одного parent?
-2. Может ли E1 гарантировать atomic read transaction для target + parent + siblings?
-3. Подтверждается ли полный Markdown document read?
-4. Как E1 принимает/echo-ит snapshot_id, а E3 проверяет три component hashes?
-5. Как E1 предоставляет current-node lookup по Node ID для B1 dependency resolver?
-6. Как передаются preservation/required_with/parent_context_required?
-7. Какой TokenCounter и scope budget поддерживаются?
+E3 помечает defaults как policy defaults, а не source annotations. Поиск, excerpt и текст узла не являются источниками этих значений.
 
-До согласования и реализации этого API E3 использует fake E1 Scope API только в тестах и не делает SQL к внутренней схеме E1.
+## 8. Разделение ответственности
+
+- E1: текущая структурная идентичность, атомарное source read, проверка текста/хешей/путей/координат/relations, echo \`snapshot_id\`.
+- E3: закрепление Git HEADs, проверка \`sfra-state\` ref и Vault commit against manifest, raw manifest digest, SnapshotRef, token counter/budget, dependency policy defaults, Context Pack.
+- E2: только поиск и ranking через существующий SearchAdapter boundary.
+
+Ни одна из сторон не изменяет SQLite schema v2 в рамках этого интеграционного контракта.

@@ -70,6 +70,10 @@ class ContextIntegrationPipeline:
         if not isinstance(request, SearchRequest):
             raise TypeError("request must be a SearchRequest")
 
+        begin_request = getattr(self._dependency_resolver, "begin_request", None)
+        if callable(begin_request):
+            begin_request()
+
         search_result = self._search.search(request)
         snapshot = self._pinned.ref
         pack = self._builder.build(

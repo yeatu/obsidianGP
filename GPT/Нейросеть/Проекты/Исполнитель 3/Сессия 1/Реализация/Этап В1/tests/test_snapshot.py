@@ -37,7 +37,11 @@ def _fixture(tmp_path, *, source_commit="a" * 40):
     return sidecar, vault_git, vault_root, manifest, raw, database
 
 
-def _binder(sidecar, vault_git, vault_root, manifest, *, sidecar_sha="b" * 40, vault_sha="a" * 40, dirty=""):
+def _binder(
+    sidecar, vault_git, vault_root, manifest, *,
+    sidecar_sha="b" * 40, vault_sha="a" * 40, dirty="",
+    branch="sfra-state",
+):
     def head_reader(path):
         return sidecar_sha if path == sidecar.resolve() else vault_sha
 
@@ -47,6 +51,7 @@ def _binder(sidecar, vault_git, vault_root, manifest, *, sidecar_sha="b" * 40, v
         vault_root=vault_root,
         state_verifier=lambda _: manifest,
         git_head_reader=head_reader,
+        git_branch_reader=lambda _: branch,
         git_status_reader=lambda _: dirty,
     )
 
@@ -95,6 +100,7 @@ def test_rejects_manifest_verifier_disagreement(tmp_path):
             git_head_reader=lambda path: (
                 "b" * 40 if path == sidecar.resolve() else "a" * 40
             ),
+            git_branch_reader=lambda _: "sfra-state",
             git_status_reader=lambda _: "",
         )
 
@@ -116,3 +122,10 @@ def test_rejects_vault_root_outside_pinned_git_checkout(tmp_path):
     outside.mkdir()
     with pytest.raises(SnapshotBindingError, match="inside"):
         _binder(sidecar, vault_git, outside, manifest)
+
+
+
+def test_rejects_sidecar_checkout_not_on_sfra_state_branch(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, _ = _fixture(tmp_path)
+    with pytest.raises(SnapshotBindingError, match="sfra-state"):
+        _binder(sidecar, vault_git, vault_root, manifest, branch="main")

@@ -312,3 +312,40 @@ def test_ambiguous_dependency_is_not_replaced_and_is_diagnosed(tmp_path):
     assert "node_target" in {
         item["node_id"] for item in result.context_pack["Deferred"]
     }
+
+
+def test_e1_dependency_diagnostics_are_scoped_to_each_pipeline_run(tmp_path):
+    pipeline, api, pinned, _ = _pipeline(
+        tmp_path,
+        metadata={
+            "preservation": "required",
+            "required_with": ["node_parent"],
+            "parent_context_required": False,
+        },
+    )
+    resolver = pipeline._dependency_resolver
+    api.status_overrides["node_parent"] = "ambiguous"
+
+    first = pipeline.run(_request())
+    assert any(
+        item["code"] == "dependency_current_node_unavailable"
+        for item in first.context_pack["Diagnostics"]
+    )
+
+    api.status_overrides.pop("node_parent")
+    second = pipeline.run(_request())
+
+    assert not any(
+        item["code"] == "dependency_current_node_unavailable"
+        for item in second.context_pack["Diagnostics"]
+    )
+    defaults = [
+        item for item in second.context_pack["Diagnostics"]
+        if item["code"] == "dependency_policy_defaults_applied"
+    ]
+    assert len(defaults) == 1
+    assert defaults[0]["node_ids"] == ["node_parent"]
+    assert resolver.diagnostics == [
+        item for item in resolver.diagnostics
+        if item["code"] == "dependency_policy_defaults_applied"
+    ]

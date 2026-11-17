@@ -1,66 +1,117 @@
 # Этап В1 — интеграция Context Builder: контрольный рубеж C1
 
-**Статус:** C1 адаптеры и fixture pipeline реализованы; PR #10 остаётся draft и ожидает независимой проверки аналитиком.
-**Доказано:** реальный E2 runtime на временной SQLite fixture, сборка Context Pack на полном fixture-сценарии, четыре scope через тестовый E1 API, snapshot pinning и сохранность B1 regression.
-**Не доказано:** production E1 Source Scope API и полный проход по реальному Vault.
+**Статус C1:** адаптеры, Snapshot binding и fixture-проверки реализованы; PR #10 остаётся draft до независимого coordinator review.  
+**Подтверждено CI:** опубликованный E2 runtime на временной SQLite fixture, E3 pipeline и fake E1 provider, четыре scope, E3-only token accounting, dependency resolution и fail-closed поведение.  
+**Не заявляется:** real E1 + production \`sfra-state\` + Vault end-to-end. Эта проверка относится к SFRA-E3-02 и выполняется после формального завершения SFRA-E1-01 в \`PROJECT_TASKS.md\`.
 
 ## 1. E2 SearchAdapter
 
-Адаптер вызывает существующий публичный runtime E2: sfra_search.runtime.search_structural_database(source_database, query, entities, limit, entity_config).
+\`E2SearchAdapter\` вызывает опубликованный \`sfra_search.runtime.search_structural_database()\`.
 
-- Не копирует поиск, FTS5 или морфологию.
-- Сохраняет Node ID, Content Hash, path, heading, line coordinates, match type, match reasons, tier и BM25.
-- Сохраняет порядок E2: tier ascending, BM25 ascending; отдельный score не синтезирует.
-- Передаёт excerpt только как signals.match_excerpt.
-- Берёт raw_text только через E1 reader по точной паре node_id + content_hash.
-- Отвергает несовпадающие locator поля и SHA-256 полного текста.
-- Не использует E2 index_generation как E1 document-local generation.
-- Различает not_found_in_retrieval, ошибку runtime и неполную выдачу.
-- Ровно limit hits считает потенциально усечёнными, так как E2 не возвращает total_count/cursor.
-- Не изобретает facet signals; зоны фильтруются только по точному первому сегменту path и консервативно помечают выдачу неполной.
+- Поиск, FTS5, морфология и ранжирование остаются в E2.
+- Producer Node ID + Content Hash сохраняются без fuzzy/semantic replacement.
+- Tier/BM25 и порядок E2 переносятся без синтетического score.
+- E2 excerpt остаётся только \`signals.match_excerpt\`.
+- Полный \`raw_text\` поступает только через E1 public reader port и сверяется по exact UTF-8 SHA-256.
+- E2 \`index_generation\` не заменяет E1 document-local generation.
+- Empty retrieval, runtime failure, possible truncation at limit, post-filter и source rejection различаются явно.
 
-## 2. SourceReader
+## 2. Публичная граница E1 Source Scope
 
-E1SourceReader — транспортно-независимая проверяющая обёртка над публичным портом E1ScopeAPI. Она принимает scopes: node, parent, neighbors, document.
+Production boundary теперь соответствует опубликованным E1 функциям из PR #11:
 
-Проверяются snapshot_id, requested node address, document path, document-local generation, whole-document hash, exact fragment SHA-256 и отсутствие частичных fragments при ошибочном статусе. Ошибки stale_source, ambiguous, deleted, not_found, budget_exceeded, source_unavailable и integrity_error остаются явными.
+\`\`\`python
+read_source_scope(
+    db_path,
+    vault_root,
+    node_id,
+    expected_hash,
+    *,
+    scope,
+    snapshot_id,
+) -> SourceScopeResult
 
-Fixtures реализуют четыре режима на заранее описанных записях и sibling-связях. Они не выполняют SQL к E1, не парсят Markdown и не вычисляют соседей из текста.
+resolve_current_node(
+    db_path,
+    node_id,
+    *,
+    snapshot_id,
+) -> CurrentNodeAddress
+\`\`\`
 
-**Ограничение:** открытый PR #11 E1 публикует exact node lookup (get_node_by_id), но не полный четырёхрежимный Source Scope API. Поэтому C1 имеет рабочий E3 SourceReader boundary и fixture implementation, но не E1-backed production scope reader. Реальные parent/neighbors/document остаются заблокированы до согласования и реализации публичного API E1.
+У E1 нет аргумента \`budget_tokens\`. \`snapshot_id\` является opaque correlation token: E1 возвращает его без изменений, а Git binding и проверка manifest принадлежат E3.
 
-## 3. Snapshot binding и pipeline
+Реальная форма ответа E1 — \`SourceScopeResult.to_dict()\`:
+- \`snapshot_id\`, \`scope\`, \`status\`;
+- \`anchor\`, \`parent\`, \`previous\`, \`next\`;
+- \`fragments\` с \`NodeRecord.to_dict()\` для node/parent/neighbors;
+- \`document\` с полным \`DocumentRecord.to_dict()\` для document scope;
+- \`error\` при неуспехе.
 
-SnapshotRef собирается из:
-- vault_commit_sha — фактический pinned Vault HEAD, равный manifest.source_commit;
-- sidecar_commit_sha — фактический pinned checkout HEAD ветки sfra-state;
-- manifest_sha256 — SHA-256 точных байтов state/manifest.json.
+\`CurrentNodeAddress.to_dict()\` содержит только current address/provenance (\`node_id\`, \`content_hash\`, \`source_path\`, \`document_hash\`, \`index_generation\`) и не содержит source text.
 
-Snapshot binder требует официальный E1 verify_state_directory, сверяет manifest и SQLite digest. ContextIntegrationPipeline передаёт один и тот же SnapshotRef в E2 adapter, B1 dependency resolver и каждый последующий SourceReader scope-read.
+\`E1SourceReader\` адаптирует эти реальные result shapes к внутреннему E3 envelope и проверяет:
+- snapshot echo и запрошенный scope;
+- точный target Node ID + Content Hash;
+- named parent/neighbor fields против \`fragments\`;
+- parent ID против \`target.parent_node_id\`;
+- общий parent и source order для immediate siblings;
+- уникальность Node ID между ролями;
+- \`source_path\`, \`document_hash\`, \`source_sha256\`, document-local \`index_generation\`;
+- точные node/document SHA-256 и структурные координаты;
+- отсутствие любых partial records при error status.
 
-Fixture-сценарий запускает:
-real E2 runtime fixture → SearchAdapter → SearchBatch → ContextBuilder (B1) → ContextPack → SourceReader fixture (node / parent / neighbors / document).
+В E3 нет SQL-запросов к E1 и нет собственного Markdown parser. Fixture provider моделирует публичный API и используется только для изолированных тестов.
 
-Дополнительно проверяются dependency resolution, mismatch document-local generation, атомарный token budget, stale/ambiguous, полный hash и отказ при другом SnapshotRef.
+## 3. Snapshot binding
 
-## 4. Проверки
+E3 создаёт \`SnapshotRef\` до обращения к E1. Binder проверяет:
+- фактический Vault checkout HEAD равен manifest \`source_commit\` (или \`vault_commit_sha\`);
+- фактический sidecar HEAD относится к checkout ветки \`sfra-state\`;
+- оба checkout чистые;
+- E1 \`verify_state_directory()\` успешно проверяет manifest и SQLite;
+- manifest-файл прочитан как точные байты, а \`manifest_sha256\` рассчитан по ним;
+- SQLite digest равен \`manifest.database_sha256\`;
+- Vault root находится внутри pinned Vault checkout.
 
-GitHub Actions workflow: .github/workflows/sfra-context-integration-c1-tests.yml.
+E1 не получает Git refs и не выполняет fetch/checkout/branch resolution. Один \`SnapshotRef\` проходит через SearchAdapter, DependencyResolver и каждый SourceReader вызов.
 
-**Последний PR-CI:** [run 44013125521](https://github.com/yeatu/obsidianGP/actions/runs/44013125521), conclusion success.
-- B1 regression suite: **45 passed in 0.74s**.
-- C1 fixture suite: **43 passed in 0.29s**.
-- Python 3.11.
-- E2 package устанавливается из опубликованного source проекта Исполнителя 2; реальный search_structural_database вызывается на временной структурной SQLite fixture.
-- Тест проверяет, что digest временной SQLite не изменился. Это не production Vault и не production sfra-state.
+## 4. DependencyResolver и token budget
 
-## 5. Gates
+Для каждого dependency Node ID E3:
+1. вызывает \`resolve_current_node(..., snapshot_id=...)\`;
+2. получает текущий точный Content Hash;
+3. читает \`scope="node"\` по этому Hash;
+4. сверяет snapshot и exact source response.
 
-| Gate | Условие |
-|---|---|
-| C1 | Аналитик принимает E2 mapping, E1 scope boundary, snapshot binder и fixture pipeline |
-| C2 | E1 реализует node / parent / neighbors / document API и current-node resolver для B1 dependency edges |
-| C3 | E3 подключает production SourceReader / DependencyResolver только через публичный E1 API |
-| C4 | Real-Vault search → Context Pack → все scopes на одном pinned snapshot; Vault и SQLite только read-only |
+Not found, stale, ambiguous, deleted и integrity errors не заменяются похожим или историческим узлом. Требуемые группы остаются атомарными.
 
-GitHub Issue worker, recovery sweep и MCP adapter в этот PR не входят. Реальный Vault не изменялся.
+Бюджет целиком принадлежит E3:
+- E1 возвращает полный source scope без truncation;
+- E3 считает токены через существующий \`TokenCounterProtocol\`;
+- превышение даёт \`budget_exceeded\` с пустым списком fragments для scope read либо откладывает atomic group в Context Builder;
+- \`raw_text\` не обрезается;
+- E1 не считает токены.
+
+Метаданные \`preservation\`, \`required_with\`, \`parent_context_required\` берутся только из фактических E1 metadata, если они присутствуют. Иначе E3 применяет policy defaults \`normal\`, \`()\`, \`False\` и отдельно диагностирует, что это defaults E3, а не аннотации первоисточника.
+
+## 5. Проверки и границы доказательств
+
+C1 CI устанавливает опубликованный E2 пакет и выполняет:
+- 45 B1 regression tests;
+- C1 tests на fake E1 public API и временной search SQLite;
+- exact Snapshot binding fixtures;
+- positive/negative checks для четырёх scope, snapshot, fragment identity, parent/sibling relationships, budgets, required-group atomicity и повторных \`pipeline.run()\`.
+
+Тест реального E2 runtime использует временную structural SQLite fixture. Его E1 source reads остаются fake-provider reads. Этот тест не является реальной E1/Vault интеграцией.
+
+Ручной workflow \`.github/workflows/sfra-e3-real-e1-integration.yml\` подготовлен для последующего запуска на:
+- отдельном checkout E1 API;
+- отдельной копии ветки \`sfra-state\`;
+- Vault checkout на commit из manifest.
+
+Он перед запуском сверяет и после запуска повторно проверяет digest SQLite, manifest и Vault checkout.
+
+**Текущая блокировка SFRA-E3-02:** E1 код уже публикует unified API и отдельный current-node resolver в PR #11, CI на его текущем head успешен. Но \`PROJECT_TASKS.md\` всё ещё показывает SFRA-E1-01 как \`WAITING_FOR_IMPLEMENTATION\`, а E1 analyst completion/checklist не заполнены. Согласно координационному gate E3 не объявляет и не закрывает real integration до статуса \`ANALYST_COMPLETE_UNREVIEWED\` у E1.
+
+PR #10 остаётся draft и не слит. Production Vault и production \`sfra-state\` не изменялись.
