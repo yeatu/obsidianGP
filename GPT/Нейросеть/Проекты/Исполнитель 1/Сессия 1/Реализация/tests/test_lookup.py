@@ -1241,3 +1241,358 @@ def test_source_scope_and_resolver_do_not_modify_sqlite_or_vault(tmp_path):
     assert note.read_bytes() == original_source
 
 
+
+
+# Focused contract-audit regressions (Issue #17)
+
+
+def test_source_scope_rejects_active_node_id_without_matching_event(tmp_path, monkeypatch):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    replacement_id = "node_" + str(uuid.uuid4())
+    connection = _connect(db_path)
+    connection.execute(
+        "UPDATE structural_nodes SET node_id=? WHERE node_id=?",
+        (replacement_id, node_id),
+    )
+    connection.commit()
+    connection.close()
+
+    def fail_open(*args, **kwargs):
+        raise AssertionError("a node without matching event provenance must fail before source access")
+
+    monkeypatch.setattr("sfra_indexer.lookup._read_source_file", fail_open)
+    result = read_source_scope(
+        db_path, vault, replacement_id, expected_hash,
+        scope="node", snapshot_id="node-id-event-mismatch",
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "node_match_event_missing"
+    _assert_empty_scope_failure(result, "node-id-event-mismatch")
+
+
+def test_resolve_current_node_rejects_active_node_id_without_matching_event(tmp_path):
+    _, _, db_path, node_id, _, _ = _indexed_note(tmp_path)
+    replacement_id = "node_" + str(uuid.uuid4())
+    connection = _connect(db_path)
+    connection.execute(
+        "UPDATE structural_nodes SET node_id=? WHERE node_id=?",
+        (replacement_id, node_id),
+    )
+    connection.commit()
+    connection.close()
+
+    address = resolve_current_node(
+        db_path, replacement_id, snapshot_id="resolver-node-id-mismatch"
+    )
+
+    assert address.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert address.error_code == "node_match_event_missing"
+    assert address.snapshot_id == "resolver-node-id-mismatch"
+    assert address.node_id is None
+    assert address.content_hash is None
+    assert address.source_path is None
+    assert address.document_hash is None
+    assert address.index_generation is None
+
+
+def test_source_scope_rejects_active_node_without_current_generation_event(tmp_path, monkeypatch):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    connection.execute(
+        "UPDATE documents SET generation=generation+1 WHERE document_pk=?",
+        (row["doc_pk"],),
+    )
+    connection.commit()
+    connection.close()
+
+    def fail_open(*args, **kwargs):
+        raise AssertionError("a generation-mismatched node must fail before source access")
+
+    monkeypatch.setattr("sfra_indexer.lookup._read_source_file", fail_open)
+    result = read_source_scope(
+        db_path, vault, node_id, expected_hash,
+        scope="node", snapshot_id="node-event-generation-mismatch",
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "node_match_event_generation_mismatch"
+    _assert_empty_scope_failure(result, "node-event-generation-mismatch")
+
+
+def test_resolve_current_node_rejects_ambiguous_exact_id(tmp_path):
+    _, _, db_path, node_id, _, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    candidate_id = "node_" + str(uuid.uuid4())
+    connection.execute(
+        "UPDATE structural_nodes SET status='ambiguous' WHERE node_id=?",
+        (node_id,),
+    )
+    _insert_event(
+        connection, row["doc_pk"], 1, "ambiguous", node_id,
+        local_key=row["local_key"], candidates=[candidate_id],
+    )
+    connection.commit()
+    connection.close()
+
+    address = resolve_current_node(
+        db_path, node_id, snapshot_id="resolver-ambiguous-node"
+    )
+
+    assert address.status is NodeLookupStatus.AMBIGUOUS
+    assert address.snapshot_id == "resolver-ambiguous-node"
+    assert address.node_id is None
+    assert address.content_hash is None
+    assert address.source_path is None
+    assert address.document_hash is None
+    assert address.index_generation is None
+
+
+@pytest.mark.parametrize(
+    "unsafe_source_path",
+    [
+        "/absolute.md",
+        "C:/absolute.md",
+        "folder\\\\note.md",
+        "folder//note.md",
+        "./note.md",
+        "folder/../note.md",
+        "folder/\\x00note.md",
+    ],
+)
+def test_source_scope_rejects_noncanonical_path_forms_before_source_read(
+    tmp_path, monkeypatch, unsafe_source_path
+):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    connection.execute(
+        "UPDATE documents SET source_path=? WHERE document_pk=?",
+        (unsafe_source_path, row["doc_pk"]),
+    )
+    connection.commit()
+    connection.close()
+
+    def fail_open(*args, **kwargs):
+        raise AssertionError("unsafe stored paths must fail before source access")
+
+    monkeypatch.setattr("sfra_indexer.lookup._read_source_file", fail_open)
+    snapshot_id = "unsafe-path-" + str(uuid.uuid4())
+    result = read_source_scope(
+        db_path, vault, node_id, expected_hash,
+        scope="document", snapshot_id=snapshot_id,
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "source_path_unsafe"
+    _assert_empty_scope_failure(result, snapshot_id)
+
+
+def test_source_scope_rejects_symlinked_parent_directory(tmp_path):
+    vault = tmp_path / "vault"
+    nested = vault / "nested"
+    nested.mkdir(parents=True)
+    note = nested / "note.md"
+    note.write_text("# Header\\n\\nTarget paragraph.\\n", encoding="utf-8")
+    result = index_vault(vault, tmp_path / "sidecar")
+    db_path = Path(result.database_path)
+    connection = _connect(db_path)
+    row = connection.execute(
+        """SELECT n.node_id, n.content_hash
+           FROM structural_nodes n
+           JOIN documents d ON d.document_pk=n.document_pk
+           WHERE d.source_path='nested/note.md'
+           ORDER BY n.node_pk
+           LIMIT 1"""
+    ).fetchone()
+    connection.close()
+    assert row is not None, "the nested fixture must produce at least one structural node"
+
+    outside = tmp_path / "outside"
+    nested.rename(outside)
+    nested.symlink_to(outside, target_is_directory=True)
+
+    result = read_source_scope(
+        db_path, vault, row["node_id"], row["content_hash"],
+        scope="node", snapshot_id="symlinked-parent-directory",
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    _assert_empty_scope_failure(result, "symlinked-parent-directory")
+
+
+def test_source_scope_rejects_sqlite_foreign_key_violation_before_source_read(
+    tmp_path, monkeypatch
+):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    connection.execute("PRAGMA foreign_keys=OFF")
+    connection.execute(
+        "UPDATE structural_nodes SET parent_node_pk=999999 WHERE node_id=?",
+        (node_id,),
+    )
+    connection.commit()
+    connection.close()
+
+    def fail_open(*args, **kwargs):
+        raise AssertionError("SQLite foreign-key failure must be detected before source access")
+
+    monkeypatch.setattr("sfra_indexer.lookup._read_source_file", fail_open)
+    result = read_source_scope(
+        db_path, vault, node_id, expected_hash,
+        scope="node", snapshot_id="sqlite-foreign-key-failure",
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "foreign_key_failure"
+    _assert_empty_scope_failure(result, "sqlite-foreign-key-failure")
+
+# Issue #17: direct public-contract coverage for failure paths.
+
+def test_source_scope_unknown_node_id_returns_not_found_without_partial_content(tmp_path):
+    vault, _, db_path, _, expected_hash, _ = _indexed_note(tmp_path)
+    missing_node_id = "node_" + str(uuid.uuid4())
+    snapshot_id = "opaque-not-found"
+
+    result = read_source_scope(
+        db_path, vault, missing_node_id, expected_hash,
+        scope="node", snapshot_id=snapshot_id,
+    )
+
+    assert result.status is NodeLookupStatus.NOT_FOUND
+    _assert_empty_scope_failure(result, snapshot_id)
+
+
+def test_source_scope_rejects_unsafe_database_path_before_opening_source(
+    tmp_path, monkeypatch
+):
+    vault, note, db_path, node_id, expected_hash, original_source = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    connection.execute(
+        "UPDATE documents SET source_path='../outside.md' WHERE document_pk=?",
+        (row["doc_pk"],),
+    )
+    connection.commit()
+    connection.close()
+
+    import sfra_indexer.lookup as lookup_module
+
+    def unexpected_source_read(*args, **kwargs):
+        pytest.fail("Unsafe database source_path must fail before opening a source file")
+
+    monkeypatch.setattr(lookup_module, "_read_source_file", unexpected_source_read)
+    snapshot_id = "opaque-unsafe-path"
+    result = read_source_scope(
+        db_path, vault, node_id, expected_hash,
+        scope="document", snapshot_id=snapshot_id,
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "source_path_unsafe"
+    _assert_empty_scope_failure(result, snapshot_id)
+    assert "outside.md" not in json.dumps(result.to_dict())
+    assert note.read_bytes() == original_source
+
+
+def test_source_scope_rejects_symlinked_source_file_without_content(tmp_path):
+    vault, note, db_path, node_id, expected_hash, original_source = _indexed_note(tmp_path)
+    outside = tmp_path / "outside.md"
+    outside.write_bytes(original_source)
+    note.unlink()
+    note.symlink_to(outside)
+    snapshot_id = "opaque-symlink"
+
+    result = read_source_scope(
+        db_path, vault, node_id, expected_hash,
+        scope="document", snapshot_id=snapshot_id,
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "source_path_unsafe"
+    _assert_empty_scope_failure(result, snapshot_id)
+
+
+def test_source_scope_sqlite_integrity_error_is_fail_closed_and_read_only(
+    tmp_path, monkeypatch
+):
+    vault, note, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    connection.execute(
+        "UPDATE structural_nodes SET raw_text=raw_text || 'tampered' WHERE node_id=?",
+        (node_id,),
+    )
+    connection.commit()
+    connection.close()
+
+    database_before = db_path.read_bytes()
+    source_before = note.read_bytes()
+
+    import sfra_indexer.lookup as lookup_module
+
+    def unexpected_source_read(*args, **kwargs):
+        pytest.fail("SQLite integrity failure must be detected before reading Markdown")
+
+    monkeypatch.setattr(lookup_module, "_read_source_file", unexpected_source_read)
+    snapshot_id = "opaque-integrity-error"
+    result = read_source_scope(
+        db_path, vault, node_id, expected_hash,
+        scope="node", snapshot_id=snapshot_id,
+    )
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.error_code == "raw_text_hash_mismatch"
+    assert result.snapshot_id == snapshot_id
+    assert result.fragments == ()
+    assert result.anchor is None
+    assert result.parent is None
+    assert result.previous is None
+    assert result.next is None
+    assert result.document is None
+    payload = result.to_dict()
+    assert payload["fragments"] == []
+    assert payload["anchor"] is None
+    assert payload["document"] is None
+    assert "Target paragraph" not in json.dumps(payload)
+    assert db_path.read_bytes() == database_before
+    assert note.read_bytes() == source_before
+
+
+def test_resolve_current_node_rejects_ambiguous_id_without_address_or_text(tmp_path):
+    _, _, db_path, node_id, _, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    candidate_id = "node_" + str(uuid.uuid4())
+    connection.execute(
+        "UPDATE structural_nodes SET status='ambiguous' WHERE node_id=?",
+        (node_id,),
+    )
+    _insert_event(
+        connection,
+        row["doc_pk"],
+        1,
+        "ambiguous",
+        node_id,
+        local_key=row["local_key"],
+        candidates=[candidate_id],
+    )
+    connection.commit()
+    connection.close()
+
+    snapshot_id = "opaque-ambiguous-resolver"
+    address = resolve_current_node(db_path, node_id, snapshot_id=snapshot_id)
+
+    assert address.status is NodeLookupStatus.AMBIGUOUS
+    assert address.snapshot_id == snapshot_id
+    assert address.node_id is None
+    assert address.content_hash is None
+    assert address.source_path is None
+    assert address.document_hash is None
+    assert address.index_generation is None
+    payload = json.dumps(address.to_dict())
+    assert snapshot_id in payload
+    assert "raw_text" not in payload
+    assert "Target paragraph" not in payload
