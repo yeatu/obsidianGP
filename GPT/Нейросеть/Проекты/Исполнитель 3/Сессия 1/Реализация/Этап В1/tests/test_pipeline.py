@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from sfra_context_builder import ContextBuilder, TiktokenCounter, parse_search_request
+from sfra_context_builder.models import FocusAspect, SearchRequest
 from sfra_context_integrations.pipeline import (
     ContextIntegrationPipeline,
     SourceReadRequest,
@@ -159,6 +160,42 @@ def test_end_to_end_search_context_pack_and_all_scope_reads_share_one_snapshot(t
     assert all(call[-1] == pinned.ref.snapshot_id for call in api.scope_calls)
     assert all(item["snapshot_id"] == pinned.ref.snapshot_id for item in result.source_reads)
     assert reader is pipeline._source_reader
+
+
+
+
+def test_unsupported_facets_make_e2_to_e3_to_b1_pipeline_incomplete(tmp_path):
+    pipeline, _, _, _ = _pipeline(tmp_path)
+    request = SearchRequest(
+        query="original source fragment",
+        task="unsupported facet completeness fixture",
+        budget_tokens=2000,
+        facets=("VOICE",),
+        focus=(
+            FocusAspect(
+                aspect_id="voice",
+                label="Voice",
+                facets=("VOICE",),
+            ),
+        ),
+    )
+
+    result = pipeline.run(request)
+
+    assert result.search.batch.complete is False
+    assert result.context_pack["search_complete"] is False
+    coverage = result.context_pack["Coverage"][0]
+    assert coverage["status"] == "not_found_in_retrieval"
+    assert "SearchBatch.complete=false" in coverage["diagnostic_note"]
+    facet_diagnostic = next(
+        item for item in result.search.diagnostics
+        if item["code"] == "facet_match_signal_unavailable"
+    )
+    assert facet_diagnostic["severity"] == "warning"
+    assert facet_diagnostic["details"] == {
+        "requested_facets": ["VOICE"],
+        "evaluation": "not_evaluated",
+    }
 
 
 def test_dependency_resolution_receives_same_snapshot_and_group_is_atomic(tmp_path):
