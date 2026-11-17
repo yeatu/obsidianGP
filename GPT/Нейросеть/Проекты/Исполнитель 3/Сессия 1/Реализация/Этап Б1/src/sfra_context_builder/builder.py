@@ -275,9 +275,7 @@ class ContextBuilder:
                     required_group_id=group.group_id,
                     unresolved_dependency_ids=deferred_unresolved.get(member.node_id, ()),
                 ))
-        included_entries.sort(
-            key=lambda item: rank_key(by_id[item["node_id"]])
-        )
+        # Preserve selection order: required groups first, then focus, then rank.
         deferred_entries.sort(
             key=lambda item: (
                 rank_key(by_id[item["node_id"]]),
