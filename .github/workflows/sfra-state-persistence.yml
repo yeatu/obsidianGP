@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      vault_ref:
+        description: "Explicit Vault branch, tag, or commit ref to index (never defaults to main)"
+        required: false
+        default: "executor-1/sfra-indexer-session-1"
+        type: string
 
 permissions:
   contents: write
@@ -33,6 +38,28 @@ jobs:
           ref: executor-1/sfra-indexer-session-1
           path: source
           fetch-depth: 1
+
+      - name: Checkout explicitly selected Vault source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.vault_ref || 'executor-1/sfra-indexer-session-1' }}
+          path: vault
+          fetch-depth: 1
+          sparse-checkout: ГП
+          sparse-checkout-cone-mode: true
+
+      - name: Record exact Vault source ref and commit
+        id: vault-source
+        shell: bash
+        env:
+          VAULT_REF: ${{ inputs.vault_ref || 'executor-1/sfra-indexer-session-1' }}
+        run: |
+          set -euo pipefail
+          vault_commit_sha="$(git -C "$GITHUB_WORKSPACE/vault" rev-parse HEAD)"
+          echo "vault_ref=$VAULT_REF" >> "$GITHUB_OUTPUT"
+          echo "vault_commit_sha=$vault_commit_sha" >> "$GITHUB_OUTPUT"
+          echo "Vault ref: $VAULT_REF"
+          echo "Vault commit: $vault_commit_sha"
 
       - name: Checkout persistent state orphan branch
         uses: actions/checkout@v4
@@ -125,18 +152,19 @@ jobs:
         run: |
           set -euo pipefail
           sfra-index index \
-            --vault "$GITHUB_WORKSPACE/source/ГП" \
+            --vault "$GITHUB_WORKSPACE/vault/ГП" \
             --index-dir "$RUNNER_TEMP/sfra-working-index"
           sfra-index info --db "$RUNNER_TEMP/sfra-working-index/structure.sqlite3"
-          git -C "$GITHUB_WORKSPACE/source" diff --exit-code -- ГП
-          test -z "$(git -C "$GITHUB_WORKSPACE/source" status --porcelain -- ГП)"
+          git -C "$GITHUB_WORKSPACE/vault" diff --exit-code -- ГП
+          test -z "$(git -C "$GITHUB_WORKSPACE/vault" status --porcelain -- ГП)"
 
       - name: Create SQLite Backup API snapshot and manifest
         if: steps.state-mode.outputs.skip != 'true'
         working-directory: source
         env:
           SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_COMMIT: ${{ github.sha }}
+          VAULT_REF: ${{ steps.vault-source.outputs.vault_ref }}
+          VAULT_COMMIT_SHA: ${{ steps.vault-source.outputs.vault_commit_sha }}
           WORKFLOW_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -144,8 +172,8 @@ jobs:
             --db "$RUNNER_TEMP/sfra-working-index/structure.sqlite3" \
             --state-dir "$GITHUB_WORKSPACE/state-repo" \
             --source-repository "$SOURCE_REPOSITORY" \
-            --source-branch executor-1/sfra-indexer-session-1 \
-            --source-commit "$SOURCE_COMMIT" \
+            --vault-ref "$VAULT_REF" \
+            --vault-commit-sha "$VAULT_COMMIT_SHA" \
             --workflow-run-id "$WORKFLOW_RUN_ID"
           sfra-index state-verify --state-dir "$GITHUB_WORKSPACE/state-repo"
 

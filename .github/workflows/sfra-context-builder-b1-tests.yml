@@ -6,12 +6,14 @@ on:
       - executor-3/context-builder-stage-b1
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-context-builder-b1-tests.yml"
   pull_request:
     branches:
       - main
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-context-builder-b1-tests.yml"
 
 permissions:
@@ -19,6 +21,9 @@ permissions:
 
 jobs:
   unit-tests:
+    if: >-
+      github.event_name != 'pull_request' ||
+      !startsWith(github.event.pull_request.head.ref, 'executor-1/e1-source-read-api')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,3 +40,236 @@ jobs:
       - name: Run unit tests
         working-directory: "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
         run: python -m pytest -q
+
+
+  e1-source-api-tests:
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.event.pull_request.head.ref, 'executor-1/e1-source-read-api')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+    steps:
+      - name: Check out E1 pull-request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: source
+
+      - name: Check out production sfra-state read-only
+        uses: actions/checkout@v4
+        with:
+          ref: sfra-state
+          path: production-state-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/pyproject.toml"
+
+      - name: Install E1 package and test dependencies
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements-dev.txt
+
+      - name: Verify and copy production snapshot without writing to sfra-state
+        id: production-snapshot
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/e1-production-snapshot/state
+          cp "$GITHUB_WORKSPACE/production-state-source/state/manifest.json" \
+            /tmp/e1-production-snapshot/state/manifest.json
+          cp "$GITHUB_WORKSPACE/production-state-source/state/structure.sqlite3" \
+            /tmp/e1-production-snapshot/state/structure.sqlite3
+          sfra-index state-verify --state-dir /tmp/e1-production-snapshot
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path("/tmp/e1-production-snapshot/state/manifest.json")
+          manifest_bytes = manifest_path.read_bytes()
+          manifest = json.loads(manifest_bytes)
+          vault_commit_sha = manifest.get("vault_commit_sha") or manifest.get("source_commit")
+          vault_ref = manifest.get("vault_ref") or manifest.get("source_branch")
+          if (
+              not isinstance(vault_commit_sha, str)
+              or len(vault_commit_sha) != 40
+              or any(ch not in "0123456789abcdef" for ch in vault_commit_sha.lower())
+          ):
+              raise SystemExit("Production manifest has no valid 40-character Vault commit SHA")
+          if not isinstance(vault_ref, str) or not vault_ref.strip():
+              raise SystemExit("Production manifest has no explicit Vault ref")
+          snapshot_id = "sha256:" + hashlib.sha256(manifest_bytes).hexdigest()
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"vault_commit_sha={vault_commit_sha}\n")
+              output.write(f"vault_ref={vault_ref}\n")
+              output.write(f"snapshot_id={snapshot_id}\n")
+          print("Production Vault ref:", vault_ref)
+          print("Production Vault commit:", vault_commit_sha)
+          print("Opaque Snapshot ID:", snapshot_id)
+          PY
+
+      - name: Check out the exact Vault commit recorded in production manifest
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.production-snapshot.outputs.vault_commit_sha }}
+          path: vault
+          fetch-depth: 1
+          sparse-checkout: ГП
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
+
+      - name: Exercise atomic Source Scope API against isolated production snapshot
+        working-directory: source
+        env:
+          E1_SNAPSHOT_ID: ${{ steps.production-snapshot.outputs.snapshot_id }}
+          E1_VAULT_REF: ${{ steps.production-snapshot.outputs.vault_ref }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          from sfra_indexer import (
+              NodeLookupStatus,
+              read_source_scope,
+              resolve_current_node,
+          )
+
+          database = Path("/tmp/e1-production-snapshot/state/structure.sqlite3")
+          vault_root = Path(os.environ["GITHUB_WORKSPACE"]) / "vault" / "ГП"
+          snapshot_id = os.environ["E1_SNAPSHOT_ID"]
+
+          connection = sqlite3.connect(
+              database.resolve().as_uri() + "?mode=ro", uri=True
+          )
+          row = connection.execute(
+              """SELECT n.node_id, n.content_hash
+                 FROM structural_nodes AS n
+                 JOIN documents AS d ON d.document_pk = n.document_pk
+                 WHERE n.status='active' AND n.stale_generation IS NULL
+                   AND d.status='active' AND n.node_type='paragraph'
+                 ORDER BY n.char_start, n.node_pk
+                 LIMIT 1"""
+          ).fetchone()
+          connection.close()
+          if row is None:
+              raise SystemExit("The production snapshot contains no active paragraph anchor")
+          node_id, expected_hash = row
+
+          address = resolve_current_node(
+              database, node_id, snapshot_id=snapshot_id
+          )
+          assert address.status is NodeLookupStatus.OK, address.to_dict()
+          assert address.snapshot_id == snapshot_id
+          assert address.node_id == node_id
+          assert address.content_hash == expected_hash
+
+          for scope in ("node", "parent", "neighbors", "document"):
+              result = read_source_scope(
+                  database,
+                  vault_root,
+                  node_id,
+                  expected_hash,
+                  scope=scope,
+                  snapshot_id=snapshot_id,
+              )
+              assert result.status is NodeLookupStatus.OK, (scope, result.to_dict())
+              assert result.snapshot_id == snapshot_id
+              if scope == "document":
+                  assert result.document is not None
+                  doc = result.document
+                  source_bytes = (vault_root / doc.source_path).read_bytes()
+                  assert doc.raw_text.encode("utf-8") == source_bytes
+                  assert "sha256:" + hashlib.sha256(source_bytes).hexdigest() == doc.document_hash
+                  assert doc.index_generation == address.index_generation
+              else:
+                  assert result.anchor is not None
+                  for fragment in result.fragments:
+                      assert fragment.source_path == address.source_path
+                      assert fragment.document_hash == address.document_hash
+                      assert fragment.index_generation == address.index_generation
+                      assert fragment.content_hash.startswith("sha256:")
+                      assert fragment.raw_text
+          print("Atomic Source Scope API verified against production sfra-state copy")
+          PY
+
+
+      - name: Run all structural indexer and E1 API tests
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: python -m pytest -q
+
+      - name: Check public API and CLI exports
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: |
+          python - <<'PY'
+          from sfra_indexer import (
+              CurrentNodeAddress,
+              NodeLookupResult,
+              NodeLookupStatus,
+              NodeRecord,
+              SourceScopeResult,
+              get_node_by_id,
+              read_source_scope,
+              resolve_current_node,
+          )
+          assert callable(get_node_by_id)
+          assert callable(read_source_scope)
+          assert callable(resolve_current_node)
+          assert SourceScopeResult is not None
+          assert CurrentNodeAddress is not None
+          assert NodeLookupStatus.OK.value == "ok"
+          print("Public source-verified lookup API exports: OK")
+          PY
+          sfra-index --help
+
+      - name: Index the manifest-pinned real Vault without modifying it
+        working-directory: source
+        env:
+          E1_VAULT_REF: ${{ steps.production-snapshot.outputs.vault_ref }}
+        run: |
+          set -euo pipefail
+          sfra-index index --vault "$GITHUB_WORKSPACE/vault/ГП" --index-dir /tmp/e1-real-vault-index
+          sfra-index info --db /tmp/e1-real-vault-index/structure.sqlite3
+          python - <<'PY'
+          import sqlite3
+
+          connection = sqlite3.connect("/tmp/e1-real-vault-index/structure.sqlite3")
+          values = {
+              "documents": connection.execute(
+                  "SELECT COUNT(*) FROM documents WHERE status='active'"
+              ).fetchone()[0],
+              "nodes": connection.execute(
+                  "SELECT COUNT(*) FROM structural_nodes WHERE stale_generation IS NULL"
+              ).fetchone()[0],
+              "passages": connection.execute(
+                  "SELECT COUNT(*) FROM passages"
+              ).fetchone()[0],
+              "empty_documents": connection.execute(
+                  "SELECT COUNT(*) FROM documents WHERE status='active' AND source_size_bytes=0"
+              ).fetchone()[0],
+          }
+          import os
+          print("Vault source ref from production manifest:", os.environ["E1_VAULT_REF"])
+          print("Real Vault counts:", values)
+          assert values == {
+              "documents": 66,
+              "nodes": 9080,
+              "passages": 21,
+              "empty_documents": 2,
+          }, values
+          connection.close()
+          PY
+          git -C "$GITHUB_WORKSPACE/vault" diff --exit-code -- ГП
+          test -z "$(git -C "$GITHUB_WORKSPACE/vault" status --porcelain -- ГП)"
