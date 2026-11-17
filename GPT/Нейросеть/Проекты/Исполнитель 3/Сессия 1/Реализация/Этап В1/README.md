@@ -2,8 +2,8 @@
 
 **Область:** E2 SearchAdapter → E3 Context Builder → E1 public Source Scope API.  
 **Accepted E3 code HEAD:** a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe.  
-**Main sync merge commit:** 722b77d5f4bb2d07ce9b75ff7ab10220690ae39b.  
-**Main at sync:** 33dfdd9d894a7bedd822168ba479c0989e889211; branch ahead 37 / behind 0.  
+**Main sync merge commits:** 722b77d5f4bb2d07ce9b75ff7ab10220690ae39b, 043834b9260d92fa9de386f8aa1641b17190d4cd.  
+**Main at final sync:** e133a3716a28842055da6db3acfbe2c318e67904; branch ahead 39 / behind 0.  
 **Статус:** C1 и E3-02 приняты аналитиком и координатором: `COORDINATOR_ACCEPTED_NOT_MERGED`. PR #10 остаётся open / Draft / not merged.
 
 ## 1. SearchAdapter
@@ -153,3 +153,20 @@ The CI and real integration runs above target this code-under-review HEAD. Docum
 - Production SQLite, manifest, sidecar tree, Vault tree and HEADs remained unchanged; both checkouts clean.
 
 The run above validates the synchronized merge commit. The following commit, if any, only updates this README/handoff documentation and does not alter E3 implementation code. PR #10 remains open / Draft / not merged.
+
+
+---
+
+## 9. Повторная проверка после импорта последнего registry commit — 2026-11-17
+
+- Последний main registry commit: `e133a3716a28842055da6db3acfbe2c318e67904`.
+- Второй sync merge commit: `043834b9260d92fa9de386f8aa1641b17190d4cd`; после merge E3 branch **ahead 39 / behind 0**.
+- Импортированный diff содержит только `PROJECT_TASKS.md` и реестр сессии координатора; E3 runtime tree не менялся.
+- [C1 PR CI 44037802824](https://github.com/yeatu/obsidianGP/actions/runs/44037802824): success, **45 B1 + 56 C1 passed**.
+- [Real PR integration 44037802807](https://github.com/yeatu/obsidianGP/actions/runs/44037802807): success; artifact ID `14308715139`, SHA-256 `sha256:59c8711c832339b5db3545f04d267c0073c3ca9d915954a16c7eb1ae166e193f`.
+- Report records E3 `043834b9260d92fa9de386f8aa1641b17190d4cd` and E1 `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`.
+- All four scopes, real parent dependency, negative matrix, fail-closed paths, E3 budget and read-only guards passed.
+- Context Pack: `budget_limited`, 1 included / 2 deferred. One-token scope: `budget_exceeded`, no partial fragments.
+- Production SQLite, manifest, sidecar tree, Vault tree and HEADs unchanged; both checkouts clean.
+
+This run revalidates the branch after the final registry sync. The following commit only refreshes these two documentation files; runtime code and integration configuration are unchanged.
