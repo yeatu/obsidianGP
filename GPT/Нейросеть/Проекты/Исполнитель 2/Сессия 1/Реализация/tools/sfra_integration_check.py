@@ -71,8 +71,8 @@ def run_cli(command: list[str], env: dict[str, str]) -> tuple[str, Any]:
     completed = subprocess.run(command, text=True, capture_output=True, env=env)
     if completed.returncode != 0:
         raise RuntimeError(
-            f"Command failed ({completed.returncode}): {' '.join(command)}\\n"
-            f"stdout:\\n{completed.stdout[-4000:]}\\nstderr:\\n{completed.stderr[-4000:]}"
+            f"Command failed ({completed.returncode}): {' '.join(command)}\n"
+            f"stdout:\n{completed.stdout[-4000:]}\nstderr:\n{completed.stderr[-4000:]}"
         )
     return completed.stdout, parse_json_output(completed.stdout)
 
@@ -330,15 +330,15 @@ def main() -> int:
     }
 
     (args.results_dir / "search_results.json").write_text(
-        json.dumps({"searches": searches}, ensure_ascii=False, indent=2) + "\\n",
+        json.dumps({"searches": searches}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     (args.results_dir / "source_retrieval.json").write_text(
-        json.dumps({"verified_sources": retrieved}, ensure_ascii=False, indent=2) + "\\n",
+        json.dumps({"verified_sources": retrieved}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     (args.results_dir / "integration_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\\n",
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
