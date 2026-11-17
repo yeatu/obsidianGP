@@ -119,3 +119,11 @@ jobs:
         run: |
           cd e3
           PYTHONPATH="src:${PYTHONPATH}" python "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/run_real_e1_integration.py"
+
+      - name: Upload machine-readable real integration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sfra-e3-real-integration-${{ github.run_id }}
+          path: e3/integration-report.json
+          if-no-files-found: warn

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 from sfra_context_builder import ContextBuilder, TiktokenCounter, parse_search_request
 from sfra_context_integrations.dependency_resolver import E1DependencyResolver
+from sfra_context_integrations.pipeline import ContextIntegrationPipeline, SourceReadRequest
 from sfra_context_integrations.search_adapter import E2SearchAdapter
 from sfra_context_integrations.snapshot import bind_pinned_snapshot
 from sfra_context_integrations.source_reader import E1SourceReader
@@ -128,19 +129,38 @@ def main() -> int:
     if dependency["content_hash"] != candidate.content_hash:
         raise RuntimeError("Dependency resolver returned a different current Content Hash")
 
-    scope_results = {}
-    for scope in ("node", "parent", "neighbors", "document"):
-        result = source_reader.read_scope(
-            candidate.node_id,
-            candidate.content_hash,
-            scope,
-            pinned.ref,
+    pipeline = ContextIntegrationPipeline(
+        pinned_snapshot=pinned,
+        search_adapter=search_adapter,
+        context_builder=ContextBuilder(token_counter),
+        source_reader=source_reader,
+        dependency_resolver=dependency_resolver,
+    )
+    pipeline_result = pipeline.run(
+        request,
+        source_reads=tuple(
+            SourceReadRequest(
+                node_id=candidate.node_id,
+                expected_hash=candidate.content_hash,
+                scope=scope,
+            )
+            for scope in ("node", "parent", "neighbors", "document")
+        ),
+    )
+    pipeline_candidate = pipeline_result.search.batch.candidates[0]
+    if (
+        pipeline_candidate.node_id != candidate.node_id
+        or pipeline_candidate.content_hash != candidate.content_hash
+    ):
+        raise RuntimeError("Repeated pinned E2 search changed its top candidate")
+    scope_results = {
+        scope: result
+        for scope, result in zip(
+            ("node", "parent", "neighbors", "document"),
+            pipeline_result.source_reads,
+            strict=True,
         )
-        if result.get("status") != "ok":
-            raise RuntimeError(f"E1 scope {scope} failed: {result.get('status')}")
-        if result.get("snapshot_id") != pinned.ref.snapshot_id:
-            raise RuntimeError(f"E1 scope {scope} returned another snapshot_id")
-        scope_results[scope] = result
+    }
 
     node_fragment = scope_results["node"]["fragments"][0]
     if node_fragment["raw_text"] != candidate.raw_text:
@@ -180,13 +200,7 @@ def main() -> int:
     if missing.get("status") != "not_found" or missing.get("snapshot_id") != pinned.ref.snapshot_id:
         raise RuntimeError("Unknown Node ID did not return explicit not_found with the pinned snapshot")
 
-    builder = ContextBuilder(token_counter)
-    pack = builder.build(
-        request,
-        search_result.batch,
-        dependency_resolver,
-        snapshot=pinned.ref,
-    )
+    pack = pipeline_result.context_pack
     if not pack.get("Included"):
         raise RuntimeError("Context Builder produced no Included source-backed context")
     included = next((item for item in pack["Included"] if item["node_id"] == candidate.node_id), None)
@@ -252,6 +266,8 @@ def main() -> int:
             "unknown_node_status": missing["status"],
         },
         "e3": {
+            "orchestrator": "ContextIntegrationPipeline.run",
+            "pipeline_snapshot_matches": pipeline_result.snapshot == pinned.ref,
             "context_pack_status": pack["status"],
             "included_count": len(pack["Included"]),
             "deferred_count": len(pack["Deferred"]),
@@ -269,7 +285,34 @@ def main() -> int:
             "vault_checkout_clean": not vault_status_after,
         },
     }
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    report_text = json.dumps(report, ensure_ascii=False, indent=2)
+    print(report_text)
+    Path("integration-report.json").write_text(report_text + "\\n", encoding="utf-8")
+
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        scope_rows = "\\n".join(
+            f"| {scope} | {value['status']} | {len(value['fragments'])} | "
+            f"{', '.join(item['role'] for item in value['fragments'])} |"
+            for scope, value in scope_results.items()
+        )
+        summary = (
+            "# Real E2 → E3 → E1 integration\\n\\n"
+            f"- Snapshot ID: `{pinned.ref.snapshot_id}`\\n"
+            f"- Vault commit: `{pinned.ref.vault_commit_sha}`\\n"
+            f"- Sidecar commit: `{pinned.ref.sidecar_commit_sha}`\\n"
+            f"- Manifest SHA-256: `{pinned.ref.manifest_sha256}`\\n"
+            f"- E2 hits: {search_result.engine_result_count}; candidates: {len(search_result.batch.candidates)}\\n"
+            f"- Context Pack: `{pack['status']}`; Included: {len(pack['Included'])}; Deferred: {len(pack['Deferred'])}\\n"
+            f"- Scope budget (E3): `{budget_result['status']}`\\n\\n"
+            "| Scope | Status | Fragments | Roles |\\n"
+            "|---|---:|---:|---|\\n"
+            f"{scope_rows}\\n\\n"
+            "Read-only verification: SQLite, manifest, sidecar tree, Vault tree, "
+            "both Git HEADs, and both checkout statuses unchanged.\\n"
+        )
+        with Path(summary_path).open("a", encoding="utf-8") as handle:
+            handle.write(summary)
     return 0
 
 
