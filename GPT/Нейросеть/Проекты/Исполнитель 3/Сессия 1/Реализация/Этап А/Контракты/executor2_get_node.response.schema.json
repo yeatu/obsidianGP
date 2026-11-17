@@ -17,19 +17,60 @@
     "document_hash"
   ],
   "properties": {
-    "node_id": { "type": "string", "minLength": 1 },
-    "source_path": { "type": "string", "minLength": 1 },
-    "node_type": { "type": ["string", "null"] },
-    "parent_node_id": { "type": ["string", "null"] },
-    "heading_path": { "type": "array", "items": { "type": "string" } },
-    "line_start": { "type": "integer", "minimum": 1 },
-    "line_end": { "type": "integer", "minimum": 1 },
-    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "node_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parent_node_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "heading_path": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "line_start": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "line_end": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "raw_text": {
       "type": "string",
       "description": "Complete verbatim structural node text. Not an excerpt."
     },
-    "index_generation": { "type": "integer", "minimum": 0 },
-    "document_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    "index_generation": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Document-local generation from E1 documents.generation. It is comparable only for nodes with the same source_path, not a global Vault generation."
+    },
+    "document_hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 of the complete source Markdown document from E1 documents.source_sha256. Null only when the document hash is genuinely unavailable; never substitute the node content_hash."
+    }
   }
 }
