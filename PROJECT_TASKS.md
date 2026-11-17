@@ -668,3 +668,25 @@ PR #28 and PR #29 were closed as superseded after their changes were consolidate
 - E1 fixture-only PR/push CI (PR #32).
 
 В текущем согласованном scope нет открытого инженерного блокера по E1/E2/E3 contract fixes. Следующий координаторский шаг — дождаться/проверить независимый A1 follow-up по Issue #19, затем сформировать отдельное решение о следующем продуктовом этапе. Production indexing, persistence changes и V2.3/V2.4 не запускать автоматически.
+
+
+
+## 19. Публичная очистка Search smoke-test evidence — 2026-11-18
+
+### 19.1. Issue #4 завершена и очищена от source-specific metadata
+
+- [Issue #4](https://github.com/yeatu/obsidianGP/issues/4) закрыта как completed: два исторических search smoke runs завершились успешно.
+- Публичные комментарии [6930702372](https://github.com/yeatu/obsidianGP/issues/4#issuecomment-6930702372) и [6930779310](https://github.com/yeatu/obsidianGP/issues/4#issuecomment-6930779310) отредактированы.
+- Удалены из публичных комментариев Vault source paths, Node IDs, Content Hash значения, heading/line metadata и original-source excerpts.
+- Сохранены только агрегированные метрики: 66 документов, 9,080 узлов, 3 raw matches, 1 selected specific match, 2 suppressed ancestors, 3 заявленные проверки source-slice integrity.
+- Тело Issue заменено агрегированным итогом; новые source-specific данные в публичный issue не добавлялись.
+
+Это закрывает историческую smoke-test задачу, не раскрывая исходные фрагменты в публичном GitHub-журнале.
+
+### 19.2. Остаточные открытые управляющие задачи
+
+- Issue [#19](https://github.com/yeatu/obsidianGP/issues/19) остаётся открытой до завершения независимого A1 follow-up CLAIM [comment 6963802002](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6963802002), который повторно проверяет A1-01…A1-05 на актуальном main после E1/E3 merges и fixture-only CI stabilization.
+- Issue [#20](https://github.com/yeatu/obsidianGP/issues/20) содержит действующий Governance/CLAIM protocol и остаётся открытой.
+- PR [#12](https://github.com/yeatu/obsidianGP/pull/12) остаётся proposal-only. V2.3/V2.4, production GitHub transport, real Issue writes, event triggers и recovery остаются неавторизованными.
+
+**Текущая координаторская позиция:** реализованные E1/E2/E3 contract blockers сняты; E1 PR CI сделан fixture-only; исторический Search smoke-test issue очищен и закрыт. Следующий decision gate — независимый A1 follow-up, после которого можно выбирать следующий продуктовый этап без переноса старых блокеров в новую версию.
