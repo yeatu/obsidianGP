@@ -193,7 +193,7 @@ E3 `E1SourceReader._mapping()` требует Mapping и не вызывает `
 - manifest проверяется через E1 verifier, точные байты хешируются;
 - ручной workflow checkout-ит sidecar по `sfra-state` и Vault по commit из manifest.
 
-**Что осталось:** новый workflow `sfra-e3-real-e1-integration.yml` имеет `workflow_dispatch` и на текущий момент не имеет успешного прогона. Сам по себе добавленный workflow не доказывает real E1/E2/E3 integration. После исправления API response adapter его необходимо запустить и приложить run/артефакты.
+**Что осталось:** новый workflow `sfra-e3-real-e1-integration.yml` имеет `workflow_dispatch`. В проверенных PR-CI runs текущего HEAD отдельный успешный run этого workflow не представлен; поэтому реальная E1/E2/E3 интеграция пока не доказана. Само наличие workflow не заменяет успешный ручной прогон. После исправления API response adapter нужно запустить его и приложить run/артефакты.
 
 #### Блокер E3-E — устаревшая документация
 
