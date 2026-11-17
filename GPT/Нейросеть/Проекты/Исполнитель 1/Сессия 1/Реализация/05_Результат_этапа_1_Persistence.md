@@ -52,10 +52,52 @@
 - [Run 43980073213 — SFRA structural indexer stages B and C](https://github.com/yeatu/obsidianGP/actions/runs/43980073213): success; **28 passed in 1.55s**; CLI help прошёл; реальный Vault — 66 Markdown, 9 080 узлов, 21 Passage, 2 пустых документа; второй проход пропустил все 66 неизменённых документов; Git-проверка исходной папки Vault успешна.
 - [Run 43980073444 — SFRA persistent SQLite state](https://github.com/yeatu/obsidianGP/actions/runs/43980073444): success; проверка checkout orphan-ветки и allowlist прошла; workflow корректно пропустил restore/index/snapshot/push, поскольку production state branch пока содержит только README и запуск не имел флага первичной инициализации.
 
-### Что ещё не подтверждено Actions
+### Промежуточный статус до production-проверки
 
-Рабочая SQLite ещё не опубликована в \`sfra-state\`, а production restore/snapshot/push пока не выполнялся. Это сознательное fail-closed поведение: первый запуск необходимо явно выполнить через GitHub Actions → **SFRA persistent SQLite state** → **Run workflow** с \`initialize_state=true\`. После этого обычные push запускают режим восстановления существующей базы.
+На момент подготовки первоначальной версии этого отчёта рабочая SQLite ещё не была опубликована в `sfra-state`, а production restore/snapshot/push не выполнялся. Предыдущий запуск `43980073444` корректно пропустил эти шаги, поскольку не был вызван с `initialize_state=true`.
 
-Локальные тесты проверили backup из SQLite WAL, manifest hash, отказ при несовпадении контрольной суммы и отказ при повреждённой базе. Они не заменяют подтверждение полного production round-trip через GitHub branch.
+Этот раздел фиксирует историческое состояние. Неопределённость снята последующими production-запусками №4 и №5, результаты которых приведены ниже. Локальные тесты по-прежнему являются отдельным уровнем проверки и не подменяют фактический межзапусковой round-trip.
 
-API \`get_node_by_id(..., expected_hash)\`, ветка \`sfra-state-test\` и два независимых тестовых runner остаются следующими отдельными этапами.
+API `get_node_by_id(..., expected_hash)`, ветка `sfra-state-test` и отдельный интеграционный A/B-тест остаются вне границ этапа 1 Persistence и относятся к следующим отдельным этапам.
+
+## Итоговая production-проверка между независимыми GitHub Actions runner
+
+**Вердикт аналитика: этап 1 Persistence принят.** Полный production round-trip подтверждён двумя последовательными ручными запусками workflow `SFRA persistent SQLite state` на ветке `executor-1/sfra-indexer-session-1`. Оба запуска завершились со статусом `success`; все рабочие шаги workflow выполнены.
+
+### Запуск №4 — первичная инициализация
+
+[GitHub Actions run 43988013903](https://github.com/yeatu/obsidianGP/actions/runs/43988013903)
+
+- Событие: `workflow_dispatch`; параметр `initialize_state=true`.
+- Рабочая ветка: `executor-1/sfra-indexer-session-1`, исходный commit `4edb7707bee02604aa68066ca0e1ce1030f8ebfd`.
+- Проверка настоящей orphan-истории `sfra-state` и allowlist завершилась успешно.
+- Рабочая SQLite создана вне Vault, в каталоге runner temp.
+- Проиндексировано 66 документов: 66 обработано, 0 пропущено; сохранено 9 080 структурных узлов и 21 Passage. В наборе 2 пустых документа.
+- Создан снимок SQLite через Backup API, сформирован manifest, проверка состояния прошла успешно.
+- SQLite и manifest опубликованы в `sfra-state`. Коммит публикации: [`a64b9039818f6cf7da2a42fbb339491a19ae626d`](https://github.com/yeatu/obsidianGP/commit/a64b9039818f6cf7da2a42fbb339491a19ae626d).
+
+### Запуск №5 — восстановление сохранённого состояния
+
+[GitHub Actions run 43988325234](https://github.com/yeatu/obsidianGP/actions/runs/43988325234)
+
+- Событие: `workflow_dispatch`; параметр `initialize_state=false`.
+- Запуск выполнен на новом независимом runner.
+- Сохранённая SQLite восстановлена из `sfra-state`; проверка manifest и целостности завершилась успешно.
+- Повторно проверено 66 документов: 0 переиндексировано, все 66 пропущены как неизменившиеся.
+- После восстановления в индексе осталось 9 080 активных узлов, 21 Passage, 9 080 версий узлов и 9 080 событий сопоставления; статусы stale и ambiguous — 0.
+- Повторный снимок и публикация manifest завершились успешно. Итоговый commit ветки состояния: [`8cb649e507d20ff39ef387402a1c97e642b14136`](https://github.com/yeatu/obsidianGP/commit/8cb649e507d20ff39ef387402a1c97e642b14136).
+
+### Сверка состояния и неизменность Vault
+
+| Проверка | Запуск №4 | Запуск №5 |
+|---|---|---|
+| SHA-256 `state/structure.sqlite3` | `2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674` | `2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674` |
+| SQLite integrity / проверка состояния | Успешно | Успешно |
+| Документы | 66 проиндексировано | 66 пропущено |
+| Узлы | 9 080 | 9 080 сохранено |
+| Passage | 21 | 21 |
+| Изменения в исходной папке `ГП` | Не обнаружены | Не обнаружены |
+
+Контрольная сумма SQLite совпала в manifest обоих запусков. Ветка `sfra-state` содержит `README.md`, `state/structure.sqlite3` и `state/manifest.json`; бинарная база и manifest присутствуют в опубликованном дереве. Исходные материалы Vault не изменялись.
+
+**Итог:** сохранение production SQLite, восстановление на независимом runner и повторное использование прежнего состояния доказаны фактическими запусками №4 и №5. Этап 1 Persistence принят аналитиком. API адресного чтения и изолированная тестовая ветка `sfra-state-test` в этот этап не включались.
