@@ -186,6 +186,56 @@ def test_changed_body_hash_is_permanently_rejected_without_second_service_call()
     assert store.get_bound_body_sha256(15) == first.request_body_sha256
 
 
+def test_first_seen_body_hash_is_bound_before_metadata_validation() -> None:
+    body_a = body_for(payload={"query": "observed while metadata is invalid"})
+    reader = FakeIssueReader(issue_record(body_a, title="not an SFRA title"))
+    store = InMemoryTransportStatusStore()
+    search = FakeSearchApplication()
+    read_source = FakeReadSourceApplication()
+    worker = IssueWorkerCore(
+        issue_reader=reader,
+        status_store=store,
+        search_application=search,
+        read_source_application=read_source,
+    )
+
+    first = worker.run(15, snapshot=SNAPSHOT, worker_commit_sha=WORKER_SHA)
+
+    assert first.transport_status == "REJECTED"
+    assert first.error_code == "wrong_title_prefix"
+    assert store.get_bound_body_sha256(15) == first.request_body_sha256
+    assert search.calls == []
+    assert read_source.calls == []
+
+    # Correcting metadata must not allow a changed body to replace the first-seen
+    # digest. The changed request is rejected before either V2.1 service is called.
+    body_b = body_for(payload={"query": "changed after first observation"})
+    reader.current = issue_record(body_b, title="[SFRA] corrected title")
+    second = worker.run(15, snapshot=SNAPSHOT, worker_commit_sha=WORKER_SHA)
+
+    assert second.transport_status == "REJECTED"
+    assert second.error_code == "request_body_changed"
+    assert store.get_bound_body_sha256(15) == first.request_body_sha256
+    assert second.request_body_sha256 != first.request_body_sha256
+    assert search.calls == []
+    assert read_source.calls == []
+
+
+def test_deeply_nested_json_is_rejected_without_invoking_application_services() -> None:
+    body = "[" * 10_000 + "0" + "]" * 10_000
+    assert len(body.encode("utf-8")) < 32 * 1024
+
+    worker, _, store, search, read_source = make_worker(issue_record(body))
+
+    status = worker.run(15, snapshot=SNAPSHOT, worker_commit_sha=WORKER_SHA)
+
+    assert status.transport_status == "REJECTED"
+    assert status.error_code == "invalid_json"
+    assert store.get_bound_body_sha256(15) == status.request_body_sha256
+    assert search.calls == []
+    assert read_source.calls == []
+
+
 def test_worker_sanitizes_application_exception_without_serializing_its_message() -> None:
     class LeakyFailure:
         def search(self, request):
