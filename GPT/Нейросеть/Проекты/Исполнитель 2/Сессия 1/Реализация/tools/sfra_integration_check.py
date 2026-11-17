@@ -107,6 +107,7 @@ def main() -> int:
     import sqlite3
     uri = f"file:{args.source_db.resolve().as_posix()}?mode=ro"
     db = sqlite3.connect(uri, uri=True)
+    db.row_factory = sqlite3.Row
     try:
         db.execute("PRAGMA query_only = ON")
         integrity = db.execute("PRAGMA quick_check").fetchone()[0]
