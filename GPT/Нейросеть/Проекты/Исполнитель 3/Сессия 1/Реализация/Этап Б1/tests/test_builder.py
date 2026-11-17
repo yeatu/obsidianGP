@@ -181,4 +181,4 @@ def test_truncated_flag_prevents_claiming_complete_search(builder):
     )
     assert pack["search_complete"] is False
     assert pack["status"] == "partial"
-    assert "SearchAdapter.complete=false" in pack["Coverage"][0]["diagnostic_note"]
+    assert "SearchBatch.complete=false" in pack["Coverage"][0]["diagnostic_note"]
