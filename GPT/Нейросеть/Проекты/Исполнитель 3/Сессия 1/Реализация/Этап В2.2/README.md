@@ -11,14 +11,14 @@ The package is sfra_issue_core in src/. It has no runtime package dependencies d
 - IssueRequestParser validates Issue metadata, strict UTF-8 bytes, the exact request body hash, one JSON envelope and the operation-specific payload.
 - TransportStatusV2 implements a strict status-v2 mapping with status_schema_version, request_body_sha256 and worker_commit_sha.
 - SafeResultProjector extracts only allowlisted operation/status/scope/count fields and approved diagnostic codes from typed V2.1 results.
-- IssueWorkerCore reads one injected Issue record, validates it completely, compares the immutable first-seen body hash, then invokes exactly one V2.1 application service with the supplied pinned SnapshotRef.
+- IssueWorkerCore reads one injected Issue record, computes and binds the exact body digest before metadata validation, and compares every subsequent observation against that immutable first-seen baseline. This means even an Issue rejected for title/repository/author metadata pins its original body; changing the body while correcting metadata is permanently rejected before either V2.1 service is called. Only a body matching the baseline can continue through metadata and payload validation, then invoke exactly one V2.1 application service with the supplied pinned SnapshotRef.
 - InMemoryTransportStatusStore is a test/non-production implementation. It binds the first observed request body hash and never replaces that baseline.
 
 ## Request boundary
 
 The approved repository is yeatu/obsidianGP, the title must begin exactly with [SFRA], and the author must match an exact login in a non-empty injected allowlist. The default allowlist contains only yeatu. Missing and empty allowlists reject every request.
 
-The body limit is 32 KiB measured from the exact UTF-8 byte sequence. A body must be either one strict JSON value or exactly one fenced json block with whitespace only outside. Duplicate JSON keys, non-JSON constants, extra fields, unknown operations, invalid UUID v4 values and invalid operation payloads are rejected. Search and read-source payloads both reject additional properties, including nested objects.
+The body limit is 32 KiB measured from the exact UTF-8 byte sequence. A body must be either one strict JSON value or exactly one fenced json block with whitespace only outside. Duplicate JSON keys, non-JSON constants, extra fields, unknown operations, invalid UUID v4 values and invalid operation payloads are rejected. Deeply nested JSON that triggers the standard decoder's `RecursionError` is normalized to typed `invalid_json` and a safe `REJECTED` transport status; no parser exception escapes to the caller. Search and read-source payloads both reject additional properties, including nested objects.
 
 request_body_sha256 is computed over the exact original body bytes, before parsing or whitespace normalization. The status store binds the first observed hash for an Issue. A later different hash produces a permanent REJECTED / request_body_changed outcome and does not call either application service.
 
