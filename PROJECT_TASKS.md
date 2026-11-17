@@ -70,6 +70,7 @@
 | SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **DONE** | PR #10 merged. Финальная real integration [44038459427](https://github.com/yeatu/obsidianGP/actions/runs/44038459427): success; artifact `14308411701`, SHA-256 `6b096d78395e23a6aadd904a449da0cb48a94131c0c3b03fb17c53108057524a`. Все четыре scope, parent dependency, negative matrix и read-only guards подтверждены. Context Pack остаётся `budget_limited` (1 included / 2 deferred), не `complete`. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **DONE** | PR [#7](https://github.com/yeatu/obsidianGP/pull/7) merged: `d3e41965f916746225cb8f76fd4c96fc9e95486c`. Post-merge workflow [44041253438](https://github.com/yeatu/obsidianGP/actions/runs/44041253438): success, 64 passed / 0 failures / 0 errors / 0 skipped; artifact `14309710985`. |
 | SFRA-E3-V2.1 | E3 | Transport-independent SearchVaultService / ReadSourceService application services | **DONE** | PR [#14](https://github.com/yeatu/obsidianGP/pull/14) merged 2026-11-17 09:33:20 UTC: `9a0bfa012269590466a3b314770425a2a97dfe7f`. Implementation HEAD `b093c51833f47b9a4e83e83235ea7fbf591f81a7`; Analyst 3 review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022); Coordinator acceptance reviews [5935913900](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935913900). Final pre-merge checks on `516d1590744e88574bc9e67724aaaae0c5e4e13d`: C1 [44054181018](https://github.com/yeatu/obsidianGP/actions/runs/44054181018) (45 B1 + 56 C1), V2.1 [44054181091](https://github.com/yeatu/obsidianGP/actions/runs/44054181091) (45 B1 + 56 C1 + 18 V2.1; transport guard), real integration [44054181144](https://github.com/yeatu/obsidianGP/actions/runs/44054181144), artifact `14314428318`. Issue #13 closed as completed. Production Issue worker/recovery/MCP and source-content publication remain out of scope and not authorized. |
+| SFRA-E3-V2.2 | E3 | Non-production Issue validation and safe worker core (strict parser, body hash, status v2, safe projector, fake ports) | **WAITING_FOR_IMPLEMENTATION** | [Issue #15](https://github.com/yeatu/obsidianGP/issues/15). Владелец по проектной роли — Исполнитель 3; ревью — Аналитик 3. В V2.2 запрещены GitHub API/SDK/network/write calls, active workflows, real Issue/comment writes, source-content projection, leases/retries/recovery, MCP/HTTP/deployment. Использовать merged V2.1 services; fake/in-memory ports only. PR #12 остаётся proposal-only. |
 
 ---
 
@@ -294,3 +295,16 @@ Production Issue worker, recovery и публикация source content не р
 - [x] Проверена конфигурация post-merge workflow triggers: целевые workflow не настроены на push в `main`, поэтому отдельный post-merge run не создан. Pre-merge зелёные проверки остаются валидным evidence для неизменённого runtime code.
 
 **Итог:** SFRA-E3-V2.1 = `DONE`. Это не включает GitHub Issue worker/recovery, MCP, HTTP/webhooks или публикацию Vault source content. Public source-content publication remains deny-by-default.
+
+
+## 10. Постановка SFRA-E3-V2.2 — 2026-11-17
+
+- [x] V2.1 завершена и merged: PR #14, `9a0bfa012269590466a3b314770425a2a97dfe7f`; Issue #13 closed/completed.
+- [x] Создан отдельный Issue [#15](https://github.com/yeatu/obsidianGP/issues/15) для V2.2.
+- [x] Scope ограничен non-production parser/validator, status schema v2, request body hash, safe aggregate projector и IssueWorkerCore over fake/in-memory ports.
+- [x] Явно запрещены GitHub API/SDK, credentials/network/write calls, active event workflows, реальные Issue/comment writes, source-content serialization, leases/retries/recovery, MCP/HTTP/deployment.
+- [ ] Исполнитель 3 реализовал V2.2 по Issue #15.
+- [ ] Аналитик 3 провёл независимую проверку.
+- [ ] Координаторская приёмка V2.2.
+
+**Решение:** V2.2 разрешена только в описанном non-production scope. V2.3 (реальный GitHub transport/recovery) и V2.4 (controlled rollout) остаются отдельными gates; это решение не разрешает production execution.
