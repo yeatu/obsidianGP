@@ -83,9 +83,9 @@ The index directory must be outside the source Vault. The parser reads UTF-8 wit
 
 ## Atomic Source Scope API (E1)
 
-The canonical public API is \`read_source_scope\`. It reads one source scope through one SQLite read transaction and one safe source-file read. The four legacy methods remain public compatibility wrappers over this implementation; they do not maintain separate lookup paths.
+The canonical public API is `read_source_scope`. It reads one source scope through one SQLite read transaction and one safe source-file read. The four legacy methods remain public compatibility wrappers over this implementation; they do not maintain separate lookup paths.
 
-\`\`\`python
+```python
 from pathlib import Path
 from sfra_indexer import (
     NodeLookupStatus,
@@ -109,43 +109,43 @@ if address.status is NodeLookupStatus.OK:
         scope="parent",  # node | parent | neighbors | document
         snapshot_id=address.snapshot_id,
     )
-\`\`\`
+```
 
 ### Four scopes
 
-- \`node\`: the exact target Structural Node.
-- \`parent\`: target and its immediate structural parent, when present.
-- \`neighbors\`: target and its immediate previous/next siblings under the same parent, in source order. An ambiguous immediate neighbor fails the whole request; the implementation never skips it.
-- \`document\`: the complete original Markdown file, byte-for-byte as decoded from strict UTF-8. It is returned as \`result.document.raw_text\`; it is not reconstructed from SQLite node versions.
+- `node`: the exact target Structural Node.
+- `parent`: target and its immediate structural parent, when present.
+- `neighbors`: target and its immediate previous/next siblings under the same parent. `result.fragments` is in source order: previous, anchor, next (omitting a missing boundary neighbor). An ambiguous immediate neighbor fails the whole request; the implementation never skips it.
+- `document`: the complete original Markdown file, byte-for-byte as decoded from strict UTF-8. It is returned as `result.document.raw_text`; it is not reconstructed from SQLite node versions.
 
-For \`node\`, \`parent\`, and \`neighbors\`, \`result.fragments\` contains the verified NodeRecords. Every NodeRecord carries \`node_id\`, \`content_hash\`, \`source_path\`, \`document_hash\` (the exact \`documents.source_sha256\` value), \`index_generation\` (the exact \`documents.generation\` value), exact \`raw_text\`, coordinates, and only the metadata already stored for that node. No policy fields such as \`preservation\`, \`required_with\`, or \`parent_context_required\` are synthesized.
+For `node`, `parent`, and `neighbors`, `result.fragments` contains the verified NodeRecords. Every NodeRecord carries `node_id`, `content_hash`, `source_path`, `document_hash` (the exact `documents.source_sha256` value), `index_generation` (the exact `documents.generation` value), exact `raw_text`, coordinates, and only the metadata already stored for that node. No policy fields such as `preservation`, `required_with`, or `parent_context_required` are synthesized.
 
-For \`document\`, \`result.document\` contains \`source_path\`, \`document_hash\`, \`index_generation\`, byte size, the anchor Node ID/Content Hash, and the complete Markdown text. \`result.anchor\` contains the independently verified anchor fragment.
+For `document`, `result.document` contains `source_path`, `document_hash`, `index_generation`, byte size, the anchor Node ID/Content Hash, and the complete Markdown text. `result.anchor` contains the independently verified anchor fragment.
 
 ### Atomicity and failure behavior
 
 A scope call opens one existing SQLite file in read-only/query-only mode, begins one read transaction, and uses that connection for all node, parent, neighbor, document, version, lifecycle and event queries. The associated Markdown file is opened once beneath the supplied Vault root; its whole-file hash is checked once, and all selected node slices are derived from those same bytes. Related nodes must belong to the same document record, path, source hash and current document generation as the anchor.
 
-If any required record is absent, stale, ambiguous, deleted, inactive, cross-document, incorrectly bound, or fails Hash/coordinate/source validation, the call returns an explicit status and an empty \`fragments\` list. It never returns a partial parent, neighbor set, or document. Text is never sourced from historical \`node_versions\`.
+If any required record is absent, stale, ambiguous, deleted, inactive, cross-document, incorrectly bound, or fails Hash/coordinate/source validation, the call returns an explicit status and an empty `fragments` list. It never returns a partial parent, neighbor set, or document. Text is never sourced from historical `node_versions`.
 
-\`snapshot_id\` is opaque to E1. It is echoed unchanged in every \`SourceScopeResult\` and \`CurrentNodeAddress\`. E1 does not verify Git commits, manifests, SnapshotRef, or the relationship between a sidecar and a Vault commit. E3 owns that verification and passes the matching \`db_path\`, \`vault_root\`, and \`snapshot_id\`.
+`snapshot_id` is opaque to E1. It is echoed unchanged in every `SourceScopeResult` and `CurrentNodeAddress`. E1 does not verify Git commits, manifests, SnapshotRef, or the relationship between a sidecar and a Vault commit. E3 owns that verification and passes the matching `db_path`, `vault_root`, and `snapshot_id`.
 
 ### Resolving the current address
 
-\`resolve_current_node(db_path, node_id, *, snapshot_id)\` returns a \`CurrentNodeAddress\` with the current \`node_id\`, \`content_hash\`, \`source_path\`, \`document_hash\`, and \`index_generation\`. It uses only the exact Node ID, accepts only one active/unambiguous current row, and does not perform fuzzy matching or return historical versions. This resolver is DB-only because it has no Vault argument; the subsequent \`read_source_scope\` call verifies the address against the original Markdown.
+`resolve_current_node(db_path, node_id, *, snapshot_id)` returns a `CurrentNodeAddress` with the current `node_id`, `content_hash`, `source_path`, `document_hash`, and `index_generation`. It uses only the exact Node ID, accepts only one active/unambiguous current row, and does not perform fuzzy matching or return historical versions. This resolver is DB-only because it has no Vault argument; the subsequent `read_source_scope` call verifies the address against the original Markdown.
 
 ### Compatibility methods
 
 The existing public methods remain available and delegate to the unified API:
 
-- \`get_node_by_id\` → \`scope="node"\`
-- \`get_parent_by_id\` → \`scope="parent"\`
-- \`get_neighbors_by_id\` → \`scope="neighbors"\`
-- \`get_document_by_id\` → \`scope="document"\`
+- `get_node_by_id` → `scope="node"`
+- `get_parent_by_id` → `scope="parent"`
+- `get_neighbors_by_id` → `scope="neighbors"`
+- `get_document_by_id` → `scope="document"`
 
 ### Result statuses
 
-The common status set is \`ok\`, \`stale_source\`, \`deleted\`, \`ambiguous\`, \`not_found\`, \`invalid_request\`, and \`integrity_error\`. On any failed Source Scope operation, \`fragments=[]\`, \`anchor=null\`, and \`document=null\`. Error messages/codes do not contain source excerpts or absolute paths.
+The common status set is `ok`, `stale_source`, `deleted`, `ambiguous`, `not_found`, `invalid_request`, and `integrity_error`. On any failed Source Scope operation, `fragments=[]`, `anchor=null`, and `document=null`. Error messages/codes do not contain source excerpts or absolute paths.
 
 No token budget or content truncation is applied. E1 returns complete verified source text; Context Builder budgeting belongs to E3.
  

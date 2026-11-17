@@ -574,7 +574,7 @@ get_document_by_id(...) использует проверенную пару Nod
 
 ### Каноническая сигнатура
 
-\`\`\`python
+```python
 read_source_scope(
     db_path,
     vault_root,
@@ -584,86 +584,86 @@ read_source_scope(
     scope,
     snapshot_id,
 ) -> SourceScopeResult
-\`\`\`
+```
 
-Поддерживаемые scope: \`node\`, \`parent\`, \`neighbors\`, \`document\`.
+Поддерживаемые scope: `node`, `parent`, `neighbors`, `document`.
 
 Публичные типы дополнительно включают:
-- \`SourceScopeResult\`;
-- \`CurrentNodeAddress\`.
+- `SourceScopeResult`;
+- `CurrentNodeAddress`.
 
 ### Атомарность
 
-Каждый вызов \`read_source_scope\`:
-1. Открывает одну существующую SQLite в \`mode=ro\` и \`query_only\`.
+Каждый вызов `read_source_scope`:
+1. Открывает одну существующую SQLite в `mode=ro` и `query_only`.
 2. Начинает одну read-транзакцию.
 3. Выполняет все SQL-запросы target, parent, siblings, documents, versions и match events через эту транзакцию.
-4. Делает один безопасный descriptor-relative read исходного Markdown-файла под переданным \`vault_root\`.
-5. Проверяет полный \`documents.source_sha256\` и размер файла, а затем строит все selected source slices из одного и того же массива байтов.
+4. Делает один безопасный descriptor-relative read исходного Markdown-файла под переданным `vault_root`.
+5. Проверяет полный `documents.source_sha256` и размер файла, а затем строит все selected source slices из одного и того же массива байтов.
 6. Rollback/close выполняется один раз при выходе из метода.
 
 Ни одна ветка scope не вызывает публичный метод другого чтения и не открывает дополнительное SQLite соединение.
 
 ### Общая привязка фрагмента
 
-Каждый \`NodeRecord\` возвращаемый в \`fragments\` содержит:
-- \`node_id\`;
-- \`content_hash\`;
-- \`source_path\`;
-- \`document_hash\` — точное значение \`documents.source_sha256\`;
-- \`index_generation\` — точное значение \`documents.generation\`;
-- \`raw_text\` — точный фрагмент исходного Markdown;
+Каждый `NodeRecord` возвращаемый в `fragments` содержит:
+- `node_id`;
+- `content_hash`;
+- `source_path`;
+- `document_hash` — точное значение `documents.source_sha256`;
+- `index_generation` — точное значение `documents.generation`;
+- `raw_text` — точный фрагмент исходного Markdown;
 - исходные line/char/UTF-8-byte координаты;
-- \`metadata\` — только декодированные значения существующего \`metadata_json\`, без искусственного добавления policy-полей.
+- `metadata` — только декодированные значения существующего `metadata_json`, без искусственного добавления policy-полей.
 
-Все фрагменты одного результата должны принадлежать одной записи \`documents\`, иметь одинаковые \`source_path\`, \`document_hash\` и \`index_generation\). Каждый связанный узел отдельно проходит DB-only preflight, latest-version binding, lifecycle/event validation и проверку собственного Content Hash по текущим байтам файла.
+Все фрагменты одного результата должны принадлежать одной записи `documents`, иметь одинаковые `source_path`, `document_hash` и `index_generation\). Каждый связанный узел отдельно проходит DB-only preflight, latest-version binding, lifecycle/event validation и проверку собственного Content Hash по текущим байтам файла.
 
 ### Режимы
 
-- \`node\`: один anchor fragment.
-- \`parent\`: anchor и непосредственный parent по \`parent_node_pk\`; для document root отсутствие parent является штатным успешным результатом.
-- \`neighbors\`: anchor и ближайшие предыдущий/следующий sibling в одном document и с тем же parent, упорядоченные по \`char_start, char_end, node_pk\`. Неоднозначный сосед не пропускается.
-- \`document\`: anchor проверяется по Node ID + expected Hash, затем возвращается полный исходный Markdown в \`result.document.raw_text\`. Полный текст не реконструируется из \`node_versions\`, не ограничивается размером или токенным бюджетом.
+- `node`: один anchor fragment.
+- `parent`: anchor и непосредственный parent по `parent_node_pk`; для document root отсутствие parent является штатным успешным результатом.
+- `neighbors`: anchor и ближайшие предыдущий/следующий sibling в одном document и с тем же parent, упорядоченные по `char_start, char_end, node_pk`. `fragments` возвращается в порядке исходного документа: previous, anchor, next (отсутствующий граничный сосед пропускается). Неоднозначный сосед не пропускается.
+- `document`: anchor проверяется по Node ID + expected Hash, затем возвращается полный исходный Markdown в `result.document.raw_text`. Полный текст не реконструируется из `node_versions`, не ограничивается размером или токенным бюджетом.
 
 ### Snapshot binding и границы E1/E3
 
-\`snapshot_id\` является непрозрачной строкой: E1 принимает её и возвращает без изменения в каждом \`SourceScopeResult\` и \`CurrentNodeAddress\`. E1 не проверяет manifest digest, Git ref, commit SHA, SnapshotRef или соответствие checkout. Эти проверки принадлежат E3.
+`snapshot_id` является непрозрачной строкой: E1 принимает её и возвращает без изменения в каждом `SourceScopeResult` и `CurrentNodeAddress`. E1 не проверяет manifest digest, Git ref, commit SHA, SnapshotRef или соответствие checkout. Эти проверки принадлежат E3.
 
 E3 передаёт E1:
-- \`db_path\` на уже проверенную копию sidecar;
-- \`vault_root\` checkout, соответствующий проверенному manifest commit;
-- \`snapshot_id\`, вычисленный E3.
+- `db_path` на уже проверенную копию sidecar;
+- `vault_root` checkout, соответствующий проверенному manifest commit;
+- `snapshot_id`, вычисленный E3.
 
 E1 использует только эти явные пути и идентификатор. Никаких git fetch/checkout и выбора актуального snapshot внутри E1 нет.
 
 ### Разрешение актуального узла
 
-\`\`\`python
+```python
 resolve_current_node(
     db_path,
     node_id,
     *,
     snapshot_id,
 ) -> CurrentNodeAddress
-\`\`\`
+```
 
-Метод использует одну read-транзакцию и возвращает текущие \`node_id\`, \`content_hash\`, \`source_path\`, \`document_hash\`, \`index_generation\` и исходный \`snapshot_id\`. Разрешается только одна active/unambiguous запись с целостной текущей version/event history. Метод не выполняет fuzzy matching и не выдаёт историческую версию. Поскольку у него нет аргумента \`vault_root\`, он не подтверждает текущие байты файла: это делает последующий \`read_source_scope\`.
+Метод использует одну read-транзакцию и возвращает текущие `node_id`, `content_hash`, `source_path`, `document_hash`, `index_generation` и исходный `snapshot_id`. Разрешается только одна active/unambiguous запись с целостной текущей version/event history. Метод не выполняет fuzzy matching и не выдаёт историческую версию. Поскольку у него нет аргумента `vault_root`, он не подтверждает текущие байты файла: это делает последующий `read_source_scope`.
 
 ### Ошибки и атомарность выдачи
 
 Если не проходит любая проверка статуса, поколения, привязки документа, пути, coordinates, Hash или текущего source-файла:
 - возвращается явный общий статус;
-- \`fragments\` сериализуется как пустой список;
-- \`anchor\`, \`parent\`, \`previous\`, \`next\`, \`document\` равны null;
+- `fragments` сериализуется как пустой список;
+- `anchor`, `parent`, `previous`, `next`, `document` равны null;
 - никакая часть исходного текста не возвращается.
 
 ### Совместимость
 
 Старые публичные методы сохранены как обёртки над единой реализацией:
-- \`get_node_by_id\` → \`read_source_scope(scope="node")\`;
-- \`get_parent_by_id\` → \`scope="parent"\`;
-- \`get_neighbors_by_id\` → \`scope="neighbors"\`;
-- \`get_document_by_id\` → \`scope="document"\`.
+- `get_node_by_id` → `read_source_scope(scope="node")`;
+- `get_parent_by_id` → `scope="parent"`;
+- `get_neighbors_by_id` → `scope="neighbors"`;
+- `get_document_by_id` → `scope="document"`.
 
 Независимые механизмы чтения для этих методов удалены. E3 использует только публичные API и не обращается к внутренним SQLite таблицам.
 
