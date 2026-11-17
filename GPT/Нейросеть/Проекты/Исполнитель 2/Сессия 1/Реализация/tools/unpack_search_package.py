@@ -77,8 +77,87 @@ def main() -> int:
         args.destination,
         ignore=shutil.ignore_patterns(".git", ".pytest_cache", "__pycache__", "*.pyc", "*.pyo"),
     )
+    # Compatibility overlay: Executor 1 represents an empty source interval as
+    # line_end == line_start - 1. Preserve that exact coordinate in E2 rather
+    # than silently inventing a line or modifying the E1 database.
+    adapter_path = args.destination / "src" / "sfra_search" / "adapter.py"
+    adapter_text = adapter_path.read_text(encoding="utf-8")
+    legacy_validation = '''    for key in ("line_start", "line_end"):
+        if isinstance(node[key], bool) or not isinstance(node[key], int) or node[key] < 1:
+            raise ImportValidationError(f"{key} must be a positive 1-based integer")
+    if node["line_end"] < node["line_start"]:
+        raise ImportValidationError("line_end must be greater than or equal to line_start")
+    raw_text = node["raw_text"]
+    if not isinstance(raw_text, str):
+        raise ImportValidationError("raw_text must be a string")
+'''
+    compatible_validation = '''    raw_text = node["raw_text"]
+    if not isinstance(raw_text, str):
+        raise ImportValidationError("raw_text must be a string")
+    line_start = node["line_start"]
+    line_end = node["line_end"]
+    if isinstance(line_start, bool) or not isinstance(line_start, int) or line_start < 1:
+        raise ImportValidationError("line_start must be a positive 1-based integer")
+    if isinstance(line_end, bool) or not isinstance(line_end, int) or line_end < 0:
+        raise ImportValidationError("line_end must be a non-negative 1-based line boundary")
+    # Empty source spans have no inclusive line. E1 represents them as
+    # line_end == line_start - 1 (for an empty file root: 1, 0).
+    # Preserve this exact producer coordinate; do not invent a fake line.
+    if line_end < line_start and not (raw_text == "" and line_end == line_start - 1):
+        raise ImportValidationError(
+            "line_end may precede line_start only for an empty source span"
+        )
+'''
+    if legacy_validation in adapter_text:
+        adapter_text = adapter_text.replace(legacy_validation, compatible_validation, 1)
+        adapter_path.write_text(adapter_text, encoding="utf-8")
+    elif compatible_validation not in adapter_text:
+        raise RuntimeError("Unknown sfra_search adapter validation block; refusing an unsafe patch")
+
+    # Keep a regression test alongside the published module, not only in this
+    # build helper. It verifies both coordinate preservation and read-only DB use.
+    test_path = args.destination / "tests" / "test_structural_runtime.py"
+    if test_path.is_file():
+        test_text = test_path.read_text(encoding="utf-8")
+        test_marker = "def test_empty_source_span_preserves_executor1_zero_end_line("
+        test_case = '''
+
+def test_empty_source_span_preserves_executor1_zero_end_line(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    create_executor1_database(db_path)
+    empty_hash = calculate_content_hash("")
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        """UPDATE structural_nodes
+           SET line_start=1, line_end=0, raw_text='', content_hash=?
+           WHERE node_id='node_executor1_root'""",
+        (empty_hash,),
+    )
+    connection.commit()
+    connection.close()
+    before = sha256_file(db_path)
+
+    nodes, summary = load_current_nodes(db_path)
+    root = next(node for node in nodes if node["node_id"] == "node_executor1_root")
+    assert root["line_start"] == 1
+    assert root["line_end"] == 0
+    assert root["raw_text"] == ""
+    assert root["content_hash"] == empty_hash
+
+    source = get_source_node(db_path, "node_executor1_root", empty_hash)
+    assert source is not None
+    assert source["line_start"] == 1
+    assert source["line_end"] == 0
+    assert source["raw_text"] == ""
+    assert sha256_file(db_path) == before
+'''
+        if test_marker not in test_text:
+            test_path.write_text(test_text + test_case, encoding="utf-8")
+    else:
+        raise RuntimeError("Expected structural runtime test file is missing")
+
     files = sorted(
-        str(p.relative_to(args.destination)).replace("\\", "/")
+        str(p.relative_to(args.destination)).replace("\\\\", "/")
         for p in args.destination.rglob("*") if p.is_file()
     )
     manifest = {
@@ -89,6 +168,7 @@ def main() -> int:
             text=True,
         ).strip() for part in parts},
         "source_root": ".",
+        "compatibility_overlays": ["empty_source_span_line_end=line_start-1; raw_text must be empty"],
         "files": files,
     }
     (args.destination / "SOURCE_ARCHIVE_PROVENANCE.json").write_text(
