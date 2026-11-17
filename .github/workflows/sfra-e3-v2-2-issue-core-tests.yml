@@ -65,9 +65,14 @@ jobs:
           import ast
           from importlib.metadata import requires
           from pathlib import Path
+          from packaging.requirements import Requirement
 
           forbidden = {"github", "requests", "httpx", "urllib3", "fastapi", "starlette", "flask", "mcp"}
-          requirements = requires("sfra-issue-core") or []
+          requirements = []
+          for raw in requires("sfra-issue-core") or []:
+              requirement = Requirement(raw)
+              if requirement.marker is None or requirement.marker.evaluate({"extra": ""}):
+                  requirements.append(raw)
           if requirements:
               raise SystemExit("V2.2 runtime dependencies must remain empty: " + ", ".join(requirements))
           root = Path("GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.2/src")
