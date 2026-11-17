@@ -163,3 +163,22 @@ def test_parallel_overlap_group_is_neutral(builder):
     group = next(item for item in pack["Parallel Sources"] if item["relation"] == "adapter_overlap_group")
     assert "потенциальное пересечение" in group["description"]
     assert group["kept_separate"] is True
+
+
+def test_e2_tier_and_bm25_sort_ascending(builder):
+    low_priority = make_candidate("tier4", "tier four", relevance={"tier": 4, "bm25": -100})
+    stronger = make_candidate("tier2", "tier two", relevance={"tier": 2, "bm25": 10})
+    best_bm25 = make_candidate("tier2b", "tier two best", relevance={"tier": 2, "bm25": -2})
+    pack = builder.build(make_request(), make_batch(low_priority, stronger, best_bm25))
+    assert [item["node_id"] for item in pack["Included"]] == ["tier2b", "tier2", "tier4"]
+
+
+def test_truncated_flag_prevents_claiming_complete_search(builder):
+    request = make_request(focus=[{"id": "missing", "label": "Not found"}])
+    pack = builder.build(
+        request,
+        {"complete": True, "truncated_by_limit": True, "inspected_count": 0, "candidates": []},
+    )
+    assert pack["search_complete"] is False
+    assert pack["status"] == "partial"
+    assert "SearchAdapter.complete=false" in pack["Coverage"][0]["diagnostic_note"]

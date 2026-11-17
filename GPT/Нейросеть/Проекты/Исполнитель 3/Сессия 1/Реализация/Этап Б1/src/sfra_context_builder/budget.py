@@ -9,7 +9,9 @@ from .models import RetrievalCandidate, TokenCounterProtocol
 
 
 def compact_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return json.dumps(
+        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False
+    )
 
 
 def provenance(candidate: RetrievalCandidate) -> dict[str, Any]:

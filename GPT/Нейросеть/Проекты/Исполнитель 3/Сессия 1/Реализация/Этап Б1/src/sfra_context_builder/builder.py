@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Any, Mapping, Sequence
@@ -46,6 +45,7 @@ class ContextBuilder:
                 "snapshot is required when a DependencyResolver is supplied"
             )
 
+        search_complete = normalized_batch.complete and not normalized_batch.truncated_by_limit
         diagnostics: list[dict[str, Any]] = []
         rejected_count = 0
         retrieved_count = len(normalized_batch.candidates)
@@ -72,7 +72,7 @@ class ContextBuilder:
 
         candidates, conflicts = self._deduplicate(verified)
         if conflicts:
-            rejected_count += len(conflicts)
+            rejected_count += sum(len(hashes) for hashes in conflicts.values())
             for node_id, hashes in sorted(conflicts.items()):
                 diagnostics.append({
                     "code": "version_conflict",
@@ -151,12 +151,6 @@ class ContextBuilder:
         included_entries: list[dict[str, Any]] = []
         included_ids: set[str] = set()
         processed_groups: set[str] = set()
-        group_for_node: dict[str, DependencyGroup] = {
-            member.node_id: group
-            for group in groups
-            for member in group.members
-        }
-
         def coverage_for(
             proposed_included: set[str],
             proposed_deferred: set[str],
@@ -167,7 +161,7 @@ class ContextBuilder:
                 proposed_included,
                 known_ids,
                 proposed_deferred,
-                normalized_batch.complete,
+                search_complete,
             )
 
         def try_group(group: DependencyGroup) -> None:
@@ -301,7 +295,7 @@ class ContextBuilder:
                 "details": {"relationship_is_not_a_conflict_judgement": True},
             })
 
-        if not normalized_batch.complete or normalized_batch.truncated_by_limit:
+        if not search_complete:
             diagnostics.append({
                 "code": "search_result_truncated",
                 "severity": "warning",
@@ -353,7 +347,7 @@ class ContextBuilder:
         } for item in deferred_entries):
             status = "budget_limited"
         elif (
-            not normalized_batch.complete
+            not search_complete
             or any(item["reason"] == "unresolved_required_dependency" for item in deferred_entries)
             or any(aspect["status"] in {"deferred", "not_found_in_retrieval"} for aspect in coverage)
         ):
@@ -366,7 +360,7 @@ class ContextBuilder:
             "status": status,
             "query": normalized_request.query,
             "task": normalized_request.task,
-            "search_complete": normalized_batch.complete,
+            "search_complete": search_complete,
             "Included": included_entries,
             "Coverage": coverage,
             "Deferred": deferred_entries,
@@ -391,9 +385,14 @@ class ContextBuilder:
             },
             "Diagnostics": diagnostics,
         }
-        pack["Statistics"]["response_tokens_estimated"] = self._token_counter.count(
-            compact_json(pack)
-        )
+        estimate = 0
+        for _ in range(8):
+            pack["Statistics"]["response_tokens_estimated"] = estimate
+            updated_estimate = self._token_counter.count(compact_json(pack))
+            if updated_estimate == estimate:
+                break
+            estimate = updated_estimate
+        pack["Statistics"]["response_tokens_estimated"] = estimate
         validate_context_pack(pack)
         return pack
 

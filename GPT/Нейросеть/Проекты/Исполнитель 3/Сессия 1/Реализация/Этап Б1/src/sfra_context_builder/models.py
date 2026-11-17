@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Mapping, Protocol, Sequence
 
 
@@ -91,6 +92,18 @@ class SnapshotRef:
     vault_commit_sha: str
     sidecar_commit_sha: str
     manifest_sha256: str
+
+    def __post_init__(self) -> None:
+        for name in ("vault_commit_sha", "sidecar_commit_sha"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+                raise ValueError(f"{name} must be a 40-character Git SHA")
+            object.__setattr__(self, name, value.lower())
+        if not isinstance(self.manifest_sha256, str) or not re.fullmatch(
+            r"sha256:[0-9a-fA-F]{64}", self.manifest_sha256
+        ):
+            raise ValueError("manifest_sha256 must be sha256:<64 hex>")
+        object.__setattr__(self, "manifest_sha256", self.manifest_sha256.lower())
 
     @property
     def snapshot_id(self) -> str:

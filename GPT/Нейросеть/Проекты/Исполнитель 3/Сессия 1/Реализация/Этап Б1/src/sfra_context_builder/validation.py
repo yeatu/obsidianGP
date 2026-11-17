@@ -125,7 +125,7 @@ def parse_search_request(value: Mapping[str, Any]) -> SearchRequest:
             aspect_id = _string(item.get("id"), f"focus[{index}].id")
             label = _string(item.get("label"), f"focus[{index}].label")
             mode = item.get("match_mode", "any")
-            if mode not in {"any", "all"}:
+            if not isinstance(mode, str) or mode not in {"any", "all"}:
                 raise ContractValidationError(f"focus[{index}].match_mode must be any or all")
             aspect = FocusAspect(
                 aspect_id=aspect_id,
@@ -224,10 +224,16 @@ def parse_candidate(
     for key, item in signals.items():
         if not isinstance(item, (bool, str, int, float)) and item is not None:
             raise ContractValidationError(f"candidate.signals.{key} has unsupported value")
+        if isinstance(item, float) and not math.isfinite(item):
+            raise ContractValidationError(f"candidate.signals.{key} must be finite")
 
     optional_text = lambda key: (
         None if obj.get(key) is None else _string(obj[key], f"candidate.{key}", allow_empty=True)
     )
+    has_author_notes = obj.get("has_author_notes")
+    if has_author_notes is not None and not isinstance(has_author_notes, bool):
+        raise ContractValidationError("candidate.has_author_notes must be boolean or null")
+
     return RetrievalCandidate(
         node_id=node_id,
         source_path=source_path,
@@ -262,13 +268,7 @@ def parse_candidate(
             obj.get("matched_terms", ()), "candidate.matched_terms"
         ),
         zone=optional_text("zone"),
-        has_author_notes=(
-            obj.get("has_author_notes")
-            if isinstance(obj.get("has_author_notes"), bool) or obj.get("has_author_notes") is None
-            else (_ for _ in ()).throw(
-                ContractValidationError("candidate.has_author_notes must be boolean or null")
-            )
-        ),
+        has_author_notes=has_author_notes,
         preservation=preservation,
         required_with=_string_tuple(obj.get("required_with", ()), "candidate.required_with"),
         parent_context_required=parent_required,
@@ -315,16 +315,22 @@ def parse_search_batch(value: Mapping[str, Any]) -> SearchBatch:
 
 
 def validate_context_pack(value: Mapping[str, Any]) -> None:
-    """Validate the required Context Pack envelope and critical nested invariants."""
+    """Validate the Context Pack envelope and all schema-critical nested records."""
     obj = _mapping(value, "ContextPack")
     required = {
         "schema_version", "status", "query", "Included", "Coverage", "Deferred",
         "Parallel Sources", "Known", "Version Changes", "Statistics", "Diagnostics",
     }
+    allowed = required | {"task", "search_complete"}
     missing = required - set(obj)
+    extra = set(obj) - allowed
     if missing:
         raise ContractValidationError(
             f"ContextPack is missing fields: {', '.join(sorted(missing))}"
+        )
+    if extra:
+        raise ContractValidationError(
+            f"ContextPack has unsupported fields: {', '.join(sorted(extra))}"
         )
     if obj["schema_version"] != "sfra.context_pack.v1":
         raise ContractValidationError("unsupported ContextPack schema_version")
@@ -332,19 +338,171 @@ def validate_context_pack(value: Mapping[str, Any]) -> None:
         "complete", "partial", "empty", "budget_limited", "integrity_warning"
     }:
         raise ContractValidationError("invalid ContextPack status")
-    for key in ("Included", "Coverage", "Deferred", "Parallel Sources", "Known", "Version Changes", "Diagnostics"):
+    _string(obj["query"], "ContextPack.query", allow_empty=True)
+    if "task" in obj and obj["task"] is not None and not isinstance(obj["task"], str):
+        raise ContractValidationError("ContextPack.task must be string or null")
+    if "search_complete" in obj and not isinstance(obj["search_complete"], bool):
+        raise ContractValidationError("ContextPack.search_complete must be boolean")
+
+    array_fields = (
+        "Included", "Coverage", "Deferred", "Parallel Sources",
+        "Known", "Version Changes", "Diagnostics",
+    )
+    for key in array_fields:
         if not isinstance(obj[key], list):
             raise ContractValidationError(f"ContextPack.{key} must be an array")
-    if not isinstance(obj["Statistics"], Mapping):
-        raise ContractValidationError("ContextPack.Statistics must be an object")
-    for item in obj["Included"]:
-        if item.get("trust_label") != "untrusted_source_data":
+
+    provenance_required = {
+        "node_id", "source_path", "heading_path", "line_start", "line_end", "content_hash"
+    }
+
+    def validate_provenance(item: Mapping[str, Any], name: str) -> None:
+        missing_fields = provenance_required - set(item)
+        if missing_fields:
+            raise ContractValidationError(
+                f"{name} is missing provenance fields: {', '.join(sorted(missing_fields))}"
+            )
+        _string(item["node_id"], f"{name}.node_id")
+        _string(item["source_path"], f"{name}.source_path")
+        _string_tuple(item["heading_path"], f"{name}.heading_path")
+        _integer(item["line_start"], f"{name}.line_start", minimum=1)
+        line_end = _integer(item["line_end"], f"{name}.line_end", minimum=1)
+        if line_end < item["line_start"]:
+            raise ContractValidationError(f"{name}.line_end must be >= line_start")
+        _hash(item["content_hash"], f"{name}.content_hash")
+        if "signals" in item:
+            _mapping(item["signals"], f"{name}.signals")
+        if "matched_focus_ids" in item:
+            _string_tuple(item["matched_focus_ids"], f"{name}.matched_focus_ids")
+        if "document_hash" in item:
+            _hash(item["document_hash"], f"{name}.document_hash", nullable=True)
+        if "index_generation" in item and item["index_generation"] is not None:
+            _integer(item["index_generation"], f"{name}.index_generation", minimum=0)
+
+    included_required = {"raw_text", "trust_label", "inclusion_reason"}
+    inclusion_reasons = {
+        "retrieval_candidate", "required_dependency", "required_parent_context"
+    }
+    for index, raw in enumerate(obj["Included"]):
+        item = _mapping(raw, f"Included[{index}]")
+        validate_provenance(item, f"Included[{index}]")
+        if not included_required.issubset(item):
+            raise ContractValidationError(f"Included[{index}] lacks raw_text/trust_label/inclusion_reason")
+        _string(item["raw_text"], f"Included[{index}].raw_text", allow_empty=True)
+        if item["trust_label"] != "untrusted_source_data":
             raise ContractValidationError("Included raw_text must be marked untrusted_source_data")
-        if "raw_text" not in item or "content_hash" not in item:
-            raise ContractValidationError("Included item lacks raw_text or content_hash")
-    for item in obj["Deferred"]:
-        if item.get("reason") not in {
-            "budget_limit", "required_group_budget_limit",
-            "lower_priority_budget_limit", "unresolved_required_dependency",
-        }:
+        if item["inclusion_reason"] not in inclusion_reasons:
+            raise ContractValidationError(f"Included[{index}] has invalid inclusion_reason")
+        if "token_count" in item:
+            _integer(item["token_count"], f"Included[{index}].token_count", minimum=0)
+        if "is_required_dependency" in item and not isinstance(item["is_required_dependency"], bool):
+            raise ContractValidationError(f"Included[{index}].is_required_dependency must be boolean")
+
+    coverage_statuses = {"found", "deferred", "not_found_in_retrieval"}
+    coverage_bases = {"adapter_match", "explicit_entities_facets_terms", "exact_phrase_fallback"}
+    coverage_required = {
+        "aspect_id", "label", "status", "included_node_ids",
+        "known_node_ids", "deferred_node_ids", "basis",
+    }
+    for index, raw in enumerate(obj["Coverage"]):
+        item = _mapping(raw, f"Coverage[{index}]")
+        if not coverage_required.issubset(item):
+            raise ContractValidationError(f"Coverage[{index}] is missing required fields")
+        _string(item["aspect_id"], f"Coverage[{index}].aspect_id")
+        _string(item["label"], f"Coverage[{index}].label")
+        if item["status"] not in coverage_statuses:
+            raise ContractValidationError(f"Coverage[{index}] has invalid status")
+        for field_name in ("included_node_ids", "known_node_ids", "deferred_node_ids"):
+            _string_tuple(item[field_name], f"Coverage[{index}].{field_name}")
+        bases = _string_tuple(item["basis"], f"Coverage[{index}].basis")
+        if any(basis not in coverage_bases for basis in bases):
+            raise ContractValidationError(f"Coverage[{index}].basis has unsupported value")
+        if "diagnostic_note" in item and item["diagnostic_note"] is not None and not isinstance(item["diagnostic_note"], str):
+            raise ContractValidationError(f"Coverage[{index}].diagnostic_note must be string or null")
+
+    deferred_reasons = {
+        "budget_limit", "required_group_budget_limit",
+        "lower_priority_budget_limit", "unresolved_required_dependency",
+    }
+    for index, raw in enumerate(obj["Deferred"]):
+        item = _mapping(raw, f"Deferred[{index}]")
+        validate_provenance(item, f"Deferred[{index}]")
+        if "estimated_tokens" not in item or "reason" not in item:
+            raise ContractValidationError(f"Deferred[{index}] lacks estimated_tokens/reason")
+        _integer(item["estimated_tokens"], f"Deferred[{index}].estimated_tokens", minimum=0)
+        if item["reason"] not in deferred_reasons:
             raise ContractValidationError("Deferred item has invalid reason")
+        if "required_with" in item:
+            _string_tuple(item["required_with"], f"Deferred[{index}].required_with")
+        if "unresolved_dependency_ids" in item:
+            _string_tuple(item["unresolved_dependency_ids"], f"Deferred[{index}].unresolved_dependency_ids")
+
+    for index, raw in enumerate(obj["Parallel Sources"]):
+        item = _mapping(raw, f"Parallel Sources[{index}]")
+        if item.get("relation") not in {
+            "same_basename_different_path", "adapter_overlap_group", "adapter_overlap_hint"
+        } or item.get("kept_separate") is not True:
+            raise ContractValidationError(f"Parallel Sources[{index}] has invalid relation/kept_separate")
+        sources = item.get("sources")
+        if not isinstance(sources, list) or len(sources) < 2:
+            raise ContractValidationError(f"Parallel Sources[{index}].sources must contain at least two items")
+        for source_index, source_raw in enumerate(sources):
+            source = _mapping(source_raw, f"Parallel Sources[{index}].sources[{source_index}]")
+            for field_name in ("node_id", "source_path", "content_hash"):
+                _string(source.get(field_name), f"Parallel Sources[{index}].sources[{source_index}].{field_name}")
+            _hash(source["content_hash"], f"Parallel Sources[{index}].sources[{source_index}].content_hash")
+
+    for index, raw in enumerate(obj["Known"]):
+        item = _mapping(raw, f"Known[{index}]")
+        _string(item.get("node_id"), f"Known[{index}].node_id")
+        _hash(item.get("content_hash"), f"Known[{index}].content_hash")
+        if item.get("delivery") != "already_known_not_repeated":
+            raise ContractValidationError(f"Known[{index}] has invalid delivery")
+
+    for index, raw in enumerate(obj["Version Changes"]):
+        item = _mapping(raw, f"Version Changes[{index}]")
+        _string(item.get("node_id"), f"Version Changes[{index}].node_id")
+        _hash(item.get("known_hash"), f"Version Changes[{index}].known_hash")
+        _hash(item.get("current_hash"), f"Version Changes[{index}].current_hash")
+        if item.get("action") != "deliver_current_version_if_budget_allows":
+            raise ContractValidationError(f"Version Changes[{index}] has invalid action")
+
+    stats = _mapping(obj["Statistics"], "Statistics")
+    stats_required = {
+        "retrieved_count", "included_count", "deferred_count", "known_count",
+        "not_found_aspect_count", "focus_count", "coverage_available_ratio",
+        "coverage_included_ratio", "budget_tokens", "tokens_used",
+        "response_tokens_estimated", "token_counter", "rejected_count",
+    }
+    if not stats_required.issubset(stats):
+        raise ContractValidationError("Statistics is missing required fields")
+    for key in (
+        "retrieved_count", "included_count", "deferred_count", "known_count",
+        "not_found_aspect_count", "focus_count", "budget_tokens", "tokens_used",
+        "response_tokens_estimated", "rejected_count",
+    ):
+        _integer(stats[key], f"Statistics.{key}", minimum=1 if key == "budget_tokens" else 0)
+    for key in ("coverage_available_ratio", "coverage_included_ratio"):
+        ratio = stats[key]
+        if ratio is not None and (
+            isinstance(ratio, bool) or not isinstance(ratio, (int, float))
+            or not math.isfinite(float(ratio)) or not 0 <= ratio <= 1
+        ):
+            raise ContractValidationError(f"Statistics.{key} must be between 0 and 1 or null")
+    token_counter = _mapping(stats["token_counter"], "Statistics.token_counter")
+    for key in ("name", "version", "encoding"):
+        _string(token_counter.get(key), f"Statistics.token_counter.{key}", allow_empty=True)
+    for key in ("exact_for_encoding", "exact_for_client_model"):
+        if not isinstance(token_counter.get(key), bool):
+            raise ContractValidationError(f"Statistics.token_counter.{key} must be boolean")
+
+    for index, raw in enumerate(obj["Diagnostics"]):
+        item = _mapping(raw, f"Diagnostics[{index}]")
+        for key in ("code", "message"):
+            _string(item.get(key), f"Diagnostics[{index}].{key}", allow_empty=True)
+        if item.get("severity") not in {"info", "warning", "error"}:
+            raise ContractValidationError(f"Diagnostics[{index}] has invalid severity")
+        if "node_ids" in item:
+            _string_tuple(item["node_ids"], f"Diagnostics[{index}].node_ids")
+        if "details" in item:
+            _mapping(item["details"], f"Diagnostics[{index}].details")

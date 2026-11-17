@@ -53,3 +53,16 @@ def test_score_requires_explicit_direction_without_e2_relevance():
     candidate["score"] = 0.7
     with pytest.raises(ContractValidationError, match="score_direction"):
         parse_search_batch(make_batch(candidate))
+
+
+def test_unhashable_match_mode_is_a_validation_error_not_type_error():
+    with pytest.raises(ContractValidationError, match="match_mode"):
+        parse_search_request(make_request(focus=[{
+            "id": "x", "label": "X", "match_mode": ["any"]
+        }]))
+
+
+def test_non_finite_signal_is_rejected():
+    candidate = make_candidate("n1", "text", signals={"bm25": float("nan")})
+    with pytest.raises(ContractValidationError, match="finite"):
+        parse_search_batch(make_batch(candidate))
