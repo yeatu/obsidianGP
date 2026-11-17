@@ -339,7 +339,7 @@ Recovery sweep — страховка от задержанных/пропуще
 
 Старая схема `sfra-index-state/.sfra-state/` не существует и не должна использоваться worker. Ветка `sfra-state` публичная, поскольку репозиторий публичный. Опубликованная SQLite содержит `raw_text` и историю версий; после инициализации эти данные будут доступны читателям репозитория.
 
-На момент последней проверки ветка `sfra-state` ещё содержит только `README.md`: production DB и manifest не опубликованы. Persistence workflow имеет явный fail-closed режим: первый запуск должен быть вручную вызван через workflow_dispatch с `initialize_state=true`. Обычный запуск без базы пропускает restore/index/snapshot/push. Зелёный статус такого пропуска не подтверждает persistence.
+Первичная инициализация выполнена, а последующий обычный run подтвердил восстановление между независимыми GitHub Actions runner. В run [43989221734](https://github.com/yeatu/obsidianGP/actions/runs/43989221734) событие `push` прошло шаги `Verify and restore persisted SQLite`, индексацию, SQLite Backup API snapshot, проверку manifest и fast-forward публикацию. `sfra-state` теперь содержит `README.md`, `state/structure.sqlite3` (21 893 120 байт) и `state/manifest.json`; актуальный state commit — `14a6ae3b7b8e31bc0dd5def1d092c0512ae6501e`. Manifest указывает `source_commit=d04fac60e13025ba2cd8f897780d699b098dad0f`, `database_sha256=sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674`, SQLite schema v2 и indexer 0.2.0. Следовательно, production restore → re-index → snapshot → publish подтверждён на последующем runner. Это не снимает отдельного требования владельца данных принять публичность ветки: SQLite содержит исходный `raw_text` и историю версий.
 
 ### 6.2. Реальная структура и manifest E1
 
