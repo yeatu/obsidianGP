@@ -1,0 +1,12 @@
+{
+  "database": "state/structure.sqlite3",
+  "database_sha256": "sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674",
+  "format_version": 1,
+  "indexer_version": "0.2.0",
+  "source_branch": "executor-1/sfra-indexer-session-1",
+  "source_commit": "4edb7707bee02604aa68066ca0e1ce1030f8ebfd",
+  "source_repository": "yeatu/obsidianGP",
+  "sqlite_schema_version": 2,
+  "updated_at": "2026-11-17T00:29:39.232804+00:00",
+  "workflow_run_id": "43988013903"
+}
