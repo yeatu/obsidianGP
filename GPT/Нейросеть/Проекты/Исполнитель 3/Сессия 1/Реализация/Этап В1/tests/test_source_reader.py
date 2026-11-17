@@ -248,6 +248,7 @@ def test_source_reader_rejects_error_response_that_contains_partial_text(tmp_pat
 def test_source_reader_requires_whole_document_hash_for_non_node_scopes(tmp_path):
     reader, api, pinned = _reader(tmp_path)
     api.records["node_target"]["document_hash"] = None
+    api.records["node_target"]["source_sha256"] = None
 
     result = reader.read_scope(
         "node_target",

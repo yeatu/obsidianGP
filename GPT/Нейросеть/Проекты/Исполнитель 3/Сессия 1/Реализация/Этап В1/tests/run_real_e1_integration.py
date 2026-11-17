@@ -163,18 +163,71 @@ def main() -> int:
     }
 
     node_fragment = scope_results["node"]["fragments"][0]
+    target_source = scope_results["node"]["target_source"]
+    expected_identity = {
+        "node_id": candidate.node_id,
+        "content_hash": candidate.content_hash,
+        "source_path": candidate.source_path,
+        "document_hash": candidate.document_hash,
+        "index_generation": candidate.index_generation,
+    }
+    for key, expected in expected_identity.items():
+        if target_source.get(key) != expected:
+            raise RuntimeError(f"E1 target_source {key} differs from the E2-verified candidate")
+        if node_fragment.get(key) != expected:
+            raise RuntimeError(f"E1 node fragment {key} differs from the E2-verified candidate")
     if node_fragment["raw_text"] != candidate.raw_text:
         raise RuntimeError("SearchAdapter raw_text differs from E1 exact node scope")
     if _sha256_bytes(node_fragment["raw_text"].encode("utf-8")) != candidate.content_hash:
         raise RuntimeError("Exact node source text failed Content Hash verification")
 
+    for scope, result in scope_results.items():
+        if result.get("snapshot_id") != pinned.ref.snapshot_id:
+            raise RuntimeError(f"E1 scope {scope} does not share the pinned snapshot_id")
+        for fragment in result["fragments"]:
+            for key in ("source_path", "document_hash", "index_generation"):
+                if fragment.get(key) != expected_identity[key]:
+                    raise RuntimeError(
+                        f"E1 scope {scope} fragment {key} differs from the pinned target document"
+                    )
+
     document_fragment = scope_results["document"]["fragments"][0]
+    document_bytes = document_fragment["raw_text"].encode("utf-8")
     if document_fragment["raw_text"] == "":
         raise RuntimeError("E1 document scope returned an empty document unexpectedly")
-    if _sha256_bytes(document_fragment["raw_text"].encode("utf-8")) != document_fragment["document_hash"]:
+    if _sha256_bytes(document_bytes) != document_fragment["document_hash"]:
         raise RuntimeError("E1 document text failed whole-document SHA-256")
     if document_fragment["content_hash"] != document_fragment["document_hash"]:
         raise RuntimeError("Document fragment content_hash differs from document_hash")
+    if document_fragment.get("size_bytes") != len(document_bytes):
+        raise RuntimeError("E1 document size_bytes does not describe the complete raw_text")
+    if (
+        document_fragment["source_path"] != candidate.source_path
+        or document_fragment["document_hash"] != candidate.document_hash
+        or document_fragment["index_generation"] != candidate.index_generation
+    ):
+        raise RuntimeError("E1 full document identity differs from the exact target node")
+    if dependency.get("source_path") != candidate.source_path:
+        raise RuntimeError("DependencyResolver source_path differs from the current target")
+    for key in ("content_hash", "document_hash", "index_generation"):
+        if dependency.get(key) != expected_identity[key]:
+            raise RuntimeError(f"DependencyResolver {key} differs from current E1 target")
+
+    # Context Pack must preserve exact E1-backed source identity, not only its text.
+    pack = pipeline_result.context_pack
+    if not pack.get("Included"):
+        raise RuntimeError("Context Builder produced no Included source-backed context")
+    included = next(
+        (item for item in pack["Included"] if item["node_id"] == candidate.node_id),
+        None,
+    )
+    if included is None:
+        raise RuntimeError("E2 top candidate is not present in the Context Pack")
+    if included["raw_text"] != candidate.raw_text or included["content_hash"] != candidate.content_hash:
+        raise RuntimeError("Context Pack does not preserve the exact E1-backed candidate")
+    for key in ("source_path", "document_hash", "index_generation"):
+        if included.get(key) != expected_identity[key]:
+            raise RuntimeError(f"Context Pack {key} differs from the E1-verified candidate")
 
     budget_result = source_reader.read_scope(
         candidate.node_id,
@@ -199,15 +252,6 @@ def main() -> int:
     missing = source_reader.resolve_current_node(not_found_id, pinned.ref)
     if missing.get("status") != "not_found" or missing.get("snapshot_id") != pinned.ref.snapshot_id:
         raise RuntimeError("Unknown Node ID did not return explicit not_found with the pinned snapshot")
-
-    pack = pipeline_result.context_pack
-    if not pack.get("Included"):
-        raise RuntimeError("Context Builder produced no Included source-backed context")
-    included = next((item for item in pack["Included"] if item["node_id"] == candidate.node_id), None)
-    if included is None:
-        raise RuntimeError("E2 top candidate is not present in the Context Pack")
-    if included["raw_text"] != candidate.raw_text or included["content_hash"] != candidate.content_hash:
-        raise RuntimeError("Context Pack does not preserve the exact E1-backed candidate")
 
     database_after = _sha256_bytes(pinned.database_path.read_bytes())
     manifest_after = _sha256_bytes(pinned.manifest_path.read_bytes())
@@ -254,14 +298,36 @@ def main() -> int:
         "e1": {
             "current_node_status": current["status"],
             "dependency_resolved": True,
+            "current_target_identity": expected_identity,
+            "dependency_identity": {
+                key: dependency[key]
+                for key in ("node_id", "content_hash", "source_path", "document_hash", "index_generation")
+            },
             "scopes": {
                 scope: {
                     "status": value["status"],
+                    "snapshot_id": value["snapshot_id"],
                     "fragment_count": len(value["fragments"]),
                     "roles": [item["role"] for item in value["fragments"]],
+                    "fragments": [
+                        {
+                            "role": item["role"],
+                            "node_id": item.get("node_id"),
+                            "source_path": item["source_path"],
+                            "content_hash": item["content_hash"],
+                            "document_hash": item["document_hash"],
+                            "index_generation": item["index_generation"],
+                            "raw_text_sha256": _sha256_bytes(item["raw_text"].encode("utf-8")),
+                            "raw_text_utf8_bytes": len(item["raw_text"].encode("utf-8")),
+                            "size_bytes": item.get("size_bytes"),
+                        }
+                        for item in value["fragments"]
+                    ],
                 }
                 for scope, value in scope_results.items()
             },
+            "wrong_hash_returns_no_fragments": stale_result.get("fragments") == [],
+            "unknown_node_has_no_address": missing.get("address") is None,
             "wrong_hash_status": stale_result["status"],
             "unknown_node_status": missing["status"],
         },
@@ -271,6 +337,12 @@ def main() -> int:
             "context_pack_status": pack["status"],
             "included_count": len(pack["Included"]),
             "deferred_count": len(pack["Deferred"]),
+            "included_target_identity": {
+                key: included.get(key)
+                for key in ("node_id", "content_hash", "source_path", "document_hash", "index_generation")
+            },
+            "included_target_raw_text_sha256": _sha256_bytes(included["raw_text"].encode("utf-8")),
+            "included_target_raw_text_utf8_bytes": len(included["raw_text"].encode("utf-8")),
             "scope_budget_status": budget_result["status"],
             "budget_owner": budget_result["token_accounting"]["budget_owner"],
         },

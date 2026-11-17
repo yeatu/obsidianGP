@@ -100,6 +100,7 @@ def test_default_adapter_invokes_real_e2_runtime_and_uses_e1_exact_text(tmp_path
     api.document_hash = sha(api.document_text)
     for item in api.records.values():
         item["document_hash"] = api.document_hash
+        item["source_sha256"] = api.document_hash
     database = tmp_path / "structure.sqlite3"
     _create_structural_fixture(database, api)
     before = hashlib.sha256(database.read_bytes()).hexdigest()
