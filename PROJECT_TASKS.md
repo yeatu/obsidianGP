@@ -4,7 +4,7 @@
 >
 > **Координатора вызывают только по сигналу аналитика:** весь его спектр задач завершён либо возникло ограничение, требующее архитектурного решения или нового указания. Координатор не обновляет файл после каждого промежуточного отчёта.
 >
-> Последняя независимая пакетная проверка: **2026-11-17**. Основная ветка: `main`.
+> Последняя независимая пакетная проверка: **2026-11-17, после E1 HEAD `a5456c4` и E3 HEAD `dfe8877`**. Основная ветка: `main`.
 
 ## 1. Роли и статусы
 
@@ -74,203 +74,174 @@
 
 ## 3. Последняя пакетная сверка PR #10 и PR #11
 
-Проверка выполнена по текущим HEAD веток, а не только по HEAD, указанным в комментариях координатора 2.
+Проверка выполнена по актуальным HEAD `a5456c4...` (E1) и `dfe8877...` (E3), с повторной проверкой последних CI и manual integration workflow. Более ранние HEAD и комментарии ниже трактуются как история, а не как действующее состояние.
 
 ### PR #11 — E1
 
 - [PR #11 — E1 source-verified structural node lookup API](https://github.com/yeatu/obsidianGP/pull/11)
-- Проверенный HEAD аналитика: `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`
-- Ветка: `executor-1/e1-source-read-api-mainline`
-- Состояние: open, not merged; `mergeable`.
-- Коммиты: 8; изменено 33 файла.
-- CI на проверенном HEAD:
-  - [Run 44019577558 — SFRA structural indexer stages B/C](https://github.com/yeatu/obsidianGP/actions/runs/44019577558): success, **88 passed**.
-  - [Run 44019577613 — SFRA E1 / Context Builder tests](https://github.com/yeatu/obsidianGP/actions/runs/44019577613): E1 job success; production-snapshot integration step passed. Отдельный job `unit-tests` был skipped и не учитывается как пройденный.
+- Текущий HEAD: `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`
+- Состояние: open, not merged.
+- Ветка `executor-1/e1-source-read-api-mainline`: **ahead 8 / behind 8** относительно текущего `main`.
+- CI на текущем HEAD:
+  - [Run 44019577613 — E1 / Context Builder tests](https://github.com/yeatu/obsidianGP/actions/runs/44019577613): workflow success; job `e1-source-api-tests` success, включая проверку атомарного Source Scope API на изолированной копии production snapshot и запуск набора E1 tests. Отдельный job `unit-tests` имеет conclusion **skipped**. Поэтому это успех целевых E1-проверок, а не утверждение, что абсолютно все jobs прошли.
+  - [Run 44019577558 — structural indexer stages B/C](https://github.com/yeatu/obsidianGP/actions/runs/44019577558): success, **88 passed**; реальный Vault — 66 документов, 9 080 узлов, 21 Passage, 2 пустых документа.
 
-**Вывод аналитика:** SFRA-E1-01 выполнена в рамках утверждённого E1-контракта. Публичный API и его четыре scope реализованы, проверены на fixtures и на изолированной копии production snapshot. Зависимость E3 от E1 на уровне доступности Source Scope API технически закрыта. Несовпадение E1 dataclass и E3 Mapping/envelope — зона E3 adapter, а не основание возвращать E1 к реализации.
+**Что подтверждено в текущей реализации E1:**
+- Публичные `read_source_scope(..., scope, snapshot_id)` и `resolve_current_node(..., snapshot_id)` экспортированы из `sfra_indexer`.
+- Четыре режима: node / parent / neighbors / document.
+- Один read-only SQLite connection и одна read-транзакция на каждый scope; один безопасный read Markdown-файла для фрагментов scope.
+- Ответы — `SourceScopeResult` и `CurrentNodeAddress`, то есть типизированные dataclass-типы с `to_dict()`.
+- Публикуются `document_hash`, `index_generation`, исходная metadata; ошибки не возвращают partial fragments.
+- CI на копии production `sfra-state` подтверждает вызов всех четырёх scope. Production SQLite/Vault не используются как writable targets.
 
-#### Проверенные свойства реализации
-
-E1 экспортирует:
-- `read_source_scope(db_path, vault_root, node_id, expected_hash, *, scope, snapshot_id)`;
-- `resolve_current_node(db_path, node_id, *, snapshot_id)`;
-- `SourceScopeResult`, `CurrentNodeAddress` и связанные result-типы.
-
-Проверены режимы `node`, `parent`, `neighbors`, `document`. Каждый scope использует одно read-only SQLite connection и одну read-транзакцию; исходный Markdown читается один раз, а связанные фрагменты строятся из одних и тех же проверенных байтов. Результаты связывают Content Hash, source path, document hash (`documents.source_sha256`), document-local generation (`documents.generation`), координаты и точный `raw_text`.
-
-Parent разрешается по текущему `parent_node_id` в пределах того же документа и поколения. Neighbors выбираются как непосредственные siblings под тем же parent и сортируются по source coordinates; фрагменты возвращаются в порядке previous → anchor → next. Ambiguous immediate neighbor не пропускается. Полный document scope возвращает оригинальный Markdown, не реконструированный из истории версий.
-
-Ошибочные результаты fail-closed: при wrong hash, stale/ambiguous/deleted записи, несовпадении документа/поколения/пути/координат или повреждённом источнике не возвращаются частичные fragments или исходный текст. `resolve_current_node()` выдаёт только текущую однозначную адресацию и Content Hash, без fuzzy/historical fallback. `snapshot_id` echo-ится без изменений; проверка Git/manifest/checkout identity остаётся ответственностью E3. E1 не вводит token budget и не синтезирует policy metadata.
-
-#### Доказательства CI и реального production snapshot
-
-Run 44019577613 проверил production state manifest, скопировал `manifest.json` и `structure.sqlite3` из checkout `sfra-state` во временную копию, выполнил state verification и checkout Vault по commit SHA из manifest:
-- Vault source ref: `executor-1/sfra-indexer-session-1`;
-- Vault commit: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`;
-- opaque Snapshot ID, рассчитанный по точным байтам manifest: `sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`.
-
-На изолированной копии production SQLite успешно выполнены `resolve_current_node()` и все четыре scope. API работает с read-only SQLite connection; производственная SQLite не использовалась как writable target. Vault checkout прошёл `git diff --exit-code` и clean-status guard. Отдельная структурная проверка на закреплённом Vault показала 66 документов, 9 080 узлов, 21 Passage и 2 пустых документа; повторное индексирование пропустило все 66 неизменённых документов.
+**Что требуется от аналитика E1:**
+1. Проверить именно HEAD `a5456c4...`, не переносить галочки с `ebb5c92...`.
+2. Подтвердить атомарность, все четыре scope, resolver, fail-closed ошибки, snapshot echo и неизменность sidecar/Vault.
+3. Проверить, что текущая документация E1 соответствует dataclass response shape и новым полям.
+4. Отдельно отметить пропущенный `unit-tests` job; не формулировать результат как «все CI jobs успешны».
+5. Проверить синхронизацию ветки с актуальным `main` перед окончательной приёмкой/слиянием; после синхронизации прогнать CI на новом HEAD.
 
 #### Чек-лист аналитика E1
 
-- [x] Проверен актуальный HEAD `a5456c4...` и diff PR #11.
-- [x] Подтверждены один SQLite connection и одна read-транзакция для каждого scope.
-- [x] Проверены node / parent / neighbors / document.
-- [x] Проверены parent/sibling связи, непосредственность соседей и source order.
-- [x] Проверены `document_hash`, `index_generation`, source path, coordinates и exact raw_text.
-- [x] Проверены fail-closed статусы и пустые fragments при ошибках.
-- [x] Проверен `resolve_current_node()` и отсутствие fuzzy/historical fallback.
-- [x] Проверен snapshot echo для успешных и ошибочных ответов.
-- [x] Проверены оба CI run и изолированный production snapshot прогон.
-- [x] Подтверждено, что production SQLite проверялась только через отдельную временную копию; Vault checkout остался чистым и неизменённым. Публикации/записи в production `sfra-state` не выполнялись.
+- [ ] Проверен текущий HEAD `a5456c4...` и diff PR #11.
+- [ ] Подтверждены один SQLite connection и одна read-транзакция для каждого scope.
+- [ ] Проверены node / parent / neighbors / document.
+- [ ] Проверены `document_hash`, `index_generation`, source path, coordinates и exact raw_text.
+- [ ] Проверены fail-closed статусы и пустые fragments при ошибках.
+- [ ] Проверен `resolve_current_node()` и отсутствие fuzzy/historical fallback.
+- [ ] Проверен snapshot echo.
+- [ ] Проверены CI runs 44019577613 и 44019577558; отдельно отмечен skipped `unit-tests`.
+- [ ] Подтверждено отсутствие изменений production Vault и `sfra-state`.
+- [ ] Проверена актуальность PR body/README и синхронизация с текущим `main`.
 
 **Итог аналитика**
-- [x] Аналитик считает SFRA-E1-01 выполненной в рамках утверждённого контракта.
-- [x] Весь текущий спектр задач E1 завершён; выставлен `ANALYST_SCOPE_COMPLETE`, координатору передан сигнал на пакетный аудит.
-- [ ] `ANALYST_BLOCKED_NEEDS_COORDINATOR` — не требуется: архитектурной блокировки в границах E1-контракта не обнаружено.
+- [ ] Аналитик считает SFRA-E1-01 выполненной в рамках утверждённого контракта.
+- [ ] Если это закрывает весь текущий спектр E1, выставлен `ANALYST_SCOPE_COMPLETE`.
+- [ ] Если обнаружено архитектурное ограничение, выставлен `ANALYST_BLOCKED_NEEDS_COORDINATOR` с конкретным вопросом.
 
-HEAD аналитика: `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`  
-Дата проверки: `2026-11-17`  
-Отчёт / артефакты: [PR #11](https://github.com/yeatu/obsidianGP/pull/11), [Structural CI 44019577558](https://github.com/yeatu/obsidianGP/actions/runs/44019577558), [E1 Source API CI 44019577613](https://github.com/yeatu/obsidianGP/actions/runs/44019577613), [Source Scope API report](https://github.com/yeatu/obsidianGP/blob/executor-1/e1-source-read-api-mainline/GPT/%D0%9D%D0%B5%D0%B9%D1%80%D0%BE%D1%81%D0%B5%D1%82%D1%8C/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D1%8B/%D0%98%D1%81%D0%BF%D0%BE%D0%BB%D0%BD%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%201/%D0%A1%D0%B5%D1%81%D1%81%D0%B8%D1%8F%201/%D0%A0%D0%B5%D0%B0%D0%BB%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F/08_%D0%A0%D0%B5%D0%B7%D1%83%D0%BB%D1%8C%D1%82%D0%B0%D1%82_Source_Scope_API.md)
-
-Статус аналитика: **ANALYST_COMPLETE_UNREVIEWED / ANALYST_SCOPE_COMPLETE**
+HEAD аналитика: `не указан`  
+Дата проверки: `не указана`  
+Отчёт / артефакты: `не указаны`
 
 ### PR #10 — E3 C1
 
 - [PR #10 — E3 C1: E2 SearchAdapter and snapshot binding](https://github.com/yeatu/obsidianGP/pull/10)
-- Проверенный HEAD аналитика: `dfe887738655b7ea35bb06fe89caeb6d7ee53ab3`
-- Состояние: open, draft.
-- Ветка: ahead 17 / behind 7 относительно актуального `main` на момент проверки.
-- [Run 44020916692 — C1 contract tests](https://github.com/yeatu/obsidianGP/actions/runs/44020916692): success; B1 **45 passed**, C1 **49 passed**.
-- [Run 44020916667 — real E1/E2/E3 integration](https://github.com/yeatu/obsidianGP/actions/runs/44020916667): success, event `pull_request` (не `workflow_dispatch`).
+- Текущий HEAD: `dfe887738655b7ea35bb06fe89caeb6d7ee53ab3`
+- Состояние: open, **draft**.
+- Ветка `executor-3/context-integration-stage-c1`: **ahead 18 / behind 7** относительно текущего `main`.
+- [Run 44020916692 — SFRA E3 integration C1 tests](https://github.com/yeatu/obsidianGP/actions/runs/44020916692): success.
+  - B1 regression: **45 passed**.
+  - C1: **49 passed**.
+- [Run 44020916667 — SFRA E3 real E1/E2 integration (manual)](https://github.com/yeatu/obsidianGP/actions/runs/44020916667): success. Job `real-e1-e2-e3` завершён успешно.
 
-**Независимое решение:** C1 остаётся **WAITING_FOR_IMPLEMENTATION**. E1 dataclass adapter и фактическая интеграция уже подтверждены; остаются E3-A, E3-B и E3-E.
+**Что исправлено после предыдущей пакетной проверки:**
 
-#### Подтверждённый прогресс
+1. **Формат E1/E3 ответа.** Текущий `source_reader.py` принимает E1 dataclass-объекты через `to_dict()`, нормализует `SourceScopeResult` (`anchor/parent/previous/next/document`) в E3 envelope (`target_source` и role-labelled fragments), а плоский `CurrentNodeAddress` преобразует во вложенный `address`. Добавлен тест `test_source_reader_accepts_e1_public_result_dataclasses`.
+2. **Реальный integration workflow.** Workflow checkout-ит E3 HEAD `dfe8877...`, E1 ref `executor-1/e1-source-read-api-mainline` на HEAD `a5456c4...`, production `sfra-state` и Vault commit из manifest. Поэтому прежнее замечание «есть только ручной workflow, но запуска не было» устарело.
+3. **Snapshot binding.** Проверены фактические Vault/sidecar HEAD, manifest digest, SQLite digest и clean checkout.
 
-1. E3 `E1SourceReader._mapping()` теперь принимает E1 dataclass result через `to_dict()`. `_normalize_native_scope()` переводит E1 `anchor / parent / previous / next / document` в E3 envelope и роли фрагментов. Есть тест `test_source_reader_accepts_e1_public_result_dataclasses`.
-2. Snapshot binder получает фактические Git HEAD через `git rev-parse`, проверяет чистоту checkout, manifest source commit и SQLite digest.
-3. Бюджет считается E3 TokenCounter после чтения полного scope; E1 не получает budget, исходный текст не обрезается.
-4. PR-CI на проверенном HEAD успешен: B1 45 / C1 49.
-5. Реальный workflow run 44020916667 вызвал опубликованный E2 runtime и реальные E1 `resolve_current_node()` / `read_source_scope()` на закреплённых checkouts:
-   - E1 API branch HEAD: `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`;
-   - `sfra-state` HEAD: `fb0b45ae0e5043e342c790d43e2b341ca65d7f2b`;
-   - Vault commit из manifest: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`;
-   - все четыре scope вернули `ok`; resolver вернул текущий адрес; wrong hash вернул `stale_source`, неизвестный Node ID — `not_found`;
-   - Context Pack включил один source-backed candidate; статус `budget_limited`, два кандидата отложены; scope budget вернул `budget_exceeded`, владелец бюджета — E3;
-   - SHA-256 SQLite, manifest, sidecar tracked tree и Vault tree не изменились; HEAD sidecar и Vault остались прежними; оба checkout чистые.
-   
-   Это реальный E1/E2/E3 smoke test, запущенный по событию PR. Он не является ручным `workflow_dispatch` и не закрывает все негативные/metadata gates.
+**Доказательства успешного реального прогона 44020916667:**
 
-#### Блокер E3-A — проверка идентичности родителя и соседей
+- Snapshot:
+  - Vault commit: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`;
+  - sidecar commit: `fb0b45ae0e5043e342c790d43e2b341ca65d7f2b`;
+  - manifest SHA-256: `sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`.
+- E2 вернул 3 hits и 3 source-verifiable candidates.
+- E1 resolver вернул `ok`; dependency candidate разрешён.
+- Все четыре scope вернули `ok`: node, parent, neighbors, document. Для каждого проверен тот же SnapshotRef.
+- Неверный Content Hash дал `stale_source`; неизвестный Node ID — `not_found`.
+- Превышение scope budget дало `budget_exceeded` с пустыми fragments; исходный текст не обрезался.
+- Context Pack создан: `budget_limited`, 1 included и 2 deferred при лимите запроса 6 000 токенов. Это успешный ограниченный pack, а не статус `complete`.
+- До/после совпали SQLite, manifest, tracked sidecar tree, Vault tree и HEAD обоих checkout; оба checkout остались clean.
 
-Текущий normalizer сверяет каждый fragment с соответствующей именованной записью E1 по полному набору provenance fields и отклоняет неизвестные/повторные fragment Node ID. Но он пока не проверяет сами cross-relations между named records:
-- `parent.node_id == anchor.parent_node_id`;
-- `previous.parent_node_id == anchor.parent_node_id` и `next.parent_node_id == anchor.parent_node_id`;
-- source order: previous < anchor < next;
-- Node ID не повторяется между target / parent / previous / next.
+**Оставшиеся блокеры на текущем HEAD:**
 
-E1 публичная функция сама отбирает parent и immediate siblings в одной read-транзакции, но E3 должен валидировать контракт на своей границе, а не только переносить доверенные relation fields.
+#### E3-A — проверка идентичности parent/neighbors
 
-**Требуется от E3:** добавить эти проверки в `source_reader.py` и adversarial tests:
-- wrong parent ID;
-- sibling from another parent;
-- reversed neighbors;
-- duplicate Node IDs across roles.
+Адаптер теперь назначает роли по именованным relation records E1 и сравнивает их с набором E1 fragments. Но текущая реализация всё ещё не выполняет все обязательные cross-relation проверки:
 
-#### Блокер E3-B — отсутствие dependency metadata не должно давать complete
+- `parent_context.node_id == target_source.parent_node_id`;
+- `previous_neighbor.parent_node_id == target_source.parent_node_id` и то же для next;
+- source order: previous действительно расположен до target, next — после target;
+- уникальность Node ID между target/parent/previous/next ролями.
 
-На текущем HEAD `search_adapter.py` применяет placeholder defaults `normal / [] / false` и создаёт diagnostic `dependency_policy_defaults_applied` с severity `info`. При этом:
-- отсутствие одного/нескольких policy fields не меняет `SearchBatch.complete`;
-- `ContextIntegrationPipeline.run()` не переносит `SearchAdapterResult.diagnostics` в Context Pack;
-- статус pack не понижается из-за неизвестной dependency metadata;
-- `E1DependencyResolver` также применяет defaults, а его diagnostics хранятся в изменяемом списке экземпляра между вызовами.
+В текущем наборе тестов нет adversarial сценариев для wrong parent ID, sibling from another parent, reversed neighbors и duplicate IDs.
 
-Следовательно, отсутствующие policy metadata всё ещё могут быть восприняты как явное отсутствие ограничений.
+**Требуется от E3:** добавить `parent_node_id` в обязательные поля каждого node fragment (кроме document fragment), реализовать проверки и добавить четыре adversarial tests. E1 уже выполняет проверки relations в своём собственном scope API; E3 обязан независимо корректно валидировать полученный контракт на своей границе.
 
-**Требуется от E3:**
-- различать explicit policy values и unknown/missing values;
-- передавать SearchAdapter diagnostics в Context Pack;
-- при missing/partial metadata не допускать `status=complete`: использовать явный `integrity_warning` / `incomplete` или отказ;
-- изолировать/reset resolver diagnostics на каждый pipeline run;
-- добавить pipeline tests: missing/partial metadata не даёт complete; все три явно заданных значения, включая явное отсутствие зависимостей, обрабатываются как complete при отсутствии иных проблем.
+#### E3-B — жизненный цикл diagnostics DependencyResolver
 
-E1 не должен выдумывать policy metadata. Defaults допустимы только как технические placeholders и не подтверждают полноту dependency information.
+`E1DependencyResolver.diagnostics` — изменяемый список на весь срок жизни resolver. `ContextIntegrationPipeline.run()` его не сбрасывает. Если один pipeline сначала обработает stale/ambiguous dependency, а затем успешный запрос, старые diagnostics могут попасть во второй Context Pack.
 
-#### E3-C — адаптер типов E1/E3 закрыт
+**Требуется от E3:** изолировать diagnostics на границе каждого `run()` (или сделать их локальным результатом конкретного вызова) и добавить тест двух последовательных запросов на одном экземпляре pipeline: первый с dependency failure, второй без неё. Второй Context Pack не должен содержать старые сообщения.
 
-На проверенном HEAD E3 принимает E1 dataclasses через `to_dict()`, нормализует native `anchor / parent / previous / next / document` в E3 envelope. Это дополнительно подтверждено реальным run 44020916667, который использовал E1 API branch `a5456c4...`, а не FixtureE1ScopeAPI. Блокер несовместимости форматов E1/E3 снимаю.
+#### E3-C — документация и синхронизация PR
 
-#### E3-D — Snapshot binder и real E1/E2/E3 smoke
+- README E3 на текущем HEAD всё ещё утверждает, что E1 предоставляет только `get_node_by_id()`, и что реальная E1/Vault integration не доказана. Оба утверждения устарели.
+- Контрактный документ E1 Source Scope API уже описывает нативные dataclass results и adapter boundary; однако он требует проверок parent identity / sibling parent / source order, которых пока нет в коде E3. Критерий документа соответствует требуемому контракту, реализация ещё отстаёт.
+- PR description также не отражает новый HEAD, 49 C1 tests и успешный manual integration run.
+- Ветка E3 отстаёт от текущего `main` на 7 коммитов. Требуется синхронизировать ветку и повторно запустить CI после синхронизации.
 
-Snapshot binder получает фактические HEAD и проверяет clean checkout, manifest, SQLite digest. Run 44020916667 подтверждает реальный E2 → E3 → E1 → Context Pack на закреплённом snapshot и неизменность Vault/sidecar. Однако run был запущен событием `pull_request`, а не `workflow_dispatch`. Он доказывает рабочий integration path, но не закрывает весь набор негативных сценариев E3-02.
+#### Решение по dependency metadata
 
-#### Блокер E3-E — устаревшая документация
+Предыдущее требование «отсутствие metadata само по себе запрещает `status=complete`» снимается и заменяется следующим явным решением контракта:
 
-README всё ещё утверждает, что PR #11 предоставляет только `get_node_by_id()`, и содержит старые CI/head values. `E1_Source_Scope_API_v1.md` всё ещё включает `budget_tokens` в сигнатуру E1 и описывает token accounting на стороне E1. Обновить документацию под фактические `read_source_scope()` / `resolve_current_node()`, native dataclass adapter и правило: бюджет принадлежит E3, E1 отдаёт полный scope.
+- E1 возвращает только фактически существующие `NodeRecord.metadata`; E1 не создаёт policy metadata.
+- B1 defaults `preservation="normal"`, `required_with=()`, `parent_context_required=False` разрешены как policy defaults, а не source annotations. Это согласуется с моделью B1 и аналитическим заключением в PR #10 comment 5933124374.
+- E3 должен сохранять различие между source metadata и применёнными policy defaults. Диагностика `dependency_policy_defaults_applied` должна оставаться доступной вызывающему коду/итоговому integration result. Нельзя описывать defaults как сведения, найденные в первоисточнике.
+- Отсутствие этих полей само по себе не требует `integrity_warning` и не является отдельным блокером C1. Если позже появится авторитетный источник обязательных dependency annotations, это будет отдельное версионированное изменение контракта.
 
 #### Чек-лист аналитика E3 / C1
 
-- [x] Проверен текущий HEAD `dfe8877...` и актуальный diff PR #10.
-- [x] Проверен актуальный C1 CI: 45 B1 + 49 C1 tests, run 44020916692.
-- [x] Проверено использование реального опубликованного E2 runtime в C1 CI.
-- [ ] SourceReader валидирует parent ID, sibling parent IDs, source order и отсутствие дублирующихся Node ID между ролями.
-- [ ] Пройдены adversarial tests: wrong parent, wrong-parent sibling, reversed neighbors, duplicate IDs.
-- [ ] Dependency metadata unknown/partial явно диагностируется и не приводит к complete.
-- [ ] SearchAdapter diagnostics передаются в Context Pack; повторные pipeline runs не наследуют старые resolver diagnostics.
-- [x] E3 response adapter преобразует реальные E1 dataclass results в E3 envelope; подтверждено unit contract test и real run 44020916667.
-- [x] Реальные E1 функции проверены на node / parent / neighbors / document и resolver в run 44020916667.
-- [x] Snapshot binder получает реальные Git HEAD и проверяет чистоту checkout.
-- [ ] README и E1 Source Scope contract обновлены.
-- [x] C1 остаётся в границах SearchAdapter / SourceReader boundary / Snapshot binding; Issue worker, recovery sweep и MCP adapter не добавлены.
+- [ ] Проверен текущий HEAD `dfe8877...` и актуальный diff PR #10.
+- [ ] Проверен актуальный CI: 45 B1 + 49 C1 tests.
+- [ ] Проверено, что E3 принимает реальные E1 dataclass results через adapter.
+- [ ] Проверено, что parent ID exact match, siblings share target parent, source order корректен и Node IDs уникальны между ролями.
+- [ ] Пройдены adversarial tests: wrong parent, sibling from another parent, reversed neighbors, duplicate IDs.
+- [ ] Проверено, что diagnostics resolver из предыдущего pipeline run не попадают в следующий Context Pack.
+- [ ] Policy defaults отличимы от source annotations и diagnostic доступна в результате интеграции.
+- [ ] Проверены четыре scope и resolver на реальных E1 API.
+- [ ] Snapshot binder проверяет actual Git HEAD, manifest/SQLite digest и clean checkout.
+- [ ] README, контракт и PR description отражают текущий E1 API и реальные integration run.
+- [ ] Ветка синхронизирована с актуальным `main`, CI повторён после sync.
+- [ ] C1 остаётся ограниченным SearchAdapter / SourceReader boundary / Snapshot binding; Issue worker, recovery sweep и MCP adapter не добавляются.
 
 **Итог аналитика**
-- [ ] Аналитик считает C1 завершённым только после закрытия E3-A / E3-B / E3-E.
+- [ ] Аналитик считает C1 завершённым только после закрытия всех оставшихся пунктов.
 - [ ] Если C1 закрывает текущий спектр E3, выставлен `ANALYST_SCOPE_COMPLETE` и подготовлен сводный отчёт.
-- [ ] Если нужен пересмотр архитектуры/контракта, выставлен `ANALYST_BLOCKED_NEEDS_COORDINATOR` с конкретным вопросом.
+- [ ] Если нужен пересмотр архитектуры или контракта, выставлен `ANALYST_BLOCKED_NEEDS_COORDINATOR` с точным вопросом.
 
-HEAD аналитика: `dfe887738655b7ea35bb06fe89caeb6d7ee53ab3`  
-Дата проверки: `2026-11-17`  
-Отчёт / артефакты: [PR #10](https://github.com/yeatu/obsidianGP/pull/10), [C1 CI 44020916692](https://github.com/yeatu/obsidianGP/actions/runs/44020916692), [real E1/E2/E3 run 44020916667](https://github.com/yeatu/obsidianGP/actions/runs/44020916667)  
-Статус аналитика: **WAITING_FOR_IMPLEMENTATION**
+HEAD аналитика: `не указан`  
+Дата проверки: `не указана`  
+Отчёт / артефакты: `не указаны`
 
 ### SFRA-E3-02 — реальная интеграция E2 → E3 → E1 → Context Pack
 
 **Исполнитель:** E3  
-**Статус:** BLOCKED  
-**Текущий блокер:** SFRA-E3-01 — parent/neighbors validation, fail-closed dependency metadata, diagnostic propagation и документация.
+**Статус:** WAITING_FOR_ANALYST  
+**Текущий прогон:** [manual run 44020916667](https://github.com/yeatu/obsidianGP/actions/runs/44020916667), success, E3 HEAD `dfe8877...`, E1 HEAD `a5456c4...`.
 
-**Фактический smoke test уже выполнен:** [Run 44020916667 — real E1/E2/E3 integration](https://github.com/yeatu/obsidianGP/actions/runs/44020916667), success, event `pull_request`, HEAD `dfe887738655b7ea35bb06fe89caeb6d7ee53ab3`. Он использовал:
-- E1 public API branch `executor-1/e1-source-read-api-mainline`, commit `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`;
-- immutable `sfra-state` HEAD `fb0b45ae0e5043e342c790d43e2b341ca65d7f2b`;
-- Vault commit из manifest `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`;
-- snapshot ID `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158:fb0b45ae0e5043e342c790d43e2b341ca65d7f2b:sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`.
-
-В run подтверждены E2 status=ok (3 hits/candidates), current-node resolver, четыре scope со status=ok, wrong hash → stale_source, unknown Node ID → not_found, Context Pack Included=1 / Deferred=2 / status=budget_limited, scope budget → budget_exceeded / owner=E3. SQLite, manifest, sidecar tree, Vault tree и оба checkout HEAD не изменились; sidecar и Vault остались clean.
-
-Этот PR-triggered smoke доказывает рабочий реальный путь, но не заменяет полный E3-02: metadata completeness/fail-closed, E3 cross-check parent/neighbors и расширенные негативные сценарии ещё не закрыты. Координаторский статус остаётся BLOCKED до закрытия SFRA-E3-01.
+Реальная связка E2 → E3 → E1 → Context Pack уже запущена успешно. Не нужно повторять сам smoke run без причины. Аналитик должен проверить артефакт/логи, SnapshotRef, все четыре scope, resolver, budget и read-only guards. Результат Context Pack был `budget_limited` (1 included, 2 deferred), что ожидаемо при бюджете текущего smoke request и не является доказательством `complete`.
 
 #### Чек-лист аналитика E3 / real integration
 
-- [x] Сквозной прогон использует реальные E1/E2 API, не Fixture E1.
-- [x] `bind_pinned_snapshot()` доказал actual sidecar/Vault HEAD и clean checkout.
-- [x] Snapshot ID проверен на всех scope вызовах; resolver и pipeline используют тот же SnapshotRef.
-- [x] Все четыре scope и resolver работают через adapter с фактическими E1 dataclass objects.
-- [ ] Parent/neighbors relationships дополнительно проверены E3 adversarial contract tests.
-- [ ] Metadata unknown/partial не даёт `complete`; проверка пока не реализована.
-- [x] Context Pack содержит source-backed candidate с точным raw_text и Content Hash.
-- [ ] Полный набор негативных сценариев (ambiguous/deleted, повреждённый source, cross-document/generation/snapshot mismatch) и budget handling проверен. В smoke проверены wrong hash, unknown ID и budget_exceeded.
-- [x] C1 CI и real integration workflow прошли; evidence находится в job logs [44020916667](https://github.com/yeatu/obsidianGP/actions/runs/44020916667). Отдельный artifact не выгружался.
-- [x] Production Vault, manifest и SQLite не изменились; sidecar/Vault tree hashes и HEAD до/после совпали.
+- [x] Сквозной прогон использует реальные E1/E2 API, не fixture E1.
+- [x] `bind_pinned_snapshot()` подтвердил actual sidecar/Vault HEAD и clean checkout.
+- [x] Snapshot ID совпадает на каждом этапе.
+- [x] Все четыре scope и resolver отработали на реальном snapshot.
+- [x] Budget handling вернул `budget_exceeded` без partial/truncated source.
+- [x] Production Vault, manifest, SQLite и tracked sidecar tree не изменились.
+- [ ] Аналитик независимо проверил run 44020916667 и подтвердил соответствие текущему контракту.
+- [ ] После закрытия E3-A/E3-B повторно проверены relationship negative cases и отсутствие diagnostics leakage.
+- [ ] Context Pack с обычным бюджетом проверен отдельно; ожидаемый статус зависит от фактического budget/deferred результата, а не искусственно фиксируется как `complete`.
 
 **Итог аналитика**
-- [ ] Реальная интеграция завершена, весь текущий спектр E3 закрыт; передан сводный отчёт.
-- [ ] Либо отмечена блокировка с конкретным вопросом координатору.
+- [ ] Реальная интеграция принята в пределах проверенных условий.
+- [ ] Либо отмечена конкретная блокировка, требующая решения координатора.
 
-HEAD аналитика: `dfe887738655b7ea35bb06fe89caeb6d7ee53ab3`  
-Дата проверки: `2026-11-17`  
-Отчёт / артефакты: [PR #10](https://github.com/yeatu/obsidianGP/pull/10), [run 44020916667](https://github.com/yeatu/obsidianGP/actions/runs/44020916667)
-
+HEAD аналитика: `не указан`  
+Дата проверки: `не указана`  
+Отчёт / артефакты: `не указаны`
 
 ---
 
@@ -290,47 +261,57 @@ HEAD аналитика: `dfe887738655b7ea35bb06fe89caeb6d7ee53ab3`
 
 ---
 
-## 5. Личный чек-лист координатора — аудит 2026-11-17
+## 5. Личный чек-лист координатора — повторный аудит 2026-11-17
 
-> Этот блок принадлежит координатору. Аналитики его не заполняют. Он заполняется при пакетном вызове координатора. Галочки ниже фиксируют только то, что координатор действительно проверил в этой сверке.
+> Этот блок принадлежит координатору. Аналитики его не заполняют. Он фиксирует проверку после новых коммитов E1/E3 и заменяет предыдущие чек-листы для старых HEAD.
 
-### E1 / PR #11
+### E1 / PR #11 — HEAD `a5456c4...`
 
-- [x] Сверен текущий PR HEAD `ebb5c92...`, он отличается от старого HEAD `74cc68e...`, на котором основаны комментарии 6938152254 и 6938268190.
-- [x] Подтверждены публичные `read_source_scope()` и `resolve_current_node()`.
-- [x] Проверен код одного connection / одной read-транзакции на scope.
-- [x] Проверены тестовые сценарии четырёх scope, snapshot echo и resolver.
-- [x] Проверен успешный CI run 44019097575: production `sfra-state` скопирован в изолированную SQLite; все четыре scope вызваны успешно.
-- [x] Проверен run 44019097699: structural suite и реальный Vault indexing прошли успешно.
-- [x] Зафиксирован несовпадающий с E3 тип/response contract; не выдаётся за отсутствие самого E1 API.
-- [ ] Выполнена отдельная независимая аналитическая приёмка E1.
+- [x] Сверен актуальный PR HEAD и PR state: open, not merged.
+- [x] Подтверждены `read_source_scope()`, `resolve_current_node()`, dataclass result types и четыре scope.
+- [x] Проверен job `e1-source-api-tests` в run 44019577613: success.
+- [x] Проверено, что отдельный `unit-tests` job в run 44019577613 пропущен.
+- [x] Проверен structural run 44019577558: 88 passed и повторный индекс реального Vault.
+- [x] Проверено, что production snapshot копируется в isolated test area и четыре scope вызываются без записи в production branch.
+- [x] Проверено текущее отставание E1 branch от main: 8 commits.
+- [ ] Аналитик выполнил независимую приёмку текущего HEAD.
+- [ ] Ветка синхронизирована с актуальным main и проверки повторены.
 
-**Решение координатора:** реализация E1 существенно продвинулась и закрыла атомарный API на уровне собственного публичного контракта. Ожидает аналитическую приёмку. Совместимость с E3 должна быть закрыта на уровне явно определённого adapter/contract.
+**Решение координатора:** E1-01 остаётся WAITING_FOR_ANALYST. Реализацию не возвращать на доработку только из-за пропущенного отдельного job; аналитик должен указать, какие именно гарантии покрыты целевым E1 job. Перед финальным merge необходимо решить branch drift.
 
-### E3 C1 / PR #10
+### E3 / PR #10 — HEAD `dfe8877...`
 
-- [x] Сверен текущий PR HEAD `c5398cd...` и фактический код.
-- [x] Проверен успешный CI run 44018830452: 45 B1 + 48 C1 tests.
-- [x] Подтверждено, что C1 CI использует fixture E1 для source reads; real E1/Vault integration этим run не доказана.
-- [x] Подтверждено отсутствие parent ID / sibling parent / ordering / cross-role duplicate проверки в текущем E3 SourceReader.
-- [x] Подтвержден fail-open путь при отсутствующей dependency metadata: defaults + warning, SearchBatch остаётся complete, pipeline не передаёт SearchAdapter diagnostics в pack.
-- [x] Подтверждён response mismatch: E1 dataclasses/field names не соответствуют Mapping/envelope, ожидаемому E3.
-- [x] Подтверждено, что Snapshot binder теперь читает actual Git HEAD и проверяет clean checkout.
-- [x] Проверено, что real integration workflow пока manual и успешного run не найдено.
-- [x] Проверено, что README E3 всё ещё описывает старый E1 API.
-- [ ] Принята C1.
+- [x] Сверен актуальный PR HEAD и статус open/draft.
+- [x] Проверен CI run 44020916692: 45 B1 + 49 C1 tests, success.
+- [x] Проверено, что E3 теперь нормализует реальные E1 dataclass results через `to_dict()`.
+- [x] Проверен manual real integration run 44020916667: success.
+- [x] Подтверждено, что manual workflow использовал E1 HEAD `a5456c4...`.
+- [x] Проверены четыре реальные scope, current-node resolver, stale hash, unknown Node ID, budget exceeded и read-only guards.
+- [x] Подтверждено, что Context Pack имел status `budget_limited`, 1 included и 2 deferred; не приписывать ему status `complete`.
+- [x] Подтверждено, что relationship identity/order checks в нормализаторе E3 ещё неполны.
+- [x] Подтверждено, что diagnostics E1DependencyResolver сохраняются между run и не очищаются в pipeline.
+- [x] Подтверждено, что README E3 всё ещё содержит устаревшие заявления про старый E1 API и отсутствие real integration.
+- [x] Проверено отставание E3 branch от main: 7 commits.
+- [x] Зафиксировано решение по B1 policy defaults: разрешены как policy defaults, не как source annotations; отдельный fail-closed blocker за их отсутствие снимается.
+- [ ] Пройдены adversarial relationship tests.
+- [ ] Исправлено накопление diagnostics между pipeline runs.
+- [ ] README/PR description актуализированы.
+- [ ] Ветка синхронизирована с main, CI повторён.
+- [ ] C1 принята.
 
-**Решение координатора:** C1 остаётся частично реализованным и не принимается до закрытия E3-A / E3-B / E3-C и обновления документации. Real integration остаётся отдельной следующей контрольной точкой.
+**Решение координатора:** C1 остаётся не принятой. Форматный E1/E3 blocker закрыт кодом и успешным real workflow. Остались E3-A, E3-B и документация/branch sync. Не возвращать E1 к переписыванию API без нового доказательства несовместимости.
 
-### E3 real integration
+### E3-02 / реальная интеграция
 
-- [ ] Запущен и проверен реальный сквозной workflow.
-- [ ] Проверен результат с реальными E1 dataclasses через adapter.
-- [ ] Проверены реальные четыре scope и Context Pack.
-- [ ] Проверены metadata completeness и fail-closed ошибки.
-- [ ] Подтверждена неизменность production Vault/sidecar.
+- [x] Успешный ручной real E1/E2/E3 workflow найден.
+- [x] Все четыре Source Scope вызова вернули ok.
+- [x] Context Pack сформирован из source-backed candidate.
+- [x] SQLite, manifest, sidecar tree, Vault tree и HEAD не изменились.
+- [x] SnapshotRef привязан к фактическим commit SHA и raw manifest digest.
+- [ ] Аналитик независимо принимает результат run 44020916667.
+- [ ] После закрытия relationship/diagnostics issues выполнены заключительные негативные интеграционные проверки.
 
-**Решение координатора:** оставить BLOCKED до устранения C1 блокеров.
+**Решение координатора:** E3-02 больше не BLOCKED отсутствием real workflow. Статус WAITING_FOR_ANALYST для проверки уже успешного прогона; финальная приёмка зависит от закрытия оставшихся C1 integrity checks.
 
 ---
 
