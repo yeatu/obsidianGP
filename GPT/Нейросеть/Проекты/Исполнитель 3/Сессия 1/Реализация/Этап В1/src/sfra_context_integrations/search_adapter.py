@@ -78,6 +78,11 @@ def _positive_int(value: Any, name: str, *, minimum: int = 1) -> int:
         raise SearchAdapterError(f"{name} must be an integer >= {minimum}", code="invalid_e2_response")
     return value
 
+def _non_negative_int(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise SearchAdapterError(f"{name} must be a non-negative integer", code="invalid_e2_response")
+    return value
+
 
 def _string_tuple(value: Any, name: str) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)) or any(not isinstance(item, str) for item in value):
@@ -202,10 +207,25 @@ class E2SearchAdapter:
             hit_path = _text(hit.get("source_path"), f"results[{order}].source_path")
             heading_path = _string_tuple(hit.get("heading_path"), f"results[{order}].heading_path")
             line_start = _positive_int(hit.get("line_start"), f"results[{order}].line_start")
-            line_end = _positive_int(hit.get("line_end"), f"results[{order}].line_end")
-            if line_end < line_start:
+            line_end = _non_negative_int(hit.get("line_end"), f"results[{order}].line_end")
+            e2_raw_text = hit.get("raw_text")
+            if e2_raw_text is not None and not isinstance(e2_raw_text, str):
+                raise SearchAdapterError(
+                    f"results[{order}].raw_text must be a string when present",
+                    code="invalid_e2_response",
+                )
+            empty_source_span = (
+                e2_raw_text == ""
+                and line_end == line_start - 1
+            )
+            if line_end < line_start and not empty_source_span:
                 raise SearchAdapterError(
                     f"results[{order}] has invalid source line coordinates",
+                    code="invalid_e2_response",
+                )
+            if e2_raw_text == "" and not empty_source_span:
+                raise SearchAdapterError(
+                    f"results[{order}] empty raw_text requires line_end == line_start - 1",
                     code="invalid_e2_response",
                 )
 

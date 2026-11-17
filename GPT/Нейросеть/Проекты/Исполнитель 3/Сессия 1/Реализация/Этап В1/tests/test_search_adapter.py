@@ -52,6 +52,7 @@ def _hit(raw_text: str = _DEFAULT_RAW) -> dict:
         "heading_path": ["Правила"],
         "line_start": 10,
         "line_end": 11,
+        "raw_text": raw_text,
         "content_hash": _hash(raw_text),
         "excerpt": "короткая поисковая подсказка",
         "match_type": "exact_heading",
@@ -232,6 +233,68 @@ def test_adapter_does_not_infer_facet_match_and_reports_missing_dependency_metad
     assert result.batch.candidates[0].preservation == "normal"
     assert result.diagnostics[0]["code"] == "facet_match_signal_unavailable"
     assert any(d["code"] == "dependency_policy_defaults_applied" for d in result.diagnostics)
+
+
+
+
+@pytest.mark.parametrize(
+    ("source_path", "heading_path", "line_start", "line_end"),
+    [
+        ("empty-root.md", [], 1, 0),
+        ("rules/empty-section.md", ["Rules", "Empty section"], 4, 3),
+    ],
+)
+def test_adapter_accepts_exact_empty_source_span_from_e2(
+    source_path, heading_path, line_start, line_end
+):
+    hit = _hit("")
+    hit.update({
+        "source_path": source_path,
+        "heading_path": heading_path,
+        "line_start": line_start,
+        "line_end": line_end,
+    })
+    reader = FakeSourceReader(_source(hit, ""))
+    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([hit]))
+
+    result = adapter.search(_request())
+
+    assert result.batch.complete is True
+    assert len(result.batch.candidates) == 1
+    candidate = result.batch.candidates[0]
+    assert candidate.raw_text == ""
+    assert candidate.line_start == line_start
+    assert candidate.line_end == line_end
+    assert reader.calls == [("node_123", _hash(""), _snapshot())]
+
+
+@pytest.mark.parametrize(
+    ("line_start", "line_end", "raw_text"),
+    [
+        (5, 3, ""),
+        (5, 4, "not empty"),
+        (5, 5, ""),
+        (5, 4, None),
+    ],
+)
+def test_adapter_rejects_malformed_or_inverted_empty_source_spans(
+    line_start, line_end, raw_text
+):
+    hit = _hit("ordinary text")
+    hit["line_start"] = line_start
+    hit["line_end"] = line_end
+    if raw_text is None:
+        hit.pop("raw_text")
+    else:
+        hit["raw_text"] = raw_text
+    adapter = E2SearchAdapter(
+        _pinned(), FakeSourceReader({}), search_call=_engine([hit])
+    )
+
+    with pytest.raises(SearchAdapterError) as error:
+        adapter.search(_request())
+
+    assert error.value.code == "invalid_e2_response"
 
 
 def test_zone_post_filter_is_exact_and_marks_result_incomplete():
