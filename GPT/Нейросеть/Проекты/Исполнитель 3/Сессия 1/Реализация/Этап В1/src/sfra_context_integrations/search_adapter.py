@@ -14,7 +14,7 @@ from sfra_context_builder.models import (
     SearchRequest,
 )
 
-from .snapshot import PinnedSnapshot
+from .snapshot import PinnedSnapshot, SnapshotBindingError
 from .source_protocol import E1NodeReader
 
 
@@ -142,10 +142,20 @@ class E2SearchAdapter:
         """Expose the E1 reader so orchestration can enforce one read boundary."""
         return self._source_reader
 
+    def _verify_pinned_snapshot(self) -> None:
+        try:
+            self._snapshot.verify_current()
+        except SnapshotBindingError as exc:
+            raise SearchAdapterError(
+                "Pinned snapshot changed after binding; search rejected",
+                code="snapshot_changed",
+            ) from exc
+
     def search(self, request: SearchRequest) -> SearchAdapterResult:
         if not isinstance(request, SearchRequest):
             raise TypeError("request must be a SearchRequest")
 
+        self._verify_pinned_snapshot()
         try:
             envelope = self._search_call(
                 self._snapshot.database_path,
@@ -157,11 +167,13 @@ class E2SearchAdapter:
         except SearchAdapterError:
             raise
         except Exception as exc:
+            self._verify_pinned_snapshot()
             raise SearchAdapterError(
                 f"E2 search failed ({type(exc).__name__})",
                 code="e2_search_failed",
             ) from exc
 
+        self._verify_pinned_snapshot()
         envelope = _mapping(envelope, "E2 runtime response")
         search = _mapping(envelope.get("search"), "E2 runtime response.search")
         status = search.get("status")
@@ -186,12 +198,13 @@ class E2SearchAdapter:
             )
 
         diagnostics: list[Mapping[str, Any]] = []
-        if request.facets:
+        unsupported_facets = bool(request.facets)
+        if unsupported_facets:
             diagnostics.append(_diagnostic(
                 "facet_match_signal_unavailable",
-                "info",
-                "E2 exposes no facet parameter or explicit facet-match signal; no facet match was inferred.",
-                details={"requested_facets": list(request.facets)},
+                "warning",
+                "E2 has no facet retrieval channel; requested facets were not evaluated and SearchBatch is incomplete.",
+                details={"requested_facets": list(request.facets), "evaluation": "not_evaluated"},
             ))
 
         candidates: list[RetrievalCandidate] = []
@@ -469,7 +482,7 @@ class E2SearchAdapter:
 
         truncated = len(raw_hits) >= self._search_limit
         complete = status == "not_found_in_retrieval" or (status == "ok" and not truncated)
-        if truncated or zone_requested or source_rejections:
+        if truncated or zone_requested or source_rejections or unsupported_facets:
             complete = False
 
         return SearchAdapterResult(
