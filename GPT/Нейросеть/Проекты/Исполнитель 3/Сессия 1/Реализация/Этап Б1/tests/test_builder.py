@@ -104,6 +104,31 @@ def test_focus_any_and_all_use_exact_categories_only(builder):
     assert builder.build(all_request, make_batch(candidate))["Coverage"][0]["status"] == "not_found_in_retrieval"
 
 
+def test_deduplication_preserves_overlap_metadata_from_all_hits(builder):
+    first = make_candidate(
+        "a", "same source", source_path="one/Shared.md",
+        overlap_group_id=None, zone=None, has_author_notes=None,
+    )
+    second = make_candidate(
+        "a", "same source", source_path="one/Shared.md",
+        overlap_group_id="shared-model", zone="персонажи", has_author_notes=True,
+    )
+    parallel = make_candidate(
+        "b", "parallel source", source_path="two/Shared.md",
+        overlap_group_id="shared-model",
+    )
+    pack = builder.build(make_request(), make_batch(first, second, parallel))
+    assert pack["Statistics"]["included_count"] == 2
+    group = next(
+        item for item in pack["Parallel Sources"]
+        if item["relation"] == "adapter_overlap_group"
+    )
+    assert {source["node_id"] for source in group["sources"]} == {"a", "b"}
+    included_a = next(item for item in pack["Included"] if item["node_id"] == "a")
+    assert included_a["zone"] == "персонажи"
+    assert included_a["has_author_notes"] is True
+
+
 def test_terms_are_nfc_casefold_exact_not_morphological(builder):
     exact = make_candidate("n1", "СтИль РЕЧИ персонажа")
     miss = make_candidate("n2", "стилистика речи персонажа")

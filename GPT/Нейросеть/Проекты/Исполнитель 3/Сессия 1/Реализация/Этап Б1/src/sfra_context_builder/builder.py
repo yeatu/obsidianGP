@@ -426,9 +426,32 @@ class ContextBuilder:
                     merged_signals[key] = merged_signals[key] or value
                 elif key not in merged_signals:
                     merged_signals[key] = value
+            if previous.entity_metadata is None:
+                merged_entity_metadata = candidate.entity_metadata
+            elif candidate.entity_metadata is None or candidate.entity_metadata == previous.entity_metadata:
+                merged_entity_metadata = previous.entity_metadata
+            elif isinstance(previous.entity_metadata, (list, tuple)):
+                merged_entity_metadata = list(previous.entity_metadata)
+                if candidate.entity_metadata not in merged_entity_metadata:
+                    merged_entity_metadata.append(candidate.entity_metadata)
+            else:
+                merged_entity_metadata = [previous.entity_metadata, candidate.entity_metadata]
+
+            if previous.has_author_notes is True or candidate.has_author_notes is True:
+                merged_has_author_notes = True
+            elif previous.has_author_notes is None or candidate.has_author_notes is None:
+                merged_has_author_notes = None
+            else:
+                merged_has_author_notes = False
+
             by_pair[candidate.identity] = replace(
                 previous,
                 original_order=min(previous.original_order, candidate.original_order),
+                node_type=previous.node_type or candidate.node_type,
+                parent_node_id=previous.parent_node_id or candidate.parent_node_id,
+                zone=previous.zone or candidate.zone,
+                has_author_notes=merged_has_author_notes,
+                entity_metadata=merged_entity_metadata,
                 match_reasons=tuple(dict.fromkeys((*previous.match_reasons, *candidate.match_reasons))),
                 unmapped_match_reasons=tuple(dict.fromkeys((*previous.unmapped_match_reasons, *candidate.unmapped_match_reasons))),
                 matched_focus_ids=tuple(dict.fromkeys((*previous.matched_focus_ids, *candidate.matched_focus_ids))),
@@ -437,6 +460,8 @@ class ContextBuilder:
                 matched_terms=tuple(dict.fromkeys((*previous.matched_terms, *candidate.matched_terms))),
                 required_with=tuple(dict.fromkeys((*previous.required_with, *candidate.required_with))),
                 parent_context_required=previous.parent_context_required or candidate.parent_context_required,
+                overlap_group_id=previous.overlap_group_id or candidate.overlap_group_id,
+                overlap_hint=previous.overlap_hint or candidate.overlap_hint,
                 preservation=(
                     "required"
                     if "required" in {previous.preservation, candidate.preservation}
