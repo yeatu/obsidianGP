@@ -1,0 +1,40 @@
+name: SFRA E3 integration C1 tests
+
+on:
+  push:
+    branches:
+      - executor-3/context-integration-stage-c1
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - ".github/workflows/sfra-context-integration-c1-tests.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - ".github/workflows/sfra-context-integration-c1-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  adapter-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install B1 core and C1 package
+        shell: bash
+        run: |
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          C1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$C1_DIR[test]"
+      - name: Run adapter contract tests
+        run: |
+          C1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pytest -q "$C1_DIR/tests"
