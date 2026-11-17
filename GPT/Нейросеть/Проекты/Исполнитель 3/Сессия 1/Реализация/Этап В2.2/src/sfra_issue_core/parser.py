@@ -180,7 +180,7 @@ class IssueRequestParser:
                 object_pairs_hook=_object_without_duplicate_keys,
                 parse_constant=_reject_non_json_constant,
             )
-        except (_DuplicateJSONKey, json.JSONDecodeError, ValueError) as exc:
+        except (_DuplicateJSONKey, json.JSONDecodeError, ValueError, RecursionError) as exc:
             raise IssueRequestError(
                 "invalid_json",
                 "Issue body does not contain one strict JSON value",
