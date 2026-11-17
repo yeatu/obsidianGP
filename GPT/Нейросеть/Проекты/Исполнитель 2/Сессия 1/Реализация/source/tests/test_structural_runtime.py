@@ -170,7 +170,7 @@ def test_missing_executor1_identity_is_rejected_not_regenerated(tmp_path):
     connection = sqlite3.connect(db_path)
     connection.execute(
         """INSERT INTO structural_nodes VALUES
-           (5, 1, NULL, 1, 'quote', '[]', 4, 4, 66, 67,
+           (8, 1, NULL, 1, 'quote', '[]', 4, 4, 66, 67,
             NULL, 'unidentified', 'active', NULL)"""
     )
     connection.commit()
@@ -405,4 +405,5 @@ def test_integration_check_cli_has_no_duplicate_package_dir_argument():
         text=True, capture_output=True, check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.count("--package-dir") == 1
+    source = script.read_text(encoding="utf-8")
+    assert source.count('parser.add_argument("--package-dir"') == 1
