@@ -1518,8 +1518,9 @@ def read_source_scope(
                 if parent_record is not None else (target_record,)
             )
         elif scope == "neighbors":
+            # Keep the fragment sequence in original document order.
             fragments = tuple(
-                item for item in (target_record, previous_record, next_record)
+                item for item in (previous_record, target_record, next_record)
                 if item is not None
             )
         else:

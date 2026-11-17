@@ -901,8 +901,8 @@ def test_read_source_scope_supports_all_four_modes_with_one_snapshot(tmp_path):
     assert neighbors.anchor is not None
     assert neighbors.previous is not None and neighbors.next is not None
     assert [item.raw_text for item in neighbors.fragments] == [
-        neighbors.anchor.raw_text,
         neighbors.previous.raw_text,
+        neighbors.anchor.raw_text,
         neighbors.next.raw_text,
     ]
     assert neighbors.previous.raw_text == "First paragraph.\n"
