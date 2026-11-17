@@ -14,6 +14,7 @@ on:
       - main
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1/**"
       - ".github/workflows/sfra-e3-real-e1-integration.yml"
   workflow_dispatch:
     inputs:
