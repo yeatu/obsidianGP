@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -70,6 +71,65 @@ def main() -> int:
     if not any((p / "__init__.py").is_file() for p in package_dirs):
         raise SystemExit(f"sfra_search package directory not found below {package_root}")
 
+    # Preserve the canonical published E2 implementation before the destination is
+    # replaced by the older archive contents. The archive is metadata/package input;
+    # it must not be allowed to roll back source-address safety.
+    canonical_root = args.implementation_dir / "source"
+    canonical_structural = canonical_root / "src" / "sfra_search" / "structural.py"
+    canonical_tests = canonical_root / "tests" / "test_structural_runtime.py"
+    if not canonical_structural.is_file() or not canonical_tests.is_file():
+        raise RuntimeError(
+            "Canonical published source/tests are required before rebuilding the archive"
+        )
+    canonical_structural_text = canonical_structural.read_text(encoding="utf-8")
+    canonical_tests_text = canonical_tests.read_text(encoding="utf-8")
+
+    def function_source(name: str) -> str:
+        marker = f"def {name}("
+        start = canonical_structural_text.find(marker)
+        if start < 0:
+            raise RuntimeError(f"Canonical structural.py is missing {name}()")
+        next_function = re.search(
+            r"\n(?:def |class )", canonical_structural_text[start + len(marker):]
+        )
+        end = (
+            start + len(marker) + next_function.start()
+            if next_function is not None
+            else len(canonical_structural_text)
+        )
+        return canonical_structural_text[start:end]
+
+    for function_name in ("load_current_nodes", "get_source_node"):
+        body = function_source(function_name)
+        required_filters = (
+            r"\bd\.status\s*=\s*['\"]active['\"]",
+            r"\bn\.status\s*=\s*['\"]active['\"]",
+            r"\bn\.stale_generation\s+IS\s+NULL",
+        )
+        if not all(re.search(pattern, body, re.IGNORECASE) for pattern in required_filters):
+            raise RuntimeError(
+                f"Canonical {function_name}() does not enforce active document/node and current generation"
+            )
+        if re.search(
+            r"\bn\.status\s+IN\s*\([^)]*['\"]ambiguous['\"]",
+            body,
+            re.IGNORECASE,
+        ):
+            raise RuntimeError(f"Canonical {function_name}() still admits ambiguous nodes")
+
+    safe_parent_projection = re.compile(
+        r"CASE\s+WHEN\s+parent\.status\s*=\s*['\"]active['\"]\s+"
+        r"AND\s+parent\.stale_generation\s+IS\s+NULL\s+"
+        r"THEN\s+parent\.node_id\s+ELSE\s+NULL\s+END\s+AS\s+parent_node_id",
+        re.IGNORECASE | re.DOTALL,
+    )
+    if len(safe_parent_projection.findall(canonical_structural_text)) < 2:
+        raise RuntimeError(
+            "Canonical structural.py must hide ambiguous/stale parent Node IDs in both source queries"
+        )
+    if "test_active_only_policy_excludes_ambiguous_stale_and_deleted_nodes" not in canonical_tests_text:
+        raise RuntimeError("Canonical source tests do not contain the active-only status regressions")
+
     shutil.rmtree(args.destination, ignore_errors=True)
     args.destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(
@@ -77,6 +137,15 @@ def main() -> int:
         args.destination,
         ignore=shutil.ignore_patterns(".git", ".pytest_cache", "__pycache__", "*.pyc", "*.pyo"),
     )
+    # Overlay the exact canonical E2 code and complete regression suite on the
+    # archive package. This prevents another archive rebuild from restoring the
+    # legacy ambiguous-inclusive SQL in either source retrieval path.
+    rebuilt_structural = args.destination / "src" / "sfra_search" / "structural.py"
+    rebuilt_structural.parent.mkdir(parents=True, exist_ok=True)
+    rebuilt_structural.write_text(canonical_structural_text, encoding="utf-8")
+    rebuilt_tests = args.destination / "tests" / "test_structural_runtime.py"
+    rebuilt_tests.parent.mkdir(parents=True, exist_ok=True)
+    rebuilt_tests.write_text(canonical_tests_text, encoding="utf-8")
     # Compatibility overlay: Executor 1 represents an empty source interval as
     # line_end == line_start - 1. Preserve that exact coordinate in E2 rather
     # than silently inventing a line or modifying the E1 database.
@@ -168,7 +237,11 @@ def test_empty_source_span_preserves_executor1_zero_end_line(tmp_path):
             text=True,
         ).strip() for part in parts},
         "source_root": ".",
-        "compatibility_overlays": ["empty_source_span_line_end=line_start-1; raw_text must be empty"],
+        "compatibility_overlays": [
+            "canonical_E2_structural_active_only_source_and_parent_filters",
+            "canonical_E2_structural_runtime_regression_tests",
+            "empty_source_span_line_end=line_start-1; raw_text must be empty"
+        ],
         "files": files,
     }
     (args.destination / "SOURCE_ARCHIVE_PROVENANCE.json").write_text(

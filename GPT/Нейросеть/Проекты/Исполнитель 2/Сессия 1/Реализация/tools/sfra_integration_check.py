@@ -110,9 +110,10 @@ def main() -> int:
     db.row_factory = sqlite3.Row
     try:
         db.execute("PRAGMA query_only = ON")
-        integrity = db.execute("PRAGMA quick_check").fetchone()[0]
-        if integrity != "ok":
-            raise RuntimeError(f"SQLite quick_check failed: {integrity}")
+        integrity_rows = [str(row[0]) for row in db.execute("PRAGMA integrity_check").fetchall()]
+        if integrity_rows != ["ok"]:
+            raise RuntimeError(f"SQLite integrity_check failed: {integrity_rows}")
+        integrity = "ok"
         schema_version = db.execute(
             "SELECT schema_version FROM schema_info WHERE singleton=1"
         ).fetchone()[0]

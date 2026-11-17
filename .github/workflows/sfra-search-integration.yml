@@ -7,12 +7,16 @@ on:
       - ".github/workflows/sfra-search-integration.yml"
       - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
       - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/sfra_integration_check.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/unpack_search_package.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/sfra-search-prototype.tar.xz.part*"
   push:
     branches: [main]
     paths:
       - ".github/workflows/sfra-search-integration.yml"
       - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
       - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/sfra_integration_check.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/unpack_search_package.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/sfra-search-prototype.tar.xz.part*"
   workflow_dispatch:
 
 permissions:
@@ -80,14 +84,28 @@ jobs:
           python-version: "3.13"
           cache: pip
 
-      - name: Install published sfra_search package and pymorphy3
+      - name: Rebuild archive package with the canonical E2 active-only overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
+          python "$base/tools/unpack_search_package.py" --help >/dev/null
+          python "$base/tools/unpack_search_package.py" \
+            --implementation-dir "$GITHUB_WORKSPACE/$base" \
+            --destination "$RUNNER_TEMP/sfra-archive-package"
+          test -s "$RUNNER_TEMP/sfra-archive-package/SOURCE_ARCHIVE_PROVENANCE.json"
+          cmp "$base/source/src/sfra_search/structural.py" \
+            "$RUNNER_TEMP/sfra-archive-package/src/sfra_search/structural.py"
+          echo "Archive package carries the canonical active-only structural adapter."
+
+      - name: Install archive-rebuilt sfra_search package and pymorphy3
         shell: bash
         run: |
           set -euo pipefail
           base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
           python -m pip install --upgrade pip
-          python -m pip install -e "$base/source"
-          python -m pip install -r "$base/source/requirements-dev.txt"
+          python -m pip install -e "$RUNNER_TEMP/sfra-archive-package"
+          python -m pip install -r "$RUNNER_TEMP/sfra-archive-package/requirements-dev.txt"
           python - <<'PY'
           import importlib.metadata
           import pymorphy3
@@ -104,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
-          python -m pytest -q "$base/source/tests" \
+          python -m pytest -q "$RUNNER_TEMP/sfra-archive-package/tests" \
             --junitxml "$RUNNER_TEMP/sfra-e2-pytest.xml"
           sfra run-once --help >/dev/null
           sfra get-source --help >/dev/null
@@ -127,7 +145,7 @@ jobs:
             --temp-root "$RUNNER_TEMP" \
             --state-branch-sha "${{ steps.state.outputs.sha }}" \
             --implementation-commit "$E2_COMMIT_SHA" \
-            --package-dir "$GITHUB_WORKSPACE/GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/src/sfra_search" \
+            --package-dir "$RUNNER_TEMP/sfra-archive-package/src/sfra_search" \
             --max-sources 5
 
       - name: Confirm E1 SQLite and sfra-state stayed unchanged
@@ -226,5 +244,6 @@ jobs:
             ${{ runner.temp }}/sfra-integration-results/
             ${{ runner.temp }}/sfra-e2-pytest.xml
             ${{ runner.temp }}/sfra-integration-report.md
+            ${{ runner.temp }}/sfra-archive-package/SOURCE_ARCHIVE_PROVENANCE.json
           if-no-files-found: warn
           retention-days: 90
