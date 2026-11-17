@@ -314,3 +314,23 @@ Production Issue worker, recovery и публикация source content не р
 **Текущий статус:** `ANALYST_COMPLETE_UNREVIEWED` на HEAD `75a7432555029e60edc67463f92ada9d6179651b`. PR #16 остаётся Open / Draft / unmerged. Ранее выданная координаторская приёмка V2.2 относится к согласованной реализации на HEAD `b80b5d7`; после синхронизации координатору поручена финальная проверка актуального HEAD перед любым решением о merge.
 
 **Ограничения:** V2.3 (реальный GitHub transport/recovery) и V2.4 (controlled rollout) не запускать. Это обновление не разрешает production execution, GitHub API/SDK, credentials, реальные Issue/comment writes, активные event workflows, source-content publication, leases/retries/recovery, MCP/HTTP/webhooks или deployment.
+
+
+## 11. Самостоятельный захват задач — координаторская сверка 2026-11-17
+
+Обязательный протокол: [Issue #20 — SFRA Task Claim Protocol](https://github.com/yeatu/obsidianGP/issues/20).
+
+Принцип: участник своего уровня доступа самостоятельно захватывает свободную задачу через CLAIM; подтверждение координатора не требуется. Целевая роль в Issue ограничивает доступ, но не означает предварительное назначение владельца. Для конфликтов используется наименьший GitHub comment ID; после публикации CLAIM участник повторно читает Issue. GitHub comments не дают атомарной блокировки, поэтому краткая гонка возможна; проигравший прекращает пересекающуюся работу.
+
+### Активные задачи и владельцы на момент сверки
+
+| Issue | Целевая роль | Фактический владелец | Статус | Evidence |
+|---|---|---|---|---|
+| [#16 / V2.2 pre-merge sync](https://github.com/yeatu/obsidianGP/pull/16) | E3 | E3, по ранее выданному координаторскому поручению | IN_PROGRESS / повторная синхронизация и evidence | [Поручение](https://github.com/yeatu/obsidianGP/pull/16#issuecomment-6959026315), [последняя координаторская фиксация](https://github.com/yeatu/obsidianGP/pull/16#issuecomment-6959369005). PR остаётся Open / Draft / unmerged. |
+| [#17 / E1 Source Scope audit](https://github.com/yeatu/obsidianGP/issues/17) | E1 | Нет | OPEN | На момент сверки CLAIM отсутствует. |
+| [#18 / E2 lexical benchmark](https://github.com/yeatu/obsidianGP/issues/18) | E2 | ChatGPT-E2-2026-11-17 | IN_PROGRESS | [CLAIM](https://github.com/yeatu/obsidianGP/issues/18#issuecomment-6959468764), [IN_PROGRESS](https://github.com/yeatu/obsidianGP/issues/18#issuecomment-6959470085). |
+| [#19 / A1 contract audit](https://github.com/yeatu/obsidianGP/issues/19) | A1 | Нет | OPEN | На момент сверки CLAIM отсутствует. |
+
+Указанные роли E1/E2/A1 в Issues #17–19 являются целевыми уровнями доступа, а не назначениями. E2 #18 захвачена самостоятельно и может выполняться без координаторского подтверждения. Координатор не должен создавать очередь подтверждения CLAIM.
+
+Эта таблица — снимок состояния на момент сверки, а не постоянная блокировка. Каждый участник обязан перечитать Issue перед началом или продолжением сессии; новые CLAIM/RELEASE имеют приоритет над этим снимком.
