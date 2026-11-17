@@ -46,7 +46,7 @@ def test_budget_counts_included_and_provenance_but_not_coverage(builder):
         for index, aspect_id in enumerate(focus_ids)
     ]
     baseline = local_builder.build(
-        make_request(focus=focus),
+        make_request(budget_tokens=100_000, focus=focus),
         make_batch(candidate),
     )
     included_wire = json.dumps(
