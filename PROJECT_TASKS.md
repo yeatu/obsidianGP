@@ -730,3 +730,41 @@ PR #28 and PR #29 were closed as superseded after their changes were consolidate
 - V2.3/V2.4 — FROZEN до отдельного readiness/security/scope decision.
 
 **Координаторское решение:** проект не ожидает A1 или исполнителя, чтобы считать текущую контрактную стабилизацию завершённой. Следующий шаг — отдельное решение о следующей продуктовой версии; production indexing/persistence и production GitHub transport не запускаются автоматически.
+
+## 20. A1 follow-up closure verification — 2026-11-18
+
+### 20.1. Review record
+
+- **Role:** Analyst 1 (A1).
+- **Issue:** [#19 — E1 → E2 → E3 → V2.1 contract audit](https://github.com/yeatu/obsidianGP/issues/19).
+- **Follow-up CLAIM:** [comment 6963802002](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6963802002).
+- **A1 review report:** [comment 6964082653](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653).
+- **RELEASE / HANDOFF:** [comment 6964099368](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964099368).
+- **Reviewed main HEAD:** `78f6a14e910a593c7ca06ab46b732bee573b960c`.
+- **Mode:** read-only. No code, tests, workflows, Vault, SQLite or production state were changed by A1. No E1/E3 PR was accepted.
+
+### 20.2. Finding-by-finding result
+
+| Finding | A1 follow-up result | Evidence / note |
+|---|---|---|
+| A1-01 / P1 — Node ID lifecycle provenance | **CLOSED** | E1 `_check_db_snapshot()` requires matching latest lifecycle event and generation consistency. Fixture-only CI [44195690306](https://github.com/yeatu/obsidianGP/actions/runs/44195690306): 106 E1 tests + 19 V2.1 tests passed; CLI passed. |
+| A1-02 / P2 — empty SourceSpan | **CLOSED** | E3 accepts only empty text with `line_end == line_start - 1`; root/non-root tests and malformed-span negatives are present. C1/V2.1 runs [44192658933](https://github.com/yeatu/obsidianGP/actions/runs/44192658933), [44192658936](https://github.com/yeatu/obsidianGP/actions/runs/44192658936), and manifest-pinned integration [44192658977](https://github.com/yeatu/obsidianGP/actions/runs/44192658977) succeeded. |
+| A1-03 / P2 — PinnedSnapshot TOCTOU | **PARTIAL; residual P2** | Standard `bind_pinned_snapshot()` path revalidates paths, Git identity, manifest and SQLite digest before/after E1/E2 calls. Residual: `PinnedSnapshot._verify_current` is optional and defaults to `None`; `verify_current()` silently no-ops when absent. The class is exported and consumers check only `isinstance(PinnedSnapshot)`, so an unverified instance with mutable paths can bypass operation checks. There is also no dedicated regression for sidecar mutation during content-returning `E1SourceReader.read_scope()`; the current during-E1 test exercises `resolve_current_node()`. |
+| A1-04 / historical F-02 — real Vault indexing in E1 PR CI | **MITIGATED for future routine E1 PR/push CI** | PR [#32](https://github.com/yeatu/obsidianGP/pull/32) changed normal E1 CI to fixture-only, removed the real-Vault indexing step and added a boundary guard. Run [44197904583](https://github.com/yeatu/obsidianGP/actions/runs/44197904583) passed. The earlier prohibited run remains a historical incident. |
+| A1-05 / P2 — unsupported facets completeness | **CLOSED** | Unsupported facets now emit warning `not_evaluated` and force `SearchBatch.complete=false`; E2→E3→B1 regression verifies `search_complete=false` and Coverage note. CI [44193376078](https://github.com/yeatu/obsidianGP/actions/runs/44193376078) and [44193376079](https://github.com/yeatu/obsidianGP/actions/runs/44193376079) succeeded. |
+
+### 20.3. Residual A1-03 closure criterion
+
+**Recommended owner:** E3.
+
+1. Make verified construction mandatory for production consumers: reject a `PinnedSnapshot` without an active verifier, or restrict consumer-visible construction to a verified factory. Keep any test-only seam explicit.
+2. Add an `E1SourceReader.read_scope()` regression where the sidecar changes during the E1 call while the fake E1 returns a successful fragment payload; assert typed `snapshot_changed` and that no fragments escape.
+3. Re-run the focused C1 and V2.1 consumer suites on the exact updated HEAD.
+
+This is a hardening/test residual in the SnapshotRef boundary. It does not invalidate the operation-boundary checks for snapshots returned by `bind_pinned_snapshot()`.
+
+### 20.4. Coordinator / analyst disposition distinction
+
+The coordinator recorded [comment 6964076953](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964076953), concluding all findings were closed in the accepted implementation scope on the earlier code snapshot `bb2275ece19f3d7cf1aa655b89d8d037803976c6`. A1's subsequent read-only review on `78f6a14e` confirms the E1/E3 fixes and CI evidence, but records the P2 A1-03 construction/coverage residual above for explicit triage. This registry entry records both dispositions; it does not override coordinator acceptance or authorize implementation work.
+
+**A1 follow-up status:** `ANALYST_COMPLETE_UNREVIEWED / RELEASED`. The scoped review is complete and handed off. A1 made no code changes and did not approve, merge or accept another role's work.
