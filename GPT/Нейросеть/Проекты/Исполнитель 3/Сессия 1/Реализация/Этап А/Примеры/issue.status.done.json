@@ -11,9 +11,18 @@
   "lease_expires_at": null,
   "source_snapshot": {
     "vault_commit_sha": "3fc8923fb3a2738feba869076167869d92b7759c",
-    "sidecar_branch": "sfra-index-state",
+    "source_repository": "yeatu/obsidianGP",
+    "source_branch": "executor-1/sfra-indexer-session-1",
+    "sidecar_branch": "sfra-state",
     "sidecar_commit_sha": "aabbccddeeff00112233445566778899aabbccdd",
-    "index_generation": 8,
+    "manifest_format_version": 1,
+    "database_path": "state/structure.sqlite3",
+    "database_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sqlite_schema_version": 2,
+    "indexer_version": "0.2.0",
+    "workflow_run_id": "43980287197",
+    "updated_at": "2026-11-17T00:00:00Z",
+    "index_generation": null,
     "manifest_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
   "result_manifest": {
