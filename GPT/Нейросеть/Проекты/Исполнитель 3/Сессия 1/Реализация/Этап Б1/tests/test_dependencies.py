@@ -11,9 +11,11 @@ class FakeResolver:
     def __init__(self, values):
         self.values = values
         self.seen_snapshot = None
+        self.calls = []
 
     def resolve_node(self, node_id, snapshot):
         self.seen_snapshot = snapshot
+        self.calls.append(node_id)
         return self.values.get(node_id)
 
 
@@ -39,6 +41,28 @@ def test_required_chain_resolves_missing_node_in_pinned_snapshot():
     assert {item.node_id for item in groups[0].members} == {"A", "B", "C"}
     assert groups[0].has_unresolved is False
     assert resolver.seen_snapshot == snapshot
+    assert resolver.calls == ["C"]
+    assert rejected == 0
+
+
+def test_resolver_recursively_follows_dependencies_of_resolved_nodes():
+    a = make_candidate("A", "node A", required_with=["B"])
+    b = make_candidate("B", "node B", required_with=["C"])
+    c = make_candidate("C", "node C", required_with=["D"])
+    d = make_candidate("D", "node D")
+    resolver = FakeResolver({"B": b, "C": c, "D": d})
+    snapshot = SnapshotRef("1" * 40, "2" * 40, content_hash("manifest"))
+    groups, all_candidates, rejected = build_dependency_groups(
+        [candidate(a)],
+        resolver=resolver,
+        snapshot=snapshot,
+        verify_resolved_hash=lambda item: content_hash(item.raw_text) == item.content_hash,
+        diagnostics=[],
+    )
+    assert len(groups) == 1
+    assert {item.node_id for item in groups[0].members} == {"A", "B", "C", "D"}
+    assert resolver.calls == ["B", "C", "D"]
+    assert groups[0].has_unresolved is False
     assert rejected == 0
 
 
