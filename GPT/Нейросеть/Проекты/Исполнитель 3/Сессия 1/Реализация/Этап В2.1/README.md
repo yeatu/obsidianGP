@@ -1,7 +1,7 @@
 # SFRA-E3-V2.1 — Application Services
 
 **Владелец:** Исполнитель 3  
-**Статус:** реализация и аналитическая проверка завершены; ожидается координаторская приёмка, PR #14 остаётся Draft  
+**Статус:** `COORDINATOR_ACCEPTED_NOT_MERGED`; PR #14 остаётся Open / Draft / not merged  
 **Issue:** [#13 — transport-independent application services](https://github.com/yeatu/obsidianGP/issues/13)
 
 
@@ -10,7 +10,7 @@
 > **Implementation HEAD:** `b093c51833f47b9a4e83e83235ea7fbf591f81a7`. Это HEAD кода V2.1; документационный sync может добавить отдельный commit без изменения реализации.
 >
 > **PR:** [#14](https://github.com/yeatu/obsidianGP/pull/14), Open / Draft / not merged.  
-> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), статус `ANALYST_COMPLETE_UNREVIEWED`; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координаторская приёмка ещё не выставлена.
+> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), статус `ANALYST_COMPLETE_UNREVIEWED`; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координатор принял V2.1 в согласованных границах как `COORDINATOR_ACCEPTED_NOT_MERGED`; PR не объединён.
 >
 > **Актуальные проверки на Implementation HEAD:**
 > - [V2.1 application CI 44047919277](https://github.com/yeatu/obsidianGP/actions/runs/44047919277): success — **45 B1 + 56 C1 + 18 V2.1 passed**, transport dependency guard passed.
@@ -22,6 +22,8 @@
 >
 > **Boundaries unchanged:** no GitHub/HTTP/MCP transport, worker/recovery, persistence, source-text publication or source writes in V2.1. Public Vault source content remains denied by default.
 >
+> **Повторная проверка после документационной синхронизации:** PR HEAD `974d56be8fb57ae8a02eeaf97ae15ff09cc4b47c`; C1 [44053145639](https://github.com/yeatu/obsidianGP/actions/runs/44053145639) — 45 B1 + 56 C1 passed; V2.1 [44053145836](https://github.com/yeatu/obsidianGP/actions/runs/44053145836) — 45 B1 + 56 C1 + 18 V2.1 passed, dependency guard passed; real integration [44053145679](https://github.com/yeatu/obsidianGP/actions/runs/44053145679) — success, artifact [14315355448](https://github.com/yeatu/obsidianGP/actions/runs/44053145679), SHA-256 `sha256:d510864636b373169d5285613bb1786cfdad41c9957f8dc815da13c19f95931b`. Artifact confirms four scopes on one SnapshotRef, preserved `budget_limited`, E3-owned `budget_exceeded` with empty fragments, and read-only guards.
+
 > The earlier evidence section below refers to the previous implementation revision `9b57c68` and is retained as history; it is superseded by the current evidence above.
 
 ## Назначение
