@@ -14,63 +14,73 @@ on:
       - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-stage-b-tests.yml"
 
+# PR/push CI is fixture-only. It must never checkout ГП or sfra-state and must
+# never index repository Vault content. Real-state maintenance is separate and
+# requires an explicit operational action through sfra-state-persistence.yml.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sfra-e1-fixture-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   structural-indexer-tests:
+    name: E1 isolated unit and contract tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out implementation under test without persisted credentials
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/pyproject.toml"
+
       - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . -r requirements-dev.txt
-      - name: Run automated test suite
-        run: python -m pytest
-      - name: Check CLI
-        run: sfra-index --help
-      - name: Parse and re-scan the real repository Vault
-        run: |
-          sfra-index index --vault ../../../../../../ГП --index-dir /tmp/sfra-vault-sidecar
-          sfra-index index --vault ../../../../../../ГП --index-dir /tmp/sfra-vault-sidecar
-          sfra-index info --db /tmp/sfra-vault-sidecar/structure.sqlite3
-          python - <<'PY'
-          import sqlite3
 
-          connection = sqlite3.connect("/tmp/sfra-vault-sidecar/structure.sqlite3")
-          counts = {
-              "documents": connection.execute("SELECT COUNT(*) FROM documents WHERE status='active'").fetchone()[0],
-              "nodes": connection.execute("SELECT COUNT(*) FROM structural_nodes WHERE stale_generation IS NULL").fetchone()[0],
-              "node_ids": connection.execute("SELECT COUNT(DISTINCT node_id) FROM structural_nodes WHERE stale_generation IS NULL").fetchone()[0],
-              "hashes": connection.execute("SELECT COUNT(content_hash) FROM structural_nodes WHERE stale_generation IS NULL").fetchone()[0],
-              "versions": connection.execute("SELECT COUNT(*) FROM node_versions").fetchone()[0],
-              "events": connection.execute("SELECT COUNT(*) FROM node_match_events").fetchone()[0],
-              "passages": connection.execute("SELECT COUNT(*) FROM passages").fetchone()[0],
-              "empty_documents": connection.execute("SELECT COUNT(*) FROM documents WHERE status='active' AND source_size_bytes=0").fetchone()[0],
-              "non_initial_generations": connection.execute("SELECT COUNT(*) FROM documents WHERE generation <> 1").fetchone()[0],
+      - name: Run complete E1 unit and contract suite against temporary fixtures
+        run: python -m pytest -q --junitxml "$RUNNER_TEMP/e1-fixture-tests.xml"
+
+      - name: Check CLI entry point
+        run: sfra-index --help >/dev/null
+
+      - name: Assert fixture-only workflow boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          path = Path(os.environ["GITHUB_WORKSPACE"]) / ".github/workflows/sfra-stage-b-tests.yml"
+          # Ignore YAML comments; only executable workflow content is scanned.
+          executable = "\n".join(
+              line.split("#", 1)[0]
+              for line in path.read_text(encoding="utf-8").splitlines()
+          )
+          forbidden = {
+              "real index command": r"\bsfra-index\s+index\b",
+              "production state ref": r"(?m)^\s*ref:\s*sfra-state\s*$",
+              "Vault sparse checkout": r"(?m)^\s*sparse-checkout:\s*ГП\s*$",
+              "production state checkout path": r"(?m)^\s*path:\s*(_state_source|production-state-source|state-repo|vault)\s*$",
           }
-          parallel_sources = connection.execute(
-              "SELECT source_path FROM documents WHERE source_path LIKE '%Демография.md' ORDER BY source_path"
-          ).fetchall()
-          print("Real Vault snapshot:", counts)
-          print("Parallel source documents:", parallel_sources)
-          assert counts["documents"] == 66, counts
-          assert counts["nodes"] == 9080, counts
-          assert counts["node_ids"] == counts["nodes"], counts
-          assert counts["hashes"] == counts["nodes"], counts
-          assert counts["versions"] == counts["nodes"], counts
-          assert counts["events"] == counts["nodes"], counts
-          assert counts["passages"] == 21, counts
-          assert counts["empty_documents"] == 2, counts
-          assert counts["non_initial_generations"] == 0, counts
-          assert len(parallel_sources) == 2, parallel_sources
-          connection.close()
+          failures = [name for name, pattern in forbidden.items() if re.search(pattern, executable)]
+          if failures:
+              raise SystemExit("Forbidden fixture-CI configuration: " + ", ".join(failures))
+          print("Fixture-only boundary verified: no production checkout or index command.")
           PY
-          git -C "$GITHUB_WORKSPACE" diff --exit-code -- "ГП"
-          test -z "$(git -C "$GITHUB_WORKSPACE" status --porcelain -- "ГП")"
