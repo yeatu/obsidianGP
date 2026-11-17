@@ -163,3 +163,13 @@ def test_parser_rejects_extra_nested_focus_and_known_fields() -> None:
     with pytest.raises(IssueRequestError) as known_error:
         IssueRequestParser().parse(issue_record(body_for(payload=payload)))
     assert known_error.value.code == "extra_fields"
+
+def test_parser_normalizes_deep_json_recursion_error_under_body_limit() -> None:
+    body = "[" * 10_000 + "0" + "]" * 10_000
+    assert len(body.encode("utf-8")) < MAX_BODY_BYTES
+
+    with pytest.raises(IssueRequestError) as error:
+        IssueRequestParser().parse(issue_record(body))
+
+    assert error.value.code == "invalid_json"
+
