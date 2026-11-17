@@ -41,7 +41,7 @@ def _fixture(tmp_path, *, source_commit="a" * 40):
 
 
 def test_binds_snapshot_to_manifest_source_commit_and_exact_manifest_bytes(tmp_path):
-    root, vault, manifest, raw, database = _fixture()
+    root, vault, manifest, raw, database = _fixture(tmp_path)
     verifier_calls = []
 
     def verify_state(state_root):
@@ -65,7 +65,7 @@ def test_binds_snapshot_to_manifest_source_commit_and_exact_manifest_bytes(tmp_p
 
 
 def test_rejects_manifest_source_commit_not_equal_to_pinned_vault(tmp_path):
-    root, vault, manifest, _, _ = _fixture()
+    root, vault, manifest, _, _ = _fixture(tmp_path)
     with pytest.raises(SnapshotBindingError, match="manifest.source_commit"):
         bind_pinned_snapshot(
             vault_commit_sha="c" * 40,
@@ -77,7 +77,7 @@ def test_rejects_manifest_source_commit_not_equal_to_pinned_vault(tmp_path):
 
 
 def test_rejects_database_changed_after_manifest_was_written(tmp_path):
-    root, vault, manifest, _, database = _fixture()
+    root, vault, manifest, _, database = _fixture(tmp_path)
     database.write_bytes(b"modified sqlite fixture")
     with pytest.raises(SnapshotBindingError, match="SQLite SHA-256"):
         bind_pinned_snapshot(
@@ -90,7 +90,7 @@ def test_rejects_database_changed_after_manifest_was_written(tmp_path):
 
 
 def test_rejects_manifest_verifier_disagreement(tmp_path):
-    root, vault, manifest, _, _ = _fixture()
+    root, vault, manifest, _, _ = _fixture(tmp_path)
     other = dict(manifest, indexer_version="unexpected")
     with pytest.raises(SnapshotBindingError, match="verifier result"):
         bind_pinned_snapshot(
@@ -103,7 +103,7 @@ def test_rejects_manifest_verifier_disagreement(tmp_path):
 
 
 def test_requires_e1_state_verifier(tmp_path):
-    root, vault, manifest, _, _ = _fixture()
+    root, vault, manifest, _, _ = _fixture(tmp_path)
     with pytest.raises(SnapshotBindingError, match="state_verifier"):
         bind_pinned_snapshot(
             vault_commit_sha=manifest["source_commit"],
