@@ -137,7 +137,7 @@ sfra get-source \
 
 Тот же интерфейс доступен как Python API: `search_structural_database(...)`, `load_current_nodes(...)` и `get_source_node(database_path, node_id, content_hash)`. Исходная структурная БД не изменяется; FTS5 не дописывается в неё и не сохраняется между запусками. Аргумент `--db` глобальной CLI-конфигурации для `run-once` не используется, отдельный файл поисковой БД не создаётся.
 
-В Actions структуру следует создавать в `$RUNNER_TEMP` через `sfra_indexer.indexer.index_vault(VAULT_PATH, RUNNER_TEMP/index)`, после чего передавать путь `structure.sqlite3` команде `run-once`. Исходный Vault остаётся read-only и может дополнительно проверяться через `git diff --exit-code`.
+В интеграционном workflow Исполнителя 2 структурную БД **не следует создавать заново**. Workflow получает `state/structure.sqlite3` и `state/manifest.json` из ветки `sfra-state`, сверяет SHA-256, версию схемы и соответствие исходному commit, после чего передаёт существующую БД команде `run-once`. Исполнитель 2 не запускает `index_vault` и не изменяет ветку состояния. Для автономных тестов можно использовать искусственную SQLite-фикстуру. Фактическая проверка этого сценария: [успешный Actions run](https://github.com/yeatu/obsidianGP/actions/runs/43997334585).
 
 ## Сущности и алиасы
 
