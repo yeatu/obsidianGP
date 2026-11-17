@@ -4,9 +4,9 @@
   "format_version": 1,
   "indexer_version": "0.2.0",
   "source_branch": "executor-1/sfra-indexer-session-1",
-  "source_commit": "10e708dd79a2ea31623aca2fb56e7bdcebcf1ee7",
+  "source_commit": "2a3c54fa7a9e910f4c9621c8fe00f41a061fc158",
   "source_repository": "yeatu/obsidianGP",
   "sqlite_schema_version": 2,
-  "updated_at": "2026-11-17T01:52:09.050928+00:00",
-  "workflow_run_id": "43998760513"
+  "updated_at": "2026-11-17T02:03:09.484856+00:00",
+  "workflow_run_id": "44000088720"
 }
