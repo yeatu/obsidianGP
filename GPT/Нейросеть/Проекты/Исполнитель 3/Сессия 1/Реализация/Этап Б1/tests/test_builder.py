@@ -295,6 +295,36 @@ def test_e2_tier_and_bm25_sort_ascending(builder):
     assert [item["node_id"] for item in pack["Included"]] == ["tier2b", "tier2", "tier4"]
 
 
+def test_fallback_score_ranks_ascending_when_direction_is_asc(builder):
+    low = make_candidate("score_low", "lower score")
+    high = make_candidate("score_high", "higher score")
+    for candidate, score in ((low, 0.1), (high, 0.9)):
+        candidate.pop("relevance")
+        candidate["score"] = score
+        candidate["score_direction"] = "asc"
+
+    pack = builder.build(make_request(), make_batch(high, low))
+
+    assert [item["node_id"] for item in pack["Included"]] == [
+        "score_low", "score_high"
+    ]
+
+
+def test_fallback_score_ranks_descending_when_direction_is_desc(builder):
+    low = make_candidate("score_low", "lower score")
+    high = make_candidate("score_high", "higher score")
+    for candidate, score in ((low, 0.1), (high, 0.9)):
+        candidate.pop("relevance")
+        candidate["score"] = score
+        candidate["score_direction"] = "desc"
+
+    pack = builder.build(make_request(), make_batch(low, high))
+
+    assert [item["node_id"] for item in pack["Included"]] == [
+        "score_high", "score_low"
+    ]
+
+
 def test_truncated_flag_prevents_claiming_complete_search(builder):
     request = make_request(focus=[{"id": "missing", "label": "Not found"}])
     pack = builder.build(
