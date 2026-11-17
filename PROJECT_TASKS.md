@@ -69,7 +69,7 @@
 | SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency resolver, E1 adapter и Snapshot binding | **DONE** | PR [#10](https://github.com/yeatu/obsidianGP/pull/10) merged: `5e274fc85d2d5f9f9fc3a4faaa48657cd7a2b7ec`; проверенный HEAD `4b446c3`. Финальный C1 CI [44038459416](https://github.com/yeatu/obsidianGP/actions/runs/44038459416): 45 B1 + 56 C1 passed. Runtime code принят и находится в main. |
 | SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **DONE** | PR #10 merged. Финальная real integration [44038459427](https://github.com/yeatu/obsidianGP/actions/runs/44038459427): success; artifact `14308411701`, SHA-256 `6b096d78395e23a6aadd904a449da0cb48a94131c0c3b03fb17c53108057524a`. Все четыре scope, parent dependency, negative matrix и read-only guards подтверждены. Context Pack остаётся `budget_limited` (1 included / 2 deferred), не `complete`. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **DONE** | PR [#7](https://github.com/yeatu/obsidianGP/pull/7) merged: `d3e41965f916746225cb8f76fd4c96fc9e95486c`. Post-merge workflow [44041253438](https://github.com/yeatu/obsidianGP/actions/runs/44041253438): success, 64 passed / 0 failures / 0 errors / 0 skipped; artifact `14309710985`. |
-| SFRA-E3-V2.1 | E3 | Transport-independent SearchVaultService / ReadSourceService application services | **ANALYST_COMPLETE_UNREVIEWED** | Реализация передана на независимую проверку в [PR #14](https://github.com/yeatu/obsidianGP/pull/14), HEAD `b093c51833f47b9a4e83e83235ea7fbf591f81a7`. [CI 44047919277](https://github.com/yeatu/obsidianGP/actions/runs/44047919277): 45 B1 + 56 C1 + 18 V2.1 passed, transport guard passed; [real integration 44047919195](https://github.com/yeatu/obsidianGP/actions/runs/44047919195), artifact `14312636938`, SHA-256 `68c80ec5d67aa10574388bb167ba74201c8657baa517f551f27080c110e90d36`: обе службы прошли на одном pinned SnapshotRef, все 4 scope ok, budget_limited / budget_exceeded сохранены, production state read-only. Аналитическая проверка подтверждает V2.1 scope; README и handoff ещё содержат старые HEAD/run IDs и требуют синхронизации доказательств перед merge. PR остаётся Draft, не merged; coordinator acceptance не выставлена. |
+| SFRA-E3-V2.1 | E3 | Transport-independent SearchVaultService / ReadSourceService application services | **COORDINATOR_ACCEPTED_NOT_MERGED** | Координаторская приёмка в согласованном scope выполнена на [PR #14](https://github.com/yeatu/obsidianGP/pull/14); implementation HEAD `b093c51833f47b9a4e83e83235ea7fbf591f81a7`, аналитический review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), финальный координаторский review [5935846670](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935846670). После синхронизации handoff и реестров прошли C1 [44054181018](https://github.com/yeatu/obsidianGP/actions/runs/44054181018) (45 B1 + 56 C1), V2.1 [44054181091](https://github.com/yeatu/obsidianGP/actions/runs/44054181091) (45 B1 + 56 C1 + 18 V2.1; transport guard) и real integration [44054181144](https://github.com/yeatu/obsidianGP/actions/runs/44054181144), artifact `14314428318`, SHA-256 `8fcf72fbd2ea9bb373ab3f8afba70794957dfdb3fac194ad37806118421acef7`. PR branch синхронизирована с актуальным main; PR Open / Draft / not merged. Реализацию V2.1 повторно не поручать; Issue worker/recovery/MCP и публикация source content вне принятого scope и не разрешены. |
 
 ---
 
@@ -264,3 +264,18 @@ PR [#12](https://github.com/yeatu/obsidianGP/pull/12) остаётся Draft pro
 7. **Операционное владение:** первоначальный владелец — владелец/администратор репозитория `yeatu`; отключение worker workflow и удаление ошибочно опубликованных комментариев — maintainer action.
 
 Production Issue worker, recovery и публикация source content не разрешены до отдельной security/readiness проверки V2.2–V2.4. MCP остаётся optional и не является зависимостью V2 MVP.
+
+## 8. Координаторская приёмка SFRA-E3-V2.1 — 2026-11-17
+
+- [x] Аналитик завершил V2.1: review #5935543022, `ANALYST_COMPLETE_UNREVIEWED`, блокирующих дефектов в согласованном scope не выявлено.
+- [x] README и analyst handoff синхронизированы; прежние evidence на `9b57c68` помечены как исторические.
+- [x] Проверены PR head `974d56be8fb57ae8a02eeaf97ae15ff09cc4b47c` и compare: ahead 16 / behind 0 относительно main `5090047cb6a47be4783f4625c1d175fd23083bae`.
+- [x] Повторный C1 CI #44053145639: 45 B1 + 56 C1 passed.
+- [x] Повторный V2.1 CI #44053145836: 45 B1 + 56 C1 + 18 V2.1 passed; transport dependency guard passed.
+- [x] Повторная real integration #44053145679: success; artifact `14315355448`, SHA-256 `d510864636b373169d5285613bb1786cfdad41c9957f8dc815da13c19f95931b`.
+- [x] Проверены один pinned SnapshotRef, четыре source scopes, сохранение `budget_limited`, E3-owned `budget_exceeded` без partial fragments и неизменность production state / Vault / sidecar.
+- [x] Координаторская приёмка: `COORDINATOR_ACCEPTED_NOT_MERGED`.
+- [ ] PR #14 переведён из Draft в Ready.
+- [ ] PR #14 merged.
+
+**Решение:** V2.1 принят только как transport-independent application services. PR #14 остаётся Open / Draft / not merged. Никакого разрешения на production Issue worker/recovery, MCP, HTTP/webhooks или публикацию Vault source content не выдано. Public source-content policy остаётся deny-by-default.
