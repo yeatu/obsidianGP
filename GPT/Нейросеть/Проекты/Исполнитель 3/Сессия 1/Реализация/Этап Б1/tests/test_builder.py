@@ -112,7 +112,8 @@ def test_terms_are_nfc_casefold_exact_not_morphological(builder):
     }])
     pack = builder.build(request, make_batch(exact, miss))
     assert pack["Coverage"][0]["included_node_ids"] == ["n1"]
-    assert [item["node_id"] for item in pack["Deferred"]] == ["n2"]
+    assert {item["node_id"] for item in pack["Included"]} == {"n1", "n2"}
+    assert "n2" not in pack["Coverage"][0]["included_node_ids"]
 
 
 def test_two_same_basename_sources_remain_separate(builder):
