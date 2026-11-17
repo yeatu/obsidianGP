@@ -1,8 +1,28 @@
 # SFRA-E3-V2.1 — Application Services
 
 **Владелец:** Исполнитель 3  
-**Статус:** реализация в отдельной ветке, передача аналитику после CI  
+**Статус:** реализация и аналитическая проверка завершены; ожидается координаторская приёмка, PR #14 остаётся Draft  
 **Issue:** [#13 — transport-independent application services](https://github.com/yeatu/obsidianGP/issues/13)
+
+
+> ## Актуальное состояние проверки — 2026-11-17
+>
+> **Implementation HEAD:** `b093c51833f47b9a4e83e83235ea7fbf591f81a7`. Это HEAD кода V2.1; документационный sync может добавить отдельный commit без изменения реализации.
+>
+> **PR:** [#14](https://github.com/yeatu/obsidianGP/pull/14), Open / Draft / not merged.  
+> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), статус `ANALYST_COMPLETE_UNREVIEWED`; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координаторская приёмка ещё не выставлена.
+>
+> **Актуальные проверки на Implementation HEAD:**
+> - [V2.1 application CI 44047919277](https://github.com/yeatu/obsidianGP/actions/runs/44047919277): success — **45 B1 + 56 C1 + 18 V2.1 passed**, transport dependency guard passed.
+> - [C1 regression CI 44047919191](https://github.com/yeatu/obsidianGP/actions/runs/44047919191): success — **45 B1 + 56 C1 passed**.
+> - [Real E1/E2/E3 + V2.1 integration 44047919195](https://github.com/yeatu/obsidianGP/actions/runs/44047919195): success.
+> - Machine-readable artifact [14312636938](https://github.com/yeatu/obsidianGP/actions/runs/44047919195), ZIP SHA-256 `sha256:68c80ec5d67aa10574388bb167ba74201c8657baa517f551f27080c110e90d36`.
+>
+> Real integration exercised both application services on one pinned SnapshotRef; all four source scopes returned `ok`; Context Pack status `budget_limited` was preserved; one-token document read returned `budget_exceeded` with no fragments and E3 as budget owner. Production SQLite, manifest, sidecar and Vault remained unchanged.
+>
+> **Boundaries unchanged:** no GitHub/HTTP/MCP transport, worker/recovery, persistence, source-text publication or source writes in V2.1. Public Vault source content remains denied by default.
+>
+> The earlier evidence section below refers to the previous implementation revision `9b57c68` and is retained as history; it is superseded by the current evidence above.
 
 ## Назначение
 
@@ -101,7 +121,7 @@ CI workflow: `.github/workflows/sfra-e3-v2-1-application-tests.yml`. Он зап
 Репозиторий и GitHub Issues/comments публичные. Публикация raw_text, excerpts, quotes, titles, paths и source fragments запрещена по умолчанию. V2.1 не содержит механизма сериализации или внешней публикации содержимого Vault.
 
 
-## Фактические результаты проверки — 2026-11-17
+## Исторические результаты предыдущей ревизии — HEAD 9b57c68 (superseded)
 
 Проверенный implementation HEAD: `9b57c68a4d74240432a530f941f38e06c1100d3b`.
 
