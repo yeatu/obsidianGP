@@ -3,6 +3,7 @@
 from .identity import MatchPlan, build_match_plan, content_hash
 from .indexer import IndexResult, get_database_summary, index_vault, read_markdown_file
 from .lookup import (
+    CurrentNodeAddress,
     DocumentLookupResult,
     DocumentRecord,
     NodeLookupResult,
@@ -10,10 +11,13 @@ from .lookup import (
     NodeRecord,
     NodeNeighborsResult,
     NodeParentResult,
+    SourceScopeResult,
     get_document_by_id,
     get_neighbors_by_id,
     get_node_by_id,
     get_parent_by_id,
+    read_source_scope,
+    resolve_current_node,
 )
 from .models import ParsedDocument, Passage, SourceSpan, StructuralNode
 from .parser import (
@@ -33,6 +37,10 @@ from .storage import connect_database, save_parsed_document
 
 __all__ = [
     "IndexResult",
+    "CurrentNodeAddress",
+    "SourceScopeResult",
+    "read_source_scope",
+    "resolve_current_node",
     "NodeLookupResult",
     "NodeLookupStatus",
     "NodeRecord",

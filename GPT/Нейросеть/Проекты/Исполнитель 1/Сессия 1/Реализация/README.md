@@ -81,119 +81,74 @@ sfra-index info --db /path/outside/Vault/.sfra-index/structure.sqlite3
 
 The index directory must be outside the source Vault. The parser reads UTF-8 with `newline=""` and preserves source LF/CRLF. Empty Markdown files are represented as documents with zero bytes and a document-root node. Deleted source files remain in SQLite with document status `deleted`, and their former active nodes become `stale`.
 
-## Source-verified exact node lookup (E1)
+## Atomic Source Scope API (E1)
 
-The public API `get_node_by_id` returns a current Structural Node only after verifying it against the original Markdown file. The database path is explicit; no package-level global database configuration is used.
+The canonical public API is \`read_source_scope\`. It reads one source scope through one SQLite read transaction and one safe source-file read. The four legacy methods remain public compatibility wrappers over this implementation; they do not maintain separate lookup paths.
 
-```python
-from pathlib import Path
-from sfra_indexer import NodeLookupStatus, get_node_by_id
-
-result = get_node_by_id(
-    db_path=Path("/path/to/restored-index/structure.sqlite3"),
-    node_id="node_<UUID4>",
-    expected_hash="sha256:<64 lowercase hex>",
-    vault_root=Path("/path/to/checkout/ГП"),
-)
-
-if result.status is NodeLookupStatus.OK:
-    print(result.node.raw_text)  # exact slice from the current Markdown file
-else:
-    print(result.status.value, result.error_code)
-    assert result.node is None
-```
-
-The successful response includes `node_id`, `content_hash`, `source_path`, `node_type`, `parent_node_id`, `heading_path`, exact `raw_text`, line/character/UTF-8-byte coordinates and the verified whole-file `source_sha256`. `NodeLookupResult.to_dict()` emits `{"status": "...", "node": null}` for every unsuccessful status.
-
-Possible statuses:
-
-- `ok`: the active node and its exact source slice were verified.
-- `stale_source`: the current file is missing/changed, or the requested Hash is no longer current.
-- `deleted`: the indexed document or node address was deleted.
-- `ambiguous`: matching history does not identify one safe current node.
-- `not_found`: the Node ID is absent from the index.
-- `invalid_request`: malformed Node ID/Hash, database path, or Vault root.
-- `integrity_error`: damaged SQLite/history, unsafe stored path, invalid coordinates, unsupported secure-open semantics, or inconsistent stored data.
-
-The API opens SQLite in read-only/query-only mode and never calls the schema-creating `connect_database()`. It checks the complete event history, saved-text and latest-version integrity before resolving terminal statuses. For an active node it then opens the source under the supplied Vault root using descriptor-relative no-follow resolution, checks file identity before/after reading, hashes the whole file, reconstructs the exact slice using Python character offsets, cross-checks UTF-8 byte and line offsets, and compares the slice SHA-256 with both the stored Content Hash and `expected_hash`. No text is returned for a failed status. The stored `raw_text` is only a consistency witness, never the returned source.
-
-The current schema stores a relative path, not the Git ref. The caller must therefore pass the intended Vault checkout root explicitly. The persistence workflow records that checkout's ref and actual commit SHA in the manifest as described below.
-
-
-## Public source-reading interface for E3
-
-The package exposes four source-reading operations through sfra_indexer. E3 must use these public functions and result types; it must not query the implementation's SQLite tables directly.
-
-All four operations take the same anchor and environment:
-
-~~~python
+\`\`\`python
 from pathlib import Path
 from sfra_indexer import (
-    get_document_by_id,
-    get_neighbors_by_id,
-    get_node_by_id,
-    get_parent_by_id,
+    NodeLookupStatus,
+    read_source_scope,
+    resolve_current_node,
 )
 
-db_path = Path("/path/to/restored-index/structure.sqlite3")
-vault_root = Path("/path/to/the/selected/checkout/ГП")
+db_path = Path("/path/to/isolated-snapshot/state/structure.sqlite3")
+vault_root = Path("/path/to/the-matching-checkout/ГП")
+snapshot_id = "sha256:<manifest-digest-computed-by-E3>"
 
-node = get_node_by_id(db_path, node_id, expected_hash, vault_root)
-parent = get_parent_by_id(db_path, node_id, expected_hash, vault_root)
-neighbors = get_neighbors_by_id(db_path, node_id, expected_hash, vault_root)
-document = get_document_by_id(db_path, node_id, expected_hash, vault_root)
-~~~
+address = resolve_current_node(
+    db_path, "node_<UUID4>", snapshot_id=snapshot_id
+)
+if address.status is NodeLookupStatus.OK:
+    result = read_source_scope(
+        db_path,
+        vault_root,
+        address.node_id,
+        address.content_hash,
+        scope="parent",  # node | parent | neighbors | document
+        snapshot_id=address.snapshot_id,
+    )
+\`\`\`
 
-### Shared address and version rules
+### Four scopes
 
-- The input address is always the exact pair node_id + expected_hash. The pair addresses the current Structural Node; the API never searches by text or chooses a similar node.
-- The SQLite path and selected Vault root are explicit arguments. No environment variable, global package setting, or implicit checkout selection is used.
-- The anchor must pass the same schema-v2 DB-only preflight and current source verification as get_node_by_id.
-- Every additional NodeRecord returned by a relation operation is independently resolved by its current node_id + content_hash and verified against the same source checkout.
-- stale_source, deleted, ambiguous, not_found, invalid_request and integrity_error are propagated as result statuses. On any failed operation, all content fields for that operation are null; no partial parent, neighbor or document text is returned.
-- Historical hashes are not accepted as a way to retrieve an older version. A changed anchor Hash returns stale_source; a deleted or ambiguous anchor returns its corresponding status.
-- All success text is read from current Markdown bytes. SQLite raw_text remains a consistency witness only.
+- \`node\`: the exact target Structural Node.
+- \`parent\`: target and its immediate structural parent, when present.
+- \`neighbors\`: target and its immediate previous/next siblings under the same parent, in source order. An ambiguous immediate neighbor fails the whole request; the implementation never skips it.
+- \`document\`: the complete original Markdown file, byte-for-byte as decoded from strict UTF-8. It is returned as \`result.document.raw_text\`; it is not reconstructed from SQLite node versions.
 
-### 1. Node
+For \`node\`, \`parent\`, and \`neighbors\`, \`result.fragments\` contains the verified NodeRecords. Every NodeRecord carries \`node_id\`, \`content_hash\`, \`source_path\`, \`document_hash\` (the exact \`documents.source_sha256\` value), \`index_generation\` (the exact \`documents.generation\` value), exact \`raw_text\`, coordinates, and only the metadata already stored for that node. No policy fields such as \`preservation\`, \`required_with\`, or \`parent_context_required\` are synthesized.
 
-get_node_by_id(db_path, node_id, expected_hash, vault_root) -> NodeLookupResult
+For \`document\`, \`result.document\` contains \`source_path\`, \`document_hash\`, \`index_generation\`, byte size, the anchor Node ID/Content Hash, and the complete Markdown text. \`result.anchor\` contains the independently verified anchor fragment.
 
-Returns exactly one currently active and unambiguous Structural Node. The node text is the original source slice identified by the stored half-open character offsets, with verified UTF-8 byte offsets, line coordinates, whole-file SHA-256 and expected Content Hash.
+### Atomicity and failure behavior
 
-### 2. Parent
+A scope call opens one existing SQLite file in read-only/query-only mode, begins one read transaction, and uses that connection for all node, parent, neighbor, document, version, lifecycle and event queries. The associated Markdown file is opened once beneath the supplied Vault root; its whole-file hash is checked once, and all selected node slices are derived from those same bytes. Related nodes must belong to the same document record, path, source hash and current document generation as the anchor.
 
-get_parent_by_id(db_path, node_id, expected_hash, vault_root) -> NodeParentResult
+If any required record is absent, stale, ambiguous, deleted, inactive, cross-document, incorrectly bound, or fails Hash/coordinate/source validation, the call returns an explicit status and an empty \`fragments\` list. It never returns a partial parent, neighbor set, or document. Text is never sourced from historical \`node_versions\`.
 
-The node field is the verified anchor. parent is its immediate structural parent according to the current parent_node_pk, cross-checked against the latest node_versions.parent_node_id. The parent is then read through the same public Node ID + Content Hash checks.
+\`snapshot_id\` is opaque to E1. It is echoed unchanged in every \`SourceScopeResult\` and \`CurrentNodeAddress\`. E1 does not verify Git commits, manifests, SnapshotRef, or the relationship between a sidecar and a Vault commit. E3 owns that verification and passes the matching \`db_path\`, \`vault_root\`, and \`snapshot_id\`.
 
-A document-root node has no parent and returns status="ok", parent=null. If the parent is stale, deleted, ambiguous or cannot be source-verified, the operation fails with that status and returns neither anchor nor parent content.
+### Resolving the current address
 
-### 3. Neighbors
+\`resolve_current_node(db_path, node_id, *, snapshot_id)\` returns a \`CurrentNodeAddress\` with the current \`node_id\`, \`content_hash\`, \`source_path\`, \`document_hash\`, and \`index_generation\`. It uses only the exact Node ID, accepts only one active/unambiguous current row, and does not perform fuzzy matching or return historical versions. This resolver is DB-only because it has no Vault argument; the subsequent \`read_source_scope\` call verifies the address against the original Markdown.
 
-get_neighbors_by_id(db_path, node_id, expected_hash, vault_root) -> NodeNeighborsResult
+### Compatibility methods
 
-Returns only the immediate previous and next siblings in source order. A sibling is a current structural node in the same document with the same parent; the ordering key is the structural source range (char_start, char_end, node_pk as a deterministic tie-breaker).
+The existing public methods remain available and delegate to the unified API:
 
-Document boundaries are represented by previous=null or next=null. An ambiguous immediate sibling is not skipped to select a more distant neighbor: the whole operation returns ambiguous. A selected sibling is returned only after its own current Hash and source slice have been verified. If any selected neighbor is stale, deleted, ambiguous or otherwise invalid, no partial neighbor list is returned.
+- \`get_node_by_id\` → \`scope="node"\`
+- \`get_parent_by_id\` → \`scope="parent"\`
+- \`get_neighbors_by_id\` → \`scope="neighbors"\`
+- \`get_document_by_id\` → \`scope="document"\`
 
-### 4. Document
+### Result statuses
 
-get_document_by_id(db_path, node_id, expected_hash, vault_root) -> DocumentLookupResult
+The common status set is \`ok\`, \`stale_source\`, \`deleted\`, \`ambiguous\`, \`not_found\`, \`invalid_request\`, and \`integrity_error\`. On any failed Source Scope operation, \`fragments=[]\`, \`anchor=null\`, and \`document=null\`. Error messages/codes do not contain source excerpts or absolute paths.
 
-The Node ID + Content Hash pair is an anchor into one document. After validating the anchor, the operation reads the complete Markdown file at the indexed relative path, checks its full SHA-256 against documents.source_sha256 (surfaced as anchor.source_sha256), and strictly decodes UTF-8 without newline or Unicode normalization. document.raw_text is the complete original file; document.source_path, document.source_sha256 and document.size_bytes describe that exact byte sequence.
-
-If the anchor is stale, deleted or ambiguous, the document is not returned. If the file changes or disappears between anchor verification and complete-document reading, the operation returns stale_source without text.
-
-### Result types
-
-- NodeLookupResult: status, node, optional error_code/message.
-- NodeParentResult: status, verified anchor node, optional parent, optional error.
-- NodeNeighborsResult: status, verified anchor node, optional previous/next, optional error.
-- DocumentLookupResult: status, verified anchor, optional complete document, optional error.
-- DocumentRecord: source_path, source_sha256, size_bytes, complete source raw_text.
-
-All result classes provide to_dict(). For failure results, the content fields are null; safe error details contain codes and messages only, never excerpts or absolute source paths.
-
+No token budget or content truncation is applied. E1 returns complete verified source text; Context Builder budgeting belongs to E3.
+ 
 ## Structural model
 
 - Headings H1–H6 form nested section nodes. A heading's `raw_text` and span include descendant sections up to the next heading of equal or higher rank. Its `content_spans` separately list its own heading line and direct block content, excluding child heading sections.
