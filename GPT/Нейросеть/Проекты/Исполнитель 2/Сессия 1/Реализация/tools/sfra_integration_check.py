@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 import re
@@ -84,7 +85,7 @@ def main() -> int:
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--temp-root", required=True, type=Path)
     parser.add_argument("--state-branch-sha", required=True)
-    parser.add_argument("--package-dir", required=True, type=Path)
+    parser.add_argument("--package-dir", type=Path, default=None)
     parser.add_argument("--package-dir", required=True, type=Path)
     parser.add_argument("--max-sources", type=int, default=5)
     args = parser.parse_args()
@@ -141,7 +142,13 @@ def main() -> int:
     lemmas = {word: morph.parse(word)[0].normal_form for word in forms}
     if len(set(lemmas.values())) != 1:
         raise RuntimeError(f"pymorphy3 did not normalize the test forms to one lemma: {lemmas}")
-    package_root = args.package_dir.resolve()
+    if args.package_dir is not None:
+        package_root = args.package_dir.resolve()
+    else:
+        package_spec = importlib.util.find_spec("sfra_search")
+        if package_spec is None or not package_spec.submodule_search_locations:
+            raise RuntimeError("Installed sfra_search package cannot be located")
+        package_root = Path(next(iter(package_spec.submodule_search_locations)))
     if not package_root.is_dir() or not (package_root / "__init__.py").is_file():
         raise RuntimeError(f"sfra_search package directory is invalid: {package_root}")
     python_sources = list(package_root.rglob("*.py"))
