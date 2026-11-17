@@ -138,11 +138,12 @@ def source_response(
     role: str = "target",
     fragments: list[dict[str, object]] | None = None,
     snapshot_id: str | None = None,
+    scope: str = "node",
 ) -> dict[str, object]:
     return {
         "status": status,
         "snapshot_id": snapshot_id or SNAPSHOT.snapshot_id,
-        "scope": "node",
+        "scope": scope,
         "fragments": [fragment(role)] if fragments is None and status == "ok" else (fragments or []),
         "diagnostics": [{
             "code": "source_checked",
@@ -212,7 +213,7 @@ def test_read_source_service_returns_typed_result_for_all_scopes(
     scope: str,
     role: str,
 ) -> None:
-    reader = FakeSourceReader(source_response(role=role))
+    reader = FakeSourceReader(source_response(role=role, scope=scope))
     service = ReadSourceService(reader)
     request = source_read_request(scope=scope)
 
