@@ -210,17 +210,17 @@ Structural adapter соблюдает принцип active-only:
 
 ## Fixture-тесты и интеграция E2
 
-Итоговый PR run: https://github.com/yeatu/obsidianGP/actions/runs/44006287530
+Итоговый PR run: https://github.com/yeatu/obsidianGP/actions/runs/44010014722
 
-На Python 3.13 выполнено **64 passed, 0 failed, 0 errors, 0 skipped**. Искусственные SQLite fixtures проверяют active / ambiguous / stale / deleted, stale_generation, удалённый документ, пустую выдачу, отсутствие ID у ambiguous-узла, null document_hash, скрытие ambiguous parent_node_id, read-only получение источников и CLI parser.
+На Python 3.13 в пересобранном архивном пакете выполнено **64 passed, 0 failed, 0 errors, 0 skipped**. Искусственные SQLite fixtures проверяют active / ambiguous / stale / deleted, stale_generation, удалённый документ, пустую выдачу, отсутствие ID у ambiguous-узла, null document_hash, скрытие ambiguous parent_node_id, read-only получение источников и CLI parser.
 
-Отдельно выполнен real-Vault сценарий на актуальном manifest E1:
+Отдельно выполнен real-Vault сценарий на актуальном manifest E1; workflow предварительно пересобрал архивный пакет и наложил канонический active-only structural.py:
 
-- E2 commit: 08d0d0de51323f893a77d8f86ede8211a9cb3052.
+- E2 tested commit: 78466b6dc400f96f2821391434553bc1e3a2326b.
 - E1 state branch SHA: fb0b45ae0e5043e342c790d43e2b341ca65d7f2b.
 - SHA-256 manifest: sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072.
 - SHA-256 SQLite: sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674.
-- SQLite quick_check: ok; schema 2.
+- SQLite PRAGMA integrity_check: ok; schema 2.
 - 66 документов, 9 080 active-узлов; в этом снимке E1 ambiguous/stale/deleted узлов и удалённых документов не было.
 - pymorphy3 2.0.6: формы «реанимации» и «реанимацию» нормализованы к «реанимация»; оба запроса вернули три одинаковые пары node_id + content_hash.
 - Три источника получены через get-source; SHA-256 каждого raw_text совпал с content_hash.

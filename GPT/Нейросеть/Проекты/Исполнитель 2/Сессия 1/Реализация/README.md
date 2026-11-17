@@ -5,8 +5,8 @@
 ## Контрольные ссылки
 
 - [PR №7: исправление ambiguous-статусов и повторная интеграция](https://github.com/yeatu/obsidianGP/pull/7)
-- [Итоговый GitHub Actions run](https://github.com/yeatu/obsidianGP/actions/runs/44007319361)
-- [Actions artifact: JSON, JUnit XML и отчёт](https://github.com/yeatu/obsidianGP/actions/runs/44007319361/artifacts/14295396277)
+- [Итоговый GitHub Actions run](https://github.com/yeatu/obsidianGP/actions/runs/44010014722)
+- [Actions artifact: JSON, JUnit XML и отчёт](https://github.com/yeatu/obsidianGP/actions/runs/44010014722/artifacts/14295409315)
 - [Подробный отчёт с SHA и результатами](./Результат.md)
 - [Исходный пакет sfra_search](./source/)
 - [Fixture-тесты адаптера](./source/tests/test_structural_runtime.py)
@@ -23,14 +23,14 @@ E2 не пытается разрешать неоднозначность и н
 
 ## Проверки
 
-Итоговый Actions run на commit 6e5a1cca0bfacbcb610bb394cc8080fba960c324 завершился success по всем шагам.
+Итоговый Actions run на commit 78466b6dc400f96f2821391434553bc1e3a2326b завершился success по всем шагам. Workflow пересобрал архив, применил active-only overlay и проверил именно пересобранный пакет.
 
 - 64 fixture-теста прошли; 0 failures, 0 errors, 0 skipped.
 - CLI smoke checks для sfra run-once --help и sfra get-source --help успешны.
 - Реальный Vault: 66 документов, 9 080 активных узлов.
 - SHA manifest: sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072.
 - SHA структурной SQLite: sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674.
-- SQLite quick_check: ok; schema 2.
+- SQLite PRAGMA integrity_check: ok; schema 2.
 - Morphology: pymorphy3 2.0.6; обе формы реанимации / реанимацию нормализованы к реанимация.
 - Оба запроса вернули по три active-результата; три пары node_id + content_hash совпали.
 - Три оригинальных источника получены отдельно; SHA-256 каждого raw_text совпал с content_hash.
