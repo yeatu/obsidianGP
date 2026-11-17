@@ -34,6 +34,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e "$B1_DIR"
           python -m pip install -e "$C1_DIR[test]"
+      - name: Install real E2 search runtime for adapter integration test
+        shell: bash
+        run: |
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install -e "$E2_DIR"
       - name: Run B1 regression tests
         run: |
           B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
