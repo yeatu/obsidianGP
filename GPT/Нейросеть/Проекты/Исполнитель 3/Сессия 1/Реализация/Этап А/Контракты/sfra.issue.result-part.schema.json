@@ -40,12 +40,14 @@
     },
     "marker": {
       "type": "string",
-      "pattern": "^<!-- sfra:request:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:attempt:[1-3]:part:[1-9][0-9]*/[1-9][0-9]* -->$"
+      "pattern": "^<!-- sfra:request:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:attempt:[1-3]:part:[1-9][0-9]*/[1-9][0-9]* -->$",
+      "description": "Machine-readable marker carried inside the JSON object. Do not publish this value as a separate line."
     },
     "content": {
       "type": "string",
       "minLength": 1,
       "description": "One UTF-8-safe chunk of the compact serialized result. Chunks are concatenated in part_index order; a single chunk need not be standalone JSON."
     }
-  }
+  },
+  "description": "The complete body of one SFRA result Issue comment. The body MUST be exactly one JSON object matching this schema, with no marker line, Markdown fence, prefix, suffix, or surrounding text. The marker is a JSON string property, not an out-of-band line."
 }

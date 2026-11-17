@@ -92,8 +92,12 @@
           "minimum": 1
         },
         "document_hash": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Whole-document SHA-256 from E1 documents.source_sha256; null is allowed only for scope=node."
         },
         "index_generation": {
           "type": "integer",
@@ -174,8 +178,12 @@
             "minimum": 0
           },
           "document_hash": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Whole-document SHA-256 for the source_path; null is allowed only for scope=node."
           },
           "index_generation": {
             "type": "integer",
@@ -356,6 +364,55 @@
           },
           "fragments": {
             "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          },
+          "requested": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "parent",
+                  "neighbors",
+                  "document"
+                ]
+              }
+            },
+            "required": [
+              "scope"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "requested"
+        ]
+      },
+      "then": {
+        "properties": {
+          "target_source": {
+            "properties": {
+              "document_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          },
+          "fragments": {
+            "items": {
+              "properties": {
+                "document_hash": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            }
           }
         }
       }

@@ -203,13 +203,26 @@ GitHub указывает для события issues, что оно имеет
 
     repository_full_name + issue_number + request_id
 
-В комментариях используется marker:
+Status comment использует marker:
 
     <!-- sfra:request:<request_id>:status -->
 
-Комментарии с результатом используют:
+Комментарии с результатом используют JSON-объект по схеме `sfra.issue.result-part.schema.json`. **Полное тело каждого result-комментария — ровно один JSON-объект**, без отдельной строки marker до/после объекта, без Markdown fence и без произвольного текста вокруг JSON.
 
-    <!-- sfra:request:<request_id>:attempt:<attempt_no>:part:<index>/<total> -->
+Пример структуры тела (это именно тело комментария, а не JSON-фрагмент внутри другого формата):
+
+    {
+      "protocol_version": "sfra.issue.v1",
+      "request_id": "<uuid-v4>",
+      "attempt_no": 1,
+      "part_index": 1,
+      "parts_total": 1,
+      "encoding": "utf-8-json-compact",
+      "marker": "<!-- sfra:request:<request_id>:attempt:1:part:1/1 -->",
+      "content": "<часть компактного JSON-результата>"
+    }
+
+HTML marker является значением JSON-поля `marker`; он **не** публикуется отдельной строкой и не извлекается из тела до JSON-разбора. Клиент сначала разбирает полное тело как строгий JSON, проверяет его по result-part schema, затем проверяет точное соответствие marker полям request_id, attempt_no, part_index и parts_total. Не допускаются префиксы/суффиксы, fenced-блоки или fallback-разбор marker из произвольного текста.
 
 Status comment содержит:
 - protocol_version;
@@ -218,27 +231,25 @@ Status comment содержит:
 - транспортный status;
 - attempt_no и max_attempts=3;
 - lease_expires_at (не null только в RUNNING);
-- source snapshot (commit SHA, index_generation, document/index manifest);
+- source snapshot (закреплённые source/sidecar commit SHA, manifest digest и версия SQLite/indexer);
 - result_manifest или error;
 - workflow run id и время обновления.
 
-Result manifest дополнительно содержит attempt_no, который обязан совпадать с top-level attempt_no в status comment. Worker сверяет это равенство. Каждая часть результата публикуется как JSON-объект по схеме `sfra.issue.result-part.schema.json`: protocol_version, request_id, attempt_no, part_index, parts_total, encoding, marker и content. Поле content — очередная UTF-8-safe строка компактного JSON-результата; отдельная часть сама по себе не обязана быть валидным JSON. Сборка выполняется только после соединения content по порядку и проверки длины и SHA-256.
+Result manifest дополнительно содержит attempt_no, который обязан совпадать с top-level attempt_no в status comment. Worker сверяет это равенство. Поле `content` result-part объекта — очередная UTF-8-safe строка компактного JSON-результата; отдельная часть сама по себе не обязана быть валидным JSON. Сборка выполняется только после соединения content по порядку и проверки длины и SHA-256.
 
-Payload comments содержат сериализованный результат. Тело каждого комментария состоит из marker на отдельной строке и следующего за ним content. Для небольшого ответа используется одна часть. Для большого ответа:
-- компактный JSON сериализуется в UTF-8 без форматирующих переносов;
+Для небольшого ответа используется одна часть. Для большого ответа:
+- компактный JSON результата сериализуется в UTF-8 без форматирующих переносов;
 - content делится на части не более 45 KiB UTF-8, только по границам code points;
-- каждая часть публикуется отдельным комментарием с marker, содержащим request_id, attempt_no и part_index/parts_total;
-- worker разбирает marker и content в объект по схеме sfra.issue.result-part.schema.json;
-- worker проверяет, что request_id/attempt_no/index/total из marker совпадают с полями записи, индексы идут подряд от 1 до parts_total, а число частей равно result_manifest.parts;
+- каждая часть публикуется отдельным комментарием, полное тело которого является JSON-объектом по result-part schema;
+- worker проверяет, что request_id/attempt_no/index/total в marker совпадают с полями объекта, индексы идут подряд от 1 до parts_total, а число частей равно result_manifest.parts;
 - status comment содержит attempt_no, число частей, общий размер и SHA-256 всей последовательности content;
 - клиент соединяет content строго по part_index, проверяет общий размер и hash, затем разбирает единый JSON.
 
-Отдельный комментарий не должен содержать больше 45 KiB content в UTF-8; лимит проверяется по байтам, а не по числу Unicode-символов.
+45 KiB — лимит только для content; полный JSON body должен оставаться внутри лимита GitHub Issue Comment. Лимит content проверяется по UTF-8 байтам, а не по числу Unicode-символов.
 
 Такой механизм не обрезает исходный raw_text и не меняет контракт Context Pack/SourceReadResult. Если часть комментариев не опубликована, запрос не переводится в DONE.
 
 При повторе статусный комментарий с тем же request_id обновляется. Маркеры частей включают attempt_no, поэтому старые части другой попытки не могут попасть в сборку нового результата. DONE и FAILED с retryable=false являются терминальными и дают no-op. FAILED с retryable=true может быть повторён recovery workflow с тем же request_id после retry_after и только пока не исчерпан max_attempts. Для повторной попытки создаётся новая группа result-part comments с новым attempt_no; status comment указывает только на manifest текущей попытки.
-
 ## 5. Идемпотентность и защита от потери запросов
 
 ### 5.1. Источник истины
@@ -316,79 +327,108 @@ Recovery sweep — страховка от задержанных/пропуще
 
 ## 6. Постоянное sidecar-хранилище
 
-### 6.1. Наблюдаемое состояние текущей реализации
+### 6.1. Актуальное состояние E1 на 17 ноября 2026 года
 
-В ветке executor-1/sfra-indexer-session-1 README Исполнителя 1 указывает SQLite sidecar structure.sqlite3 во внешнем каталоге индекса. Workflow Stage B/C создаёт его в /tmp/sfra-vault-sidecar. Файл SQLite исключён через .gitignore (*.sqlite3, *.db).
+Постоянное хранилище уже реализовано в E1 и не должно проектироваться заново под прежнее имя:
 
-Следовательно, действующий workflow подтверждает корректность индексации, но не сохраняет SQLite sidecar между независимыми GitHub Actions runs. Это необходимо устранить до полноценного Issue MVP. Стабильные Node ID и история версий существуют в SQLite, но исчезают вместе с временным runner, если база не переносится в постоянное хранилище.
+- ветка: `sfra-state` (orphan branch с отдельным root commit);
+- SQLite: `state/structure.sqlite3`;
+- manifest: `state/manifest.json`;
+- разрешённое дерево ветки: `README.md`, `state/structure.sqlite3`, `state/manifest.json`;
+- workflow: `.github/workflows/sfra-state-persistence.yml`.
 
-### 6.2. Предлагаемое хранилище MVP
+Старая схема `sfra-index-state/.sfra-state/` не существует и не должна использоваться worker. Ветка `sfra-state` публичная, поскольку репозиторий публичный. Опубликованная SQLite содержит `raw_text` и историю версий; после инициализации эти данные будут доступны читателям репозитория.
 
-Предлагается отдельная ветка:
+Первичная инициализация выполнена, а последующий обычный run подтвердил восстановление между независимыми GitHub Actions runner. В run [43989221734](https://github.com/yeatu/obsidianGP/actions/runs/43989221734) событие `push` прошло шаги `Verify and restore persisted SQLite`, индексацию, SQLite Backup API snapshot, проверку manifest и fast-forward публикацию. `sfra-state` теперь содержит `README.md`, `state/structure.sqlite3` (21 893 120 байт) и `state/manifest.json`; актуальный state commit — `14a6ae3b7b8e31bc0dd5def1d092c0512ae6501e`. Manifest указывает `source_commit=d04fac60e13025ba2cd8f897780d699b098dad0f`, `database_sha256=sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674`, SQLite schema v2 и indexer 0.2.0. Следовательно, production restore → re-index → snapshot → publish подтверждён на последующем runner. Это не снимает отдельного требования владельца данных принять публичность ветки: SQLite содержит исходный `raw_text` и историю версий.
 
-    sfra-index-state
+### 6.2. Реальная структура и manifest E1
 
-Структура:
+Worker использует только следующую структуру:
 
-    .sfra-state/
-      manifest.json
-      structure.sqlite3
-      search-state.sqlite3       # если E2 хранит отдельное постоянное состояние сущностей/алиасов
+    sfra-state/
+      README.md
+      state/
+        structure.sqlite3
+        manifest.json
 
-Ветка содержит только служебное состояние, не меняет ГП/ и не вливается в main.
+Фактический manifest E1 (format_version=1, SQLite schema v2) содержит следующие поля:
 
-manifest.json должен включать:
-- protocol/state schema version;
-- commit SHA Vault, для которого sidecar актуален;
-- commit SHA версии индексатора;
-- generation/manifest version;
-- SQLite schema versions;
-- количество активных документов/узлов;
-- дату последней синхронизации;
-- SHA-256 каждого SQLite файла.
+    {
+      "format_version": 1,
+      "database": "state/structure.sqlite3",
+      "database_sha256": "sha256:<64 lowercase hex>",
+      "sqlite_schema_version": 2,
+      "source_repository": "yeatu/obsidianGP",
+      "source_branch": "executor-1/sfra-indexer-session-1",
+      "source_commit": "<40-char commit SHA>",
+      "indexer_version": "0.2.0",
+      "workflow_run_id": "<GitHub Actions run id>",
+      "updated_at": "<UTC ISO-8601 timestamp>"
+    }
 
-structure.sqlite3 сохраняет Node ID, структурные узлы, node_versions, stale/ambiguous состояния и match events Исполнителя 1. Если E2 хранит собственный реестр сущностей/алиасов и подтверждённые аннотации, они должны находиться в постоянном search-state.sqlite3 либо в согласованной постоянной таблице, но не в ephemeral FTS.
+Соответствие manifest E1 и canonical source_snapshot E3:
 
-FTS5 и Context Pack могут пересобираться/создаваться во временном каталоге на каждый запрос. Постоянная часть — идентичность Node ID, Content Hash, история версий и подтверждённые поисковые аннотации.
+| Поле E1 manifest | Поле E3 | Правило |
+|---|---|---|
+| `source_repository` | `source_repository` | Должно совпасть с разрешённым репозиторием |
+| `source_branch` | `source_branch` | Проверяется по allowlist; сейчас E1 использует `executor-1/sfra-indexer-session-1` |
+| `source_commit` | `vault_commit_sha` | Это commit, из которого E1 индексировал Vault; worker checkout-ит ровно этот SHA, не текущий `main` |
+| `database` | `database_path` | Сейчас строго `state/structure.sqlite3` |
+| `database_sha256` | `database_sha256` | Сравнивается с SHA-256 скачанного SQLite-файла |
+| `format_version` | `manifest_format_version` | Сейчас 1 |
+| `sqlite_schema_version` | `sqlite_schema_version` | Проверяется с фактической SQLite schema |
+| `indexer_version` | `indexer_version` | Сейчас 0.2.0 |
+| `workflow_run_id`, `updated_at` | те же диагностические поля | Сохраняются в source_snapshot |
 
-Конкретное разбиение DB-файлов требует согласования с Исполнителями 1 и 2. Главный инвариант — база с Node ID/историей не является временным артефактом runner.
+Дополнительные метаданные, которых **нет** в E1 manifest:
+- `sidecar_branch` — фиксированное имя `sfra-state`;
+- `sidecar_commit_sha` — SHA commit ветки `sfra-state`, полученный Git checkout/ref;
+- `manifest_sha256` — worker вычисляет SHA-256 точных байтов `state/manifest.json`; E1 не хранит hash самого manifest внутри manifest;
+- `index_generation` верхнего транспортного snapshot — `null`, потому что E1 SQLite v2 имеет generation на уровне документа, а не единый глобальный generation. Для конкретного source_path E2 получает `documents.generation`; это значение передаётся в get_node/SourceReadResult и сравнивается внутри одного документа, но не между разными документами.
 
-### 6.3. Отдельный workflow синхронизации sidecar
+Нельзя ожидать от E1 manifest полей `vault_commit_sha`, `manifest_sha256` или глобального `index_generation`. Нельзя переименовывать `database_sha256` в hash manifest: это hash самого SQLite файла.
 
-Предусмотреть отдельный workflow, который обновляет sfra-index-state при изменении ГП/** или версии индексатора/поискового слоя:
+### 6.3. Источник whole-document hash и generation
 
-1. Получить точный commit SHA Vault.
-2. Получить текущую ветку sidecar.
-3. Загрузить постоянные SQLite базы и manifest.
-4. Запустить инкрементальную синхронизацию из текущего структурного индексатора.
-5. Обновить согласованный поисковый state.
-6. Выполнить checkpoint/close SQLite и проверить integrity.
-7. Сформировать manifest с SHA-256 и source commit SHA.
-8. Опубликовать новый commit только в sfra-index-state.
+В SQLite E1 v2 таблица `documents` содержит:
+- `source_sha256` — SHA-256 всего исходного Markdown-документа в точном UTF-8 представлении;
+- `generation` — номер версии именно этого документа, увеличиваемый при его обновлении.
 
-Этот workflow сериализуется общей группой:
+E2 должен получать `document_hash` из `documents.source_sha256` по тому же document/source_path, из которого получен узел. Это предпочтительный путь, а не попытка вывести hash документа из Content Hash отдельного узла. Если поле отсутствует в старой/неполной записи или не может быть однозначно сопоставлено, E2 возвращает `document_hash: null`; подставлять туда `content_hash` запрещено.
 
-    concurrency:
-      group: sfra-index-state
-      queue: max
+`index_generation` в ответе get_node означает документный `documents.generation`, а не глобальный номер всего Vault. Узлы одного source_path должны иметь одинаковые document_hash и index_generation в одном закреплённом snapshot. Для разных source_path эти generation могут различаться; общая идентичность snapshot определяется парой source commit + sidecar commit (и manifest digest).
 
-cancel-in-progress не используется. Для защиты от пропущенного события отдельный scheduled catch-up сравнивает manifest с текущим default branch и обновляет sidecar до актуального состояния. История версий сохраняется в постоянной SQLite базе; каждое обработанное состояние не должно сбрасывать Node ID.
+### 6.4. Реальный persistence workflow E1
 
-### 6.4. Issue worker — только чтение
+Workflow `.github/workflows/sfra-state-persistence.yml`:
+1. Checkout кода и Vault из `executor-1/sfra-indexer-session-1`.
+2. Checkout отдельной orphan-ветки `sfra-state`.
+3. Проверяет root commit без родителей и allowlist файлов.
+4. При уже существующих DB+manifest проверяет состояние и восстанавливает SQLite; при первичной инициализации требует `initialize_state=true`.
+5. Выполняет инкрементальную индексацию в RUNNER_TEMP, не меняя `ГП/`.
+6. Создаёт согласованный SQLite snapshot через Backup API, пишет manifest с точными полями §6.2 и проверяет его.
+7. Публикует обычным fast-forward push с проверкой remote HEAD и без force push.
 
-Issue workflow:
-- checkout Vault на конкретный commit SHA;
-- checkout sfra-index-state на конкретный commit SHA;
-- проверяет manifest.vault_commit_sha == checked_out_vault_sha;
-- сверяет SHA-256 SQLite файла с manifest;
-- открывает постоянную БД read-only;
-- строит FTS5/временные структуры в RUNNER_TEMP;
-- выполняет запрос;
-- не записывает изменения в sfra-index-state, main или ГП/.
+Этот workflow сериализован concurrency group `sfra-state-production`. Он обновляет только `sfra-state`; E3 worker не публикует и не изменяет sidecar.
 
-Если manifest не соответствует Vault snapshot, запрос остаётся PENDING с диагностикой INDEX_NOT_READY. Он не должен выполнять поиск по несогласованным данным. Recovery sweep повторит запрос после синхронизации sidecar.
+### 6.5. Issue worker — только чтение
 
-Все фрагменты одного read_source читаются из одного закреплённого snapshot. Node ID + expected_hash проверяется до выдачи, а SHA-256 считается повторно от точного UTF-8 raw_text.
+До вызова application service worker обязан:
+1. Checkout-ить `sfra-state` и зафиксировать его фактический HEAD как `sidecar_commit_sha`.
+2. Прочитать `state/manifest.json`, строго проверить обязательные поля/версии и `database == state/structure.sqlite3`.
+3. Проверить `source_repository` и allowlist `source_branch`; checkout-ить исходный репозиторий на точном `source_commit` из manifest. Значение `source_commit` становится E3 `vault_commit_sha`. Worker не подменяет его SHA текущего `main` или SHA из Issue body.
+4. Скачать `state/structure.sqlite3`, сверить SHA-256 с `database_sha256`, выполнить SQLite integrity/schema checks.
+5. Вычислить SHA-256 точных байтов manifest и записать его как E3 `manifest_sha256`.
+6. Открыть SQLite read-only; FTS5 и временные поисковые структуры строить в RUNNER_TEMP.
+
+Проверка snapshot:
+- E3 `vault_commit_sha` равен manifest `source_commit` и SHA checkout исходного кода/Vault;
+- `sidecar_branch == "sfra-state"`, `sidecar_commit_sha` является commit, из которого прочитаны manifest и DB;
+- hash скачанной DB равен manifest `database_sha256`;
+- `manifest_sha256` вычислен из тех же байтов manifest, по которым worker выполнил JSON parsing.
+
+Если одна из проверок не проходит, sidecar не используется, результат не выдаётся; запрос остаётся PENDING с диагностикой `INDEX_NOT_READY` или завершается соответствующим integrity error по правилам transport. Worker никогда не записывает в `sfra-state`, `main` или `ГП/`.
+
 
 ## 7. Права GitHub Actions
 
@@ -399,7 +439,7 @@ Issue workflow:
 | Issue request worker | contents: read, issues: write | Читать Vault и sidecar; создать/обновить Issue Comments |
 | Issue recovery sweep | contents: read, issues: write | Найти ожидающие Issues и восстановить их обработку |
 | Sidecar build job | contents: read | Читать Vault, исходники компонентов и текущий sidecar |
-| Sidecar publish job | contents: write | Записать SQLite и manifest только в ветку sfra-index-state |
+| Sidecar publish job | contents: write | Записать SQLite и manifest только в ветку sfra-state |
 | Unit tests | минимум contents: read или без дополнительных write scopes | Читать исходники и запускать тесты |
 
 Issue worker никогда не получает contents: write. Публикация результата требует только issues: write. contents: write выделяется отдельному workflow/job обслуживания sidecar.
@@ -491,7 +531,7 @@ Issue worker никогда не получает contents: write. Публик�
 
 ## 12. Что подтвердить с координатором/предыдущими исполнителями
 
-1. Допускается ли отдельная публичная ветка sfra-index-state для постоянного хранения SQLite. Поскольку репозиторий публичный, ветка будет публичной.
+1. Координатору следует явно принять публичность ветки sfra-state: после инициализации она будет содержать исходные raw_text и историю версий SQLite.
 2. Где хранится постоянная часть реестра сущностей/алиасов E2: в отдельном search-state DB или в общей базе. FTS5 при этом может быть временной.
 3. Какой точный workflow/branch является источником актуального кода E1/E2 при sidecar refresh.
 4. Требуется ли разрешать несколько авторов в SFRA_ALLOWED_ISSUE_AUTHORS, кроме текущего владельца репозитория.

@@ -82,30 +82,90 @@
           "additionalProperties": false,
           "required": [
             "vault_commit_sha",
+            "source_repository",
+            "source_branch",
             "sidecar_branch",
             "sidecar_commit_sha",
+            "manifest_format_version",
+            "database_path",
+            "database_sha256",
+            "sqlite_schema_version",
+            "indexer_version",
+            "workflow_run_id",
+            "updated_at",
             "index_generation",
             "manifest_sha256"
           ],
           "properties": {
             "vault_commit_sha": {
               "type": "string",
-              "pattern": "^[0-9a-f]{40}$"
+              "pattern": "^[0-9a-f]{40}$",
+              "description": "E1 manifest.source_commit; the exact source commit used to index the Vault."
+            },
+            "source_repository": {
+              "type": "string",
+              "minLength": 1,
+              "description": "E1 manifest.source_repository."
+            },
+            "source_branch": {
+              "type": "string",
+              "minLength": 1,
+              "description": "E1 manifest.source_branch; runtime must validate against an allowlist."
             },
             "sidecar_branch": {
-              "type": "string"
+              "const": "sfra-state",
+              "description": "Actual E1 persistent state branch."
             },
             "sidecar_commit_sha": {
               "type": "string",
-              "pattern": "^[0-9a-f]{40}$"
+              "pattern": "^[0-9a-f]{40}$",
+              "description": "Git commit SHA of the checked-out sfra-state branch."
+            },
+            "manifest_format_version": {
+              "const": 1,
+              "description": "E1 manifest.format_version."
+            },
+            "database_path": {
+              "const": "state/structure.sqlite3",
+              "description": "E1 manifest.database."
+            },
+            "database_sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "description": "E1 manifest.database_sha256; digest of the SQLite file."
+            },
+            "sqlite_schema_version": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "E1 manifest.sqlite_schema_version."
+            },
+            "indexer_version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "E1 manifest.indexer_version."
+            },
+            "workflow_run_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "E1 manifest.workflow_run_id."
+            },
+            "updated_at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "E1 manifest.updated_at."
             },
             "index_generation": {
-              "type": "integer",
-              "minimum": 0
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Transport-wide snapshot has no single E1 generation and uses null. Per-document generation comes from documents.generation in get_node/read_source."
             },
             "manifest_sha256": {
               "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "description": "Computed by the worker over the exact manifest.json bytes; not a field stored in the E1 manifest."
             }
           }
         }
@@ -276,6 +336,9 @@
           "lease_expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "source_snapshot": {
+            "type": "object"
           }
         }
       }
