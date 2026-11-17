@@ -1,4 +1,4 @@
-"""Budget accounting for the atomic Included + Coverage context payload."""
+"""Budget accounting for Included source material and its provenance."""
 
 from __future__ import annotations
 
@@ -51,12 +51,12 @@ def make_included_entry(
     return entry
 
 
-def context_tokens(
+def included_tokens(
     included: Sequence[Mapping[str, Any]],
-    coverage: Sequence[Mapping[str, Any]],
     token_counter: TokenCounterProtocol,
 ) -> int:
-    payload = {"Included": list(included), "Coverage": list(coverage)}
+    """Count only Included content and provenance against budget_tokens."""
+    payload = {"Included": list(included)}
     return token_counter.count(compact_json(payload))
 
 
