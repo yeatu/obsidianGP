@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - executor-3/context-integration-stage-c1
+      - executor-3/v2-1-application-services
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1/**"
       - ".github/workflows/sfra-e3-real-e1-integration.yml"
   pull_request:
     branches:
@@ -18,7 +20,7 @@ on:
       e1_ref:
         description: E1 ref that implements read_source_scope and resolve_current_node
         required: true
-        default: executor-1/e1-source-read-api-mainline
+        default: main
         type: string
       query:
         description: Real Vault search query
@@ -42,14 +44,14 @@ jobs:
       - name: Checkout E3 branch under review
         uses: actions/checkout@v4
         with:
-          ref: executor-3/context-integration-stage-c1
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: e3
           persist-credentials: false
 
       - name: Checkout requested E1 API implementation
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.e1_ref || 'executor-1/e1-source-read-api-mainline' }}
+          ref: ${{ inputs.e1_ref || 'main' }}
           path: e1
           persist-credentials: false
 
