@@ -10,7 +10,7 @@
 > **Implementation HEAD:** `b093c51833f47b9a4e83e83235ea7fbf591f81a7`. Это HEAD кода V2.1; документационный sync может добавить отдельный commit без изменения реализации.
 >
 > **PR:** [#14](https://github.com/yeatu/obsidianGP/pull/14), merged 2026-11-17 09:33:20 UTC; merge commit `9a0bfa012269590466a3b314770425a2a97dfe7f`.  
-> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), статус `ANALYST_COMPLETE_UNREVIEWED`; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координатор принял V2.1 в согласованных границах; PR объединён merge-коммитом `9a0bfa012269590466a3b314770425a2a97dfe7f`.
+> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), аналитическая проверка завершена; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координатор принял V2.1 в согласованных границах; PR объединён merge-коммитом `9a0bfa012269590466a3b314770425a2a97dfe7f`.
 >
 > **Актуальные проверки на Implementation HEAD:**
 > - [V2.1 application CI 44047919277](https://github.com/yeatu/obsidianGP/actions/runs/44047919277): success — **45 B1 + 56 C1 + 18 V2.1 passed**, transport dependency guard passed.
