@@ -5,8 +5,8 @@
 ## Контрольные ссылки
 
 - [PR №7: исправление ambiguous-статусов и повторная интеграция](https://github.com/yeatu/obsidianGP/pull/7)
-- [Итоговый GitHub Actions run](https://github.com/yeatu/obsidianGP/actions/runs/44006287530)
-- [Actions artifact: JSON, JUnit XML и отчёт](https://github.com/yeatu/obsidianGP/actions/runs/44006287530/artifacts/14293364621)
+- [Итоговый GitHub Actions run](https://github.com/yeatu/obsidianGP/actions/runs/44007319361)
+- [Actions artifact: JSON, JUnit XML и отчёт](https://github.com/yeatu/obsidianGP/actions/runs/44007319361/artifacts/14295396277)
 - [Подробный отчёт с SHA и результатами](./Результат.md)
 - [Исходный пакет sfra_search](./source/)
 - [Fixture-тесты адаптера](./source/tests/test_structural_runtime.py)
@@ -23,7 +23,7 @@ E2 не пытается разрешать неоднозначность и н
 
 ## Проверки
 
-Итоговый Actions run на commit 08d0d0de51323f893a77d8f86ede8211a9cb3052 завершился success по всем шагам.
+Итоговый Actions run на commit 6e5a1cca0bfacbcb610bb394cc8080fba960c324 завершился success по всем шагам.
 
 - 64 fixture-теста прошли; 0 failures, 0 errors, 0 skipped.
 - CLI smoke checks для sfra run-once --help и sfra get-source --help успешны.
