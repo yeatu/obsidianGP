@@ -82,8 +82,8 @@
 - Финальный проверенный PR HEAD: `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5`.
 - Implementation tree: `433a474147b9353afdd4dee4af205a79dc21253d`; финальный HEAD дополнительно содержит merge-sync с актуальным `main` и аналитическую запись.
 - Состояние: open, not merged, mergeable.
-- Ветка `executor-1/e1-source-read-api-mainline`: **ahead 10 / behind 0** относительно `main` на момент проверки.
-- Force-push не использовался.
+- После финальной синхронизации PR (`f9b0ede`) `main` получил дополнительные коммиты, затрагивающие только `PROJECT_TASKS.md`; E1 implementation files не менялись. GitHub API на момент сверки сообщает `mergeable=true`, `mergeable_state=clean`.
+- Force-push не использовался; текущий PR HEAD остаётся `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5`.
 
 **CI на финальном HEAD**
 - [Run 44023930642 — E1 source API](https://github.com/yeatu/obsidianGP/actions/runs/44023930642): `e1-source-api-tests` success, **88 passed**; production snapshot copy, manifest-pinned Vault checkout, все четыре scope + resolver и Vault clean guards завершились успешно. Job `unit-tests` — **skipped**, не success и не failure.
