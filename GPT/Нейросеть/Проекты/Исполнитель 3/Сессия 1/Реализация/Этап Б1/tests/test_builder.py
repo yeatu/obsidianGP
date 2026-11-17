@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 
 from sfra_context_builder.validation import validate_context_pack
 from conftest import make_batch, make_candidate, make_request
@@ -40,12 +41,24 @@ def test_budget_counts_included_and_provenance_but_not_coverage(builder):
         "n1", "source material", matched_focus_ids=focus_ids
     )
 
-    baseline = local_builder.build(make_request(), make_batch(candidate))
-    budget = baseline["Statistics"]["tokens_used"]
     focus = [
         {"id": aspect_id, "label": f"Long focus aspect label {index}"}
         for index, aspect_id in enumerate(focus_ids)
     ]
+    baseline = local_builder.build(
+        make_request(focus=focus),
+        make_batch(candidate),
+    )
+    included_wire = json.dumps(
+        {"Included": baseline["Included"]},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+        allow_nan=False,
+    )
+    budget = counter.count(included_wire)
+    assert baseline["Statistics"]["tokens_used"] == budget
+
     pack = local_builder.build(
         make_request(budget_tokens=budget, focus=focus),
         make_batch(candidate),
