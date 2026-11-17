@@ -615,3 +615,56 @@ PR #28 and PR #29 were closed as superseded after their changes were consolidate
 Проверка выполнена на disposable fixtures: production `sfra-state` и Vault не checkout-ились, индексатор не запускался, production writes не выполнялись. Ранее зафиксированный F-02 остаётся историческим safety incident; его наличие не отменяет последующую корректную fixture-only верификацию и не означает, что прежние небезопасные workflows разрешено запускать повторно.
 
 **Итог:** E1 scope по Issue #17 завершён и принят координатором. Нового CLAIM для #17 не требуется; задача закрыта и не является свободной. Production indexing/persistence остаются вне принятого scope.
+
+
+
+## 18. Координаторская стабилизация E1 CI — 2026-11-18
+
+Этот раздел supersedes исторические статусы разделов 15–17, где E1 fixture environment был обозначен как незавершённая блокировка или workflow hazard ещё ожидал исправления.
+
+### 18.1. Обычный E1 CI теперь fixture-only
+
+- PR [#32](https://github.com/yeatu/obsidianGP/pull/32) принят и объединён в `main`.
+- Merge commit: [`bb2275ece19f3d7cf1aa655b89d8d037803976c6`](https://github.com/yeatu/obsidianGP/commit/bb2275ece19f3d7cf1aa655b89d8d037803976c6).
+- Изменён только `.github/workflows/sfra-stage-b-tests.yml`.
+- Удалён шаг, который запускал `sfra-index index` против repository Vault `ГП/` в PR/push CI.
+- Сохранены E1 unit/contract tests и CLI smoke check.
+- Установлены минимальные GitHub Actions permissions: `contents: read`; checkout использует `persist-credentials: false`.
+- Добавлен guard, который запрещает вернуть команду `sfra-index index`, checkout `sfra-state`, production Vault checkout/sparse checkout в этот тестовый workflow.
+- Проверка PR #32: [run 44197904583](https://github.com/yeatu/obsidianGP/actions/runs/44197904583) — success; полный E1 test suite прошёл, CLI check прошёл, fixture-only boundary guard прошёл.
+- Issue [#31](https://github.com/yeatu/obsidianGP/issues/31) закрыта автоматически при merge PR #32.
+
+**Важно:** `.github/workflows/sfra-state-persistence.yml` не изменялся. Production state persistence и её отдельный операционный режим остаются вне этого CI-рефакторинга.
+
+### 18.2. Подтверждённая E1-приёмка
+
+| Артефакт | Итог |
+|---|---|
+| Issue #17 | DONE / CLOSED (completed). |
+| PR #23 | MERGED, commit `5be2f70667a6a7143be53896a2d018b1ca1da8e7`; lifecycle provenance теперь fail-closed. |
+| PR #22 | CLOSED / SUPERSEDED; тестовые дополнения включены в PR #23. |
+| Fixture CI | [Run 44195690306](https://github.com/yeatu/obsidianGP/actions/runs/44195690306): 106 E1 tests + 19 V2.1 tests; CLI check; оба job success. |
+| E1 stage-B PR CI | [Run 44197904583](https://github.com/yeatu/obsidianGP/actions/runs/44197904583): E1 tests, CLI check и fixture-only boundary guard — success. |
+| Historical F-02 | Старый CI запускал индексатор против repository Vault, что нарушало тогдашнее ограничение Issue #17. Теперь этот шаг удалён из обычного PR/push CI. По логам прежнего запуска не было обнаружено tracked Vault mutations; сам факт запрещённого indexing run остаётся в истории инцидента. |
+
+### 18.3. Остаточные состояния
+
+- A1 / Issue #19: исходный межмодульный аудит завершён. На Issue опубликован отдельный follow-up CLAIM A1 для read-only проверки закрытия A1-01…A1-05 на текущем main; issue остаётся открытой до завершения этого независимого подтверждения.
+- Governance / Issue #20: общий протокол захвата задач остаётся действующим; сама governance issue открыта.
+- E3 PR #12: архитектурное предложение по GitHub Issue Worker/Recovery; production transport не реализован и не разрешён.
+- V2.3/V2.4: NOT STARTED / FROZEN до отдельного scope/security/readiness решения.
+- Старые PR #1/#2 остаются историческими открытыми PR; они не блокируют текущие принятые E1/E2/E3 deliverables.
+
+### 18.4. Текущая точка восстановления
+
+**Main HEAD:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`.
+
+В main приняты:
+- E2 synthetic lexical benchmark (PR #21);
+- E3 empty SourceSpan (PR #27);
+- E3 SnapshotRef TOCTOU и facets completeness (PR #30);
+- E3 V2.2 non-production Issue core (PR #16);
+- E1 lifecycle provenance fix (PR #23);
+- E1 fixture-only PR/push CI (PR #32).
+
+В текущем согласованном scope нет открытого инженерного блокера по E1/E2/E3 contract fixes. Следующий координаторский шаг — дождаться/проверить независимый A1 follow-up по Issue #19, затем сформировать отдельное решение о следующем продуктовом этапе. Production indexing, persistence changes и V2.3/V2.4 не запускать автоматически.
