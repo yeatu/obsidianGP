@@ -1364,7 +1364,206 @@ def read_source_scope(
     try:
         canonical_root = Path(vault_root).expanduser().resolve(strict=True)
     except (OSError, TypeError, ValueError, RuntimeError):
-    @dataclass(frozen=True, slots=True)
+        return _scope_error(
+            snapshot_id, scope, NodeLookupStatus.INVALID_REQUEST,
+            "vault_root_invalid", "Vault root must identify an existing directory.",
+        )
+    if not canonical_root.is_dir():
+        return _scope_error(
+            snapshot_id, scope, NodeLookupStatus.INVALID_REQUEST,
+            "vault_root_invalid", "Vault root must identify an existing directory.",
+        )
+
+    connection: sqlite3.Connection | None = None
+    try:
+        # This is the one connection and one read transaction for the entire scope.
+        connection = _read_only_connection(db_path)
+        if not connection.in_transaction:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "read_transaction_missing",
+                "The source-scope lookup could not establish a read transaction.",
+            )
+        _verify_database(connection)
+
+        target = _load_node_snapshot(connection, node_id)
+        target_document = target["document"]
+        target_document_pk = target_document["document_pk"]
+
+        parent_loaded: dict[str, Any] | None = None
+        previous_loaded: dict[str, Any] | None = None
+        next_loaded: dict[str, Any] | None = None
+
+        if scope == "parent" and target["parent_node_id"] is not None:
+            parent_loaded = _load_node_snapshot(
+                connection,
+                target["parent_node_id"],
+                expected_document_pk=target_document_pk,
+            )
+            if (
+                parent_loaded["document"]["generation"] != target_document["generation"]
+                or parent_loaded["document"]["source_path"] != target_document["source_path"]
+                or parent_loaded["document"]["source_sha256"] != target_document["source_sha256"]
+            ):
+                _raise(
+                    NodeLookupStatus.INTEGRITY_ERROR,
+                    "parent_generation_mismatch",
+                    "The parent and target do not belong to the same document generation.",
+                )
+
+        if scope == "neighbors":
+            try:
+                sibling_rows = connection.execute(
+                    """SELECT node_pk, node_id, parent_node_pk, char_start, char_end,
+                              status, stale_generation, document_pk
+                       FROM structural_nodes
+                       WHERE document_pk = ?
+                         AND parent_node_pk IS ?
+                         AND stale_generation IS NULL
+                       ORDER BY char_start, char_end, node_pk""",
+                    (target_document_pk, target["node"]["parent_node_pk"]),
+                ).fetchall()
+            except sqlite3.Error:
+                _raise(
+                    NodeLookupStatus.INTEGRITY_ERROR,
+                    "sibling_query_failed",
+                    "The current sibling sequence could not be read.",
+                )
+
+            siblings = [dict(row) for row in sibling_rows]
+            target_positions = [
+                index for index, row in enumerate(siblings)
+                if row["node_id"] == node_id
+            ]
+            if len(target_positions) != 1:
+                _raise(
+                    NodeLookupStatus.INTEGRITY_ERROR,
+                    "sibling_address_missing",
+                    "The active target is not unique in its current sibling sequence.",
+                )
+            for row in siblings:
+                if (
+                    row["document_pk"] != target_document_pk
+                    or row["parent_node_pk"] != target["node"]["parent_node_pk"]
+                    or not _valid_node_id(row["node_id"])
+                    or not _is_int(row["char_start"])
+                    or not _is_int(row["char_end"])
+                ):
+                    _raise(
+                        NodeLookupStatus.INTEGRITY_ERROR,
+                        "sibling_state_invalid",
+                        "A current sibling has inconsistent document, parent, or coordinates.",
+                    )
+
+            position = target_positions[0]
+            previous_row = siblings[position - 1] if position > 0 else None
+            following_row = siblings[position + 1] if position + 1 < len(siblings) else None
+            if previous_row is not None:
+                previous_loaded = _load_node_snapshot(
+                    connection, previous_row["node_id"],
+                    expected_document_pk=target_document_pk,
+                )
+            if following_row is not None:
+                next_loaded = _load_node_snapshot(
+                    connection, following_row["node_id"],
+                    expected_document_pk=target_document_pk,
+                )
+            for related in (previous_loaded, next_loaded):
+                if related is not None and (
+                    related["document"]["generation"] != target_document["generation"]
+                    or related["document"]["source_path"] != target_document["source_path"]
+                    or related["document"]["source_sha256"] != target_document["source_sha256"]
+                ):
+                    _raise(
+                        NodeLookupStatus.INTEGRITY_ERROR,
+                        "sibling_document_binding_mismatch",
+                        "A neighboring node is not bound to the target document snapshot.",
+                    )
+
+        # One safe read of the original file is shared by every returned fragment.
+        source_bytes = _read_source_file(canonical_root, target["components"])
+        source_text = _verify_document_bytes(target_document, source_bytes)
+
+        target_record = _current_scope_fragment(
+            target, source_bytes, source_text, expected_hash
+        )
+        parent_record = (
+            _current_scope_fragment(
+                parent_loaded, source_bytes, source_text,
+                parent_loaded["node"]["content_hash"],
+            )
+            if parent_loaded is not None else None
+        )
+        previous_record = (
+            _current_scope_fragment(
+                previous_loaded, source_bytes, source_text,
+                previous_loaded["node"]["content_hash"],
+            )
+            if previous_loaded is not None else None
+        )
+        next_record = (
+            _current_scope_fragment(
+                next_loaded, source_bytes, source_text,
+                next_loaded["node"]["content_hash"],
+            )
+            if next_loaded is not None else None
+        )
+
+        document_record = None
+        if scope == "node":
+            fragments = (target_record,)
+        elif scope == "parent":
+            fragments = (
+                (target_record, parent_record)
+                if parent_record is not None else (target_record,)
+            )
+        elif scope == "neighbors":
+            fragments = tuple(
+                item for item in (target_record, previous_record, next_record)
+                if item is not None
+            )
+        else:
+            fragments = ()
+            document_record = DocumentRecord(
+                source_path=target_document["source_path"],
+                source_sha256=target_document["source_sha256"],
+                size_bytes=len(source_bytes),
+                raw_text=source_text,
+                document_hash=target_document["source_sha256"],
+                index_generation=target_document["generation"],
+                anchor_node_id=target_record.node_id,
+                anchor_content_hash=target_record.content_hash,
+            )
+
+        return SourceScopeResult(
+            snapshot_id=snapshot_id,
+            scope=scope,
+            status=NodeLookupStatus.OK,
+            fragments=fragments,
+            anchor=target_record,
+            parent=parent_record,
+            previous=previous_record,
+            next=next_record,
+            document=document_record,
+        )
+    except _LookupFailure as exc:
+        return _scope_error(snapshot_id, scope, exc.status, exc.code, exc.safe_message)
+    except Exception:
+        return _scope_error(
+            snapshot_id, scope, NodeLookupStatus.INTEGRITY_ERROR,
+            "source_scope_integrity_failure",
+            "The requested source scope could not be verified atomically.",
+        )
+    finally:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except sqlite3.Error:
+                pass
+            connection.close()
+
+
+@dataclass(frozen=True, slots=True)
 class NodeParentResult:
     """Compatibility result for get_parent_by_id."""
 
