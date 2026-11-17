@@ -140,6 +140,7 @@ jobs:
             --vault "$GITHUB_WORKSPACE/_vault_source/ГП" \
             --temp-root "$RUNNER_TEMP" \
             --state-branch-sha "$(cat "$RUNNER_TEMP/sfra_state_sha")" \
+            --package-dir "$GITHUB_WORKSPACE/GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/src/sfra_search" \
             --max-sources 5
 
       - name: Confirm structural DB and state branch stayed unchanged
