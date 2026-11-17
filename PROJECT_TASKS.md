@@ -66,8 +66,8 @@
 | ID | Исполнитель | Работа | Статус | Что блокирует / следующий шаг |
 |---|---|---|---|---|
 | SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **ANALYST_COMPLETE_UNREVIEWED** | Аналитическая проверка завершена на HEAD `a5456c471d9bd97a8da34b90da13cc4fa7b486ea`; весь текущий спектр E1 передан координатору на пакетный аудит. E3 response adapter не является блокером E1. |
-| SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency metadata и E1 API adapter | **WAITING_FOR_IMPLEMENTATION** | Response adapter E1/E3 и real smoke уже работают; остаются E3-side parent/sibling cross-checks, adversarial tests, fail-closed unknown metadata, SearchAdapter diagnostic propagation и актуализация docs. |
-| SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack | **BLOCKED** | PR-triggered real E1/E2/E3 smoke успешен (run 44020916667), но полный спектр заблокирован оставшимися критериями SFRA-E3-01 и неполными негативными сценариями. |
+| SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency metadata и E1 API adapter | **WAITING_FOR_IMPLEMENTATION** | Response adapter E1/E3 и real smoke уже работают; остаются E3-side parent/sibling cross-checks, adversarial tests, очистка resolver diagnostics между запусками, обновление README/PR description и синхронизация ветки с `main`. B1 policy defaults разрешены как defaults, не как source annotations. |
+| SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack | **WAITING_FOR_ANALYST** | Manual run `44020916667` успешен на E3 HEAD `dfe8877` и E1 HEAD `a5456c4`; аналитик должен проверить доказательства. Итог был `budget_limited` (1 included, 2 deferred), а не `complete`; финальная приёмка зависит от закрытия C1 integrity checks. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **COORDINATOR_ACCEPTED_NOT_MERGED** | Повторная реализация не требуется; PR #7 ещё открыт. |
 
 ---
@@ -277,7 +277,7 @@ HEAD аналитика: `не указан`
 - [ ] Аналитик выполнил независимую приёмку текущего HEAD.
 - [ ] Ветка синхронизирована с актуальным main и проверки повторены.
 
-**Решение координатора:** E1-01 остаётся WAITING_FOR_ANALYST. Реализацию не возвращать на доработку только из-за пропущенного отдельного job; аналитик должен указать, какие именно гарантии покрыты целевым E1 job. Перед финальным merge необходимо решить branch drift.
+**Решение координатора:** сохранить `ANALYST_COMPLETE_UNREVIEWED`, установленный аналитиком. Координаторская приёмка ещё не выставлена. Реализацию не возвращать на доработку только из-за пропущенного отдельного job; аналитик должен явно указать, какие гарантии покрыты целевым E1 job. Перед финальным merge необходимо синхронизировать branch drift и повторить проверки.
 
 ### E3 / PR #10 — HEAD `dfe8877...`
 
