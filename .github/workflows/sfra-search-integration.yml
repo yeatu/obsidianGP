@@ -122,6 +122,10 @@ jobs:
         run: |
           set -euo pipefail
           base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
+          # The canonical runtime test resolves tools/ relative to the package
+          # test root; mirror the exact verifier into this isolated temp root.
+          mkdir -p "$RUNNER_TEMP/tools"
+          cp "$base/tools/sfra_integration_check.py" "$RUNNER_TEMP/tools/sfra_integration_check.py"
           python -m pytest -q "$RUNNER_TEMP/sfra-archive-package/tests" \
             --junitxml "$RUNNER_TEMP/sfra-e2-pytest.xml"
           sfra run-once --help >/dev/null
