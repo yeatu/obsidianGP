@@ -470,6 +470,16 @@ def _prepare_deleted_document(connection, document_pk):
     return generation
 
 
+def _contains_payload_key(value, key):
+    if isinstance(value, dict):
+        return key in value or any(
+            _contains_payload_key(child, key) for child in value.values()
+        )
+    if isinstance(value, list):
+        return any(_contains_payload_key(child, key) for child in value)
+    return False
+
+
 def _assert_db_only_failure_without_source_read(monkeypatch, operation):
     def fail_open(*args, **kwargs):
         raise AssertionError("DB-only preflight must not open the Markdown source")
@@ -479,8 +489,10 @@ def _assert_db_only_failure_without_source_read(monkeypatch, operation):
     assert result.status is NodeLookupStatus.INTEGRITY_ERROR
     assert result.node is None
     payload = result.to_dict()
+    serialized = json.dumps(payload, ensure_ascii=False)
     assert payload["node"] is None
-    assert "raw_text" not in json.dumps(payload)
+    assert not _contains_payload_key(payload, "raw_text")
+    assert "Target paragraph." not in serialized
 
 
 def test_empty_document_root_can_be_read_exactly(tmp_path):
