@@ -297,14 +297,20 @@ Production Issue worker, recovery и публикация source content не р
 **Итог:** SFRA-E3-V2.1 = `DONE`. Это не включает GitHub Issue worker/recovery, MCP, HTTP/webhooks или публикацию Vault source content. Public source-content publication remains deny-by-default.
 
 
-## 10. Постановка SFRA-E3-V2.2 — 2026-11-17
+## 10. SFRA-E3-V2.2 — non-production Issue core
 
 - [x] V2.1 завершена и merged: PR #14, `9a0bfa012269590466a3b314770425a2a97dfe7f`; Issue #13 closed/completed.
 - [x] Создан отдельный Issue [#15](https://github.com/yeatu/obsidianGP/issues/15) для V2.2.
 - [x] Scope ограничен non-production parser/validator, status schema v2, request body hash, safe aggregate projector и IssueWorkerCore over fake/in-memory ports.
 - [x] Явно запрещены GitHub API/SDK, credentials/network/write calls, active event workflows, реальные Issue/comment writes, source-content serialization, leases/retries/recovery, MCP/HTTP/deployment.
-- [ ] Исполнитель 3 реализовал V2.2 по Issue #15.
-- [ ] Аналитик 3 провёл независимую проверку.
-- [ ] Координаторская приёмка V2.2.
+- [x] Исполнитель 3 реализовал V2.2 по Issue #15 в согласованном scope; runtime/test HEAD: `b80b5d7fff762afec94634a106f4f2383c74c103`.
+- [x] Аналитик 3 провёл независимую проверку исходного runtime HEAD: review [5945263999](https://github.com/yeatu/obsidianGP/pull/16#pullrequestreview-5945263999); оба блокирующих замечания исправлены, 174 теста и dependency/import guard прошли.
+- [x] PR синхронизирован с актуальным `main` без force-push: итоговый HEAD `75a7432555029e60edc67463f92ada9d6179651b`; base и merge base `e2e64a0339fe0e94e237b7de5b401af5b69d8635`; compare ahead 13 / behind 0.
+- [x] Повторный CI на точном синхронизированном HEAD: [run 44163173690](https://github.com/yeatu/obsidianGP/actions/runs/44163173690) — B1 45, C1 56, V2.1 18, V2.2 55; всего 174 passed, dependency/import guard passed.
+- [x] Аналитик 3 провёл повторную независимую проверку синхронизированного HEAD: [review 5945559834](https://github.com/yeatu/obsidianGP/pull/16#pullrequestreview-5945559834). Sync commit меняет только `PROJECT_TASKS.md` и реестр аналитика; runtime, tests, schemas и workflow не менялись относительно ранее проверенного HEAD.
+- [ ] Финальная координаторская проверка синхронизированного HEAD.
+- [ ] PR #16 переведён из Draft в Ready и merged (только после отдельного решения координатора).
 
-**Решение:** V2.2 разрешена только в описанном non-production scope. V2.3 (реальный GitHub transport/recovery) и V2.4 (controlled rollout) остаются отдельными gates; это решение не разрешает production execution.
+**Текущий статус:** `ANALYST_COMPLETE_UNREVIEWED` на HEAD `75a7432555029e60edc67463f92ada9d6179651b`. PR #16 остаётся Open / Draft / unmerged. Ранее выданная координаторская приёмка V2.2 относится к согласованной реализации на HEAD `b80b5d7`; после синхронизации координатору поручена финальная проверка актуального HEAD перед любым решением о merge.
+
+**Ограничения:** V2.3 (реальный GitHub transport/recovery) и V2.4 (controlled rollout) не запускать. Это обновление не разрешает production execution, GitHub API/SDK, credentials, реальные Issue/comment writes, активные event workflows, source-content publication, leases/retries/recovery, MCP/HTTP/webhooks или deployment.
