@@ -164,7 +164,7 @@ def run(corpus_path, repeats, expected_engine):
             )
         if not integrity.get("ok") or integrity.get("integrity") != "ok":
             raise RuntimeError(f"Synthetic benchmark index integrity failed: {integrity}")
-        if imported.get("created") != len(nodes):
+        if imported.get("imported") != len(nodes):
             raise RuntimeError(f"Unexpected synthetic import result: {imported}")
         results = []
         for case in corpus["cases"]:
@@ -212,7 +212,7 @@ def run(corpus_path, repeats, expected_engine):
             "duplicate_gate_cases": sum(not item["no_duplicates"] for item in gated),
             "index_integrity": integrity["integrity"],
             "index_active_nodes": integrity["active_nodes"],
-            "index_import_created": imported["created"],
+            "index_imported": imported["imported"],
             "repeat_count": repeats, "cases": results,
             "scope": {
                 "runtime_changed": False, "public_api_changed": False,
