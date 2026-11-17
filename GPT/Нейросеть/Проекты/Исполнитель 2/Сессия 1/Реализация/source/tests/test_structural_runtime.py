@@ -402,4 +402,6 @@ def test_integration_verifier_cli_help_has_one_package_dir_option():
         text=True, capture_output=True, check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.count("--package-dir") == 1
+    assert "--package-dir PACKAGE_DIR" in completed.stdout
+    source_text = script.read_text(encoding="utf-8")
+    assert source_text.count('parser.add_argument("--package-dir"') == 1
