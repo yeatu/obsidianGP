@@ -1,8 +1,8 @@
 # Этап В1 — интеграция Context Builder: контрольный рубеж C1
 
-**Статус:** C1 реализован на уровне адаптеров и fixtures; ожидает повторной проверки аналитиком. PR #10 остаётся draft.
-**Доказано:** реальный E2 runtime на временной SQLite fixture, сборка Context Pack на полном fixture-сценарии, четыре scope через тестовый E1 API, snapshot pinning и B1 regression.
-**Не доказано:** интеграция с production E1 Source Scope API и полный проход по реальному Vault.
+**Статус:** C1 адаптеры и fixture pipeline реализованы; PR #10 остаётся draft и ожидает независимой проверки аналитиком.
+**Доказано:** реальный E2 runtime на временной SQLite fixture, сборка Context Pack на полном fixture-сценарии, четыре scope через тестовый E1 API, snapshot pinning и сохранность B1 regression.
+**Не доказано:** production E1 Source Scope API и полный проход по реальному Vault.
 
 ## 1. E2 SearchAdapter
 
@@ -47,8 +47,9 @@ real E2 runtime fixture → SearchAdapter → SearchBatch → ContextBuilder (B1
 
 GitHub Actions workflow: .github/workflows/sfra-context-integration-c1-tests.yml.
 
-- B1 regression suite: 45 tests.
-- C1 fixture suite: на head c86301d было 42 passed; добавленный после этого run тест нулевого scope budget требует следующего итогового CI.
+**Последний PR-CI:** [run 44013125521](https://github.com/yeatu/obsidianGP/actions/runs/44013125521), conclusion success.
+- B1 regression suite: **45 passed in 0.74s**.
+- C1 fixture suite: **43 passed in 0.29s**.
 - Python 3.11.
 - E2 package устанавливается из опубликованного source проекта Исполнителя 2; реальный search_structural_database вызывается на временной структурной SQLite fixture.
 - Тест проверяет, что digest временной SQLite не изменился. Это не production Vault и не production sfra-state.
