@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/sfra-issue-request-v1.schema.json",
+  "title": "SFRA Issue request envelope v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "request_id", "operation", "payload"],
+      "properties": {
+        "protocol_version": {"const": "sfra.issue.v1"},
+        "request_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "operation": {"const": "search_vault"},
+        "payload": {"$ref": "#/$defs/searchPayload"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "request_id", "operation", "payload"],
+      "properties": {
+        "protocol_version": {"const": "sfra.issue.v1"},
+        "request_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "operation": {"const": "read_source"},
+        "payload": {"$ref": "#/$defs/readSourcePayload"}
+      }
+    }
+  ],
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "contentHash": {"type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$"},
+    "stringArray": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"}
+    },
+    "knownNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "content_hash"],
+      "properties": {
+        "node_id": {"$ref": "#/$defs/nonEmptyString"},
+        "content_hash": {"$ref": "#/$defs/contentHash"}
+      }
+    },
+    "focusAspect": {
+      "oneOf": [
+        {"$ref": "#/$defs/nonEmptyString"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "label"],
+          "properties": {
+            "id": {"$ref": "#/$defs/nonEmptyString"},
+            "label": {"$ref": "#/$defs/nonEmptyString"},
+            "entities": {"$ref": "#/$defs/stringArray"},
+            "facets": {"$ref": "#/$defs/stringArray"},
+            "terms": {"$ref": "#/$defs/stringArray"},
+            "match_mode": {"enum": ["any", "all"]}
+          }
+        }
+      ]
+    },
+    "searchPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query"],
+      "properties": {
+        "query": {"$ref": "#/$defs/nonEmptyString"},
+        "task": {"type": "string"},
+        "entities": {"$ref": "#/$defs/stringArray"},
+        "facets": {"$ref": "#/$defs/stringArray"},
+        "budget_tokens": {"$ref": "#/$defs/positiveInteger"},
+        "known": {"type": "array", "items": {"$ref": "#/$defs/knownNode"}},
+        "zones": {"$ref": "#/$defs/stringArray"},
+        "focus": {"type": "array", "items": {"$ref": "#/$defs/focusAspect"}}
+      }
+    },
+    "readSourcePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "expected_hash", "scope"],
+      "properties": {
+        "node_id": {"$ref": "#/$defs/nonEmptyString"},
+        "expected_hash": {"$ref": "#/$defs/contentHash"},
+        "scope": {"enum": ["node", "parent", "neighbors", "document"]},
+        "budget_tokens": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/positiveInteger"}
+          ]
+        }
+      }
+    }
+  }
+}

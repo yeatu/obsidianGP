@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/sfra-issue-transport-status-v2.schema.json",
+  "title": "SFRA Issue transport status v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status_schema_version", "issue_number", "request_id", "operation",
+    "transport_status", "request_body_sha256", "worker_commit_sha",
+    "error_code", "result"
+  ],
+  "properties": {
+    "status_schema_version": {"const": 2},
+    "issue_number": {"type": "integer", "minimum": 1},
+    "request_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"}
+      ]
+    },
+    "operation": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["search_vault", "read_source"]}
+      ]
+    },
+    "transport_status": {"enum": ["REJECTED", "COMPLETED", "FAILED"]},
+    "request_body_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "worker_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "error_code": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": [
+          "invalid_issue_record", "invalid_issue_number", "pull_request_not_allowed",
+          "wrong_repository", "wrong_title_prefix", "author_not_allowed",
+          "invalid_body_type", "invalid_utf8", "body_too_large", "invalid_json_envelope",
+          "invalid_json", "invalid_envelope", "missing_fields", "extra_fields",
+          "invalid_payload", "unsupported_protocol", "invalid_request_id",
+          "unsupported_operation", "invalid_field", "request_body_changed",
+          "application_service_failed", "unsafe_result_contract"
+        ]}
+      ]
+    },
+    "result": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operation", "business_status", "scope", "counts", "diagnostic_codes"],
+          "properties": {
+            "operation": {"enum": ["search_vault", "read_source"]},
+            "business_status": {
+              "enum": [
+                "ok", "stale", "stale_source", "ambiguous", "deleted", "not_found",
+                "invalid_request", "source_unavailable", "integrity_error",
+                "budget_exceeded", "snapshot_mismatch", "complete", "partial",
+                "empty", "error", "unknown", "budget_limited", "failed"
+              ]
+            },
+            "scope": {
+              "oneOf": [
+                {"type": "null"},
+                {"enum": ["node", "parent", "neighbors", "document"]}
+              ]
+            },
+            "counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inspected": {"type": "integer", "minimum": 0},
+                "candidates": {"type": "integer", "minimum": 0},
+                "included": {"type": "integer", "minimum": 0},
+                "deferred": {"type": "integer", "minimum": 0},
+                "covered": {"type": "integer", "minimum": 0},
+                "uncovered": {"type": "integer", "minimum": 0},
+                "source_reads": {"type": "integer", "minimum": 0},
+                "fragments": {"type": "integer", "minimum": 0}
+              }
+            },
+            "diagnostic_codes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "retrieval_partial", "budget_limited", "budget_exceeded", "source_checked",
+                  "invalid_request", "stale_source", "ambiguous", "deleted", "not_found",
+                  "snapshot_mismatch", "document_hash_mismatch", "snapshot_generation_mismatch",
+                  "source_unavailable", "integrity_error", "dependency_missing",
+                  "dependency_unresolved", "search_incomplete", "retrieval_error"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"transport_status": {"const": "COMPLETED"}}, "required": ["transport_status"]},
+      "then": {"properties": {"error_code": {"type": "null"}, "result": {"type": "object"}}}
+    },
+    {
+      "if": {"properties": {"transport_status": {"enum": ["REJECTED", "FAILED"]}}, "required": ["transport_status"]},
+      "then": {"properties": {"error_code": {"type": "string"}, "result": {"type": "null"}}}
+    }
+  ]
+}

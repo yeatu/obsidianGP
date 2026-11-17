@@ -1,0 +1,86 @@
+name: SFRA E3 V2.2 non-production Issue core tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.2/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
+      - ".github/workflows/sfra-e3-v2-2-issue-core-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  non-production-issue-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install accepted dependency layers and V2.2 test dependencies
+        shell: bash
+        run: |
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          V2_2_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.2"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$E3_DIR[test]"
+          python -m pip install -e "$E2_DIR"
+          python -m pip install -e "$V2_2_DIR[test]"
+
+      - name: Run B1 regression suite
+        run: |
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          python -m pytest -q "$B1_DIR/tests"
+
+      - name: Run C1 integration contract suite
+        run: |
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pytest -q "$E3_DIR/tests"
+
+      - name: Run V2.1 application service regression suite
+        run: |
+          V2_1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1"
+          python -m pytest -q "$V2_1_DIR/tests"
+
+      - name: Run V2.2 adversarial contract suite
+        run: |
+          V2_2_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.2"
+          python -m pytest -q "$V2_2_DIR/tests"
+
+      - name: Verify V2.2 has no transport dependencies
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ast
+          from importlib.metadata import requires
+          from pathlib import Path
+
+          forbidden = {"github", "requests", "httpx", "urllib3", "fastapi", "starlette", "flask", "mcp"}
+          requirements = requires("sfra-issue-core") or []
+          if requirements:
+              raise SystemExit("V2.2 runtime dependencies must remain empty: " + ", ".join(requirements))
+          root = Path("GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.2/src")
+          found = []
+          for source in root.rglob("*.py"):
+              tree = ast.parse(source.read_text(encoding="utf-8"))
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      found.extend(alias.name.split(".")[0] for alias in node.names)
+                  elif isinstance(node, ast.ImportFrom) and node.module:
+                      found.append(node.module.split(".")[0])
+          prohibited = sorted(set(found) & forbidden)
+          if prohibited:
+              raise SystemExit("V2.2 imports prohibited transport modules: " + ", ".join(prohibited))
+          print("No declared or imported GitHub, network, HTTP-server or MCP dependencies.")
+          PY
