@@ -439,7 +439,7 @@ Workflow `.github/workflows/sfra-state-persistence.yml`:
 | Issue request worker | contents: read, issues: write | Читать Vault и sidecar; создать/обновить Issue Comments |
 | Issue recovery sweep | contents: read, issues: write | Найти ожидающие Issues и восстановить их обработку |
 | Sidecar build job | contents: read | Читать Vault, исходники компонентов и текущий sidecar |
-| Sidecar publish job | contents: write | Записать SQLite и manifest только в ветку sfra-index-state |
+| Sidecar publish job | contents: write | Записать SQLite и manifest только в ветку sfra-state |
 | Unit tests | минимум contents: read или без дополнительных write scopes | Читать исходники и запускать тесты |
 
 Issue worker никогда не получает contents: write. Публикация результата требует только issues: write. contents: write выделяется отдельному workflow/job обслуживания sidecar.
@@ -531,7 +531,7 @@ Issue worker никогда не получает contents: write. Публик�
 
 ## 12. Что подтвердить с координатором/предыдущими исполнителями
 
-1. Допускается ли отдельная публичная ветка sfra-index-state для постоянного хранения SQLite. Поскольку репозиторий публичный, ветка будет публичной.
+1. Координатору следует явно принять публичность ветки sfra-state: после инициализации она будет содержать исходные raw_text и историю версий SQLite.
 2. Где хранится постоянная часть реестра сущностей/алиасов E2: в отдельном search-state DB или в общей базе. FTS5 при этом может быть временной.
 3. Какой точный workflow/branch является источником актуального кода E1/E2 при sidecar refresh.
 4. Требуется ли разрешать несколько авторов в SFRA_ALLOWED_ISSUE_AUTHORS, кроме текущего владельца репозитория.
