@@ -1,17 +1,25 @@
 name: SFRA search integration (Executor 2)
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/sfra-search-integration.yml"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/sfra_integration_check.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/sfra-search-integration.yml"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/sfra_integration_check.py"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: sfra-search-integration
+  group: sfra-search-integration-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -19,13 +27,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check out E2 implementation branch
+      - name: Check out the E2 commit under review
         uses: actions/checkout@v4
         with:
-          ref: main
-          persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
-      - name: Check out persisted structural state
+      - name: Check out persisted E1 structural state
         uses: actions/checkout@v4
         with:
           ref: sfra-state
@@ -33,15 +41,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Check out Vault revision recorded by E1 manifest
-        uses: actions/checkout@v4
-        with:
-          ref: executor-1/sfra-indexer-session-1
-          path: _vault_source
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Validate manifest source revision and record state branch SHA
+      - name: Verify the current state manifest and its source revision
+        id: state
         shell: bash
         run: |
           set -euo pipefail
@@ -49,20 +50,29 @@ jobs:
           test -s _state_source/state/manifest.json
           manifest_branch="$(python -c 'import json; print(json.load(open("_state_source/state/manifest.json", encoding="utf-8"))["source_branch"])')"
           manifest_commit="$(python -c 'import json; print(json.load(open("_state_source/state/manifest.json", encoding="utf-8"))["source_commit"])')"
-          test "$manifest_branch" = "executor-1/sfra-indexer-session-1"
-          actual_source_commit="$(git -C _vault_source rev-parse HEAD)"
-          if [ "$actual_source_commit" != "$manifest_commit" ]; then
-            echo "Vault checkout does not match manifest source_commit" >&2
-            echo "manifest=$manifest_commit checkout=$actual_source_commit" >&2
-            exit 1
-          fi
           state_sha="$(git -C _state_source rev-parse HEAD)"
           remote_state_sha="$(git -C _state_source ls-remote origin refs/heads/sfra-state | awk '{print $1}')"
           test "$state_sha" = "$remote_state_sha"
-          printf '%s\n' "$state_sha" > "$RUNNER_TEMP/sfra_state_sha"
-          printf '%s\n' "$manifest_commit" > "$RUNNER_TEMP/sfra_source_commit"
+          remote_source_sha="$(git -C _state_source ls-remote origin "refs/heads/$manifest_branch" | awk '{print $1}')"
+          if [ -z "$remote_source_sha" ] || [ "$remote_source_sha" != "$manifest_commit" ]; then
+            echo "Manifest source_commit is not the current head of $manifest_branch" >&2
+            echo "manifest=$manifest_commit remote=$remote_source_sha" >&2
+            exit 1
+          fi
+          echo "sha=$state_sha" >> "$GITHUB_OUTPUT"
+          echo "source_branch=$manifest_branch" >> "$GITHUB_OUTPUT"
+          echo "source_commit=$manifest_commit" >> "$GITHUB_OUTPUT"
           echo "Structural state branch SHA: $state_sha"
-          echo "Vault source commit: $manifest_commit"
+          echo "Manifest source branch: $manifest_branch"
+          echo "Current E1 source commit: $manifest_commit"
+
+      - name: Check out the exact Vault commit named in the manifest
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.state.outputs.source_commit }}
+          path: _vault_source
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -70,66 +80,42 @@ jobs:
           python-version: "3.13"
           cache: pip
 
-      - name: Rebuild archive and extract the published SFRA source package
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
-          python "$GITHUB_WORKSPACE/$base/tools/unpack_search_package.py" \
-            --implementation-dir "$GITHUB_WORKSPACE/$base" \
-            --destination "$GITHUB_WORKSPACE/$base/source"
-
-      - name: Publish unpacked Python source files into the repository
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
-          test -f "$base/source/pyproject.toml"
-          find "$base/source" -type f \( -name '*.py' -o -name 'pyproject.toml' -o -name '*.txt' -o -name '*.json' -o -name '*.md' \) | sort
-          git add -- "$base/source"
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Publish unpacked SFRA search source files"
-            git push origin HEAD:main
-          else
-            echo "Source files already match the archive."
-          fi
-
-      - name: Install pymorphy3 and the published sfra_search package
+      - name: Install published sfra_search package and pymorphy3
         shell: bash
         run: |
           set -euo pipefail
           base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
           python -m pip install --upgrade pip
-          python -m pip install pymorphy3
           python -m pip install -e "$base/source"
-          if [ -f "$base/source/requirements-dev.txt" ]; then
-            python -m pip install -r "$base/source/requirements-dev.txt"
-          else
-            python -m pip install pytest
-          fi
+          python -m pip install -r "$base/source/requirements-dev.txt"
           python - <<'PY'
           import importlib.metadata
           import pymorphy3
           morph = pymorphy3.MorphAnalyzer()
-          a = morph.parse("реанимации")[0].normal_form
-          b = morph.parse("реанимацию")[0].normal_form
-          assert a == b, (a, b)
+          forms = ["реанимации", "реанимацию"]
+          lemmas = {word: morph.parse(word)[0].normal_form for word in forms}
+          assert len(set(lemmas.values())) == 1, lemmas
           print("pymorphy3:", importlib.metadata.version("pymorphy3"))
-          print("normalized forms:", a, b)
+          print("normal forms:", lemmas)
           PY
 
-      - name: Run published sfra_search tests
+      - name: Run all sfra_search tests and CLI parser smoke checks
         shell: bash
         run: |
           set -euo pipefail
-          base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
-          test -d "$base/tests"
-          python -m pytest -q "$base/tests"
+          base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
+          python -m pytest -q "$base/source/tests" \
+            --junitxml "$RUNNER_TEMP/sfra-e2-pytest.xml"
+          sfra run-once --help >/dev/null
+          sfra get-source --help >/dev/null
 
-      - name: Run real-Vault search and source-addressing checks
+      - name: Run active-only integration checks against the current E1 SQLite and Vault
         shell: bash
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          E2_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
@@ -139,99 +125,106 @@ jobs:
             --results-dir "$RUNNER_TEMP/sfra-integration-results" \
             --vault "$GITHUB_WORKSPACE/_vault_source/ГП" \
             --temp-root "$RUNNER_TEMP" \
-            --state-branch-sha "$(cat "$RUNNER_TEMP/sfra_state_sha")" \
+            --state-branch-sha "${{ steps.state.outputs.sha }}" \
+            --implementation-commit "$E2_COMMIT_SHA" \
             --package-dir "$GITHUB_WORKSPACE/GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/src/sfra_search" \
             --max-sources 5
 
-      - name: Confirm structural DB and state branch stayed unchanged
+      - name: Confirm E1 SQLite and sfra-state stayed unchanged
         shell: bash
         run: |
           set -euo pipefail
           expected_db_sha="$(python -c 'import json; print(json.load(open("_state_source/state/manifest.json", encoding="utf-8"))["database_sha256"].removeprefix("sha256:"))')"
           actual_db_sha="$(sha256sum _state_source/state/structure.sqlite3 | awk '{print $1}')"
           test "$actual_db_sha" = "$expected_db_sha"
-          expected_state_sha="$(cat "$RUNNER_TEMP/sfra_state_sha")"
+          expected_state_sha="${{ steps.state.outputs.sha }}"
           remote_state_sha="$(git -C _state_source ls-remote origin refs/heads/sfra-state | awk '{print $1}')"
           test "$remote_state_sha" = "$expected_state_sha"
           echo "Structural DB SHA unchanged: sha256:$actual_db_sha"
           echo "sfra-state branch head unchanged: $remote_state_sha"
 
-      - name: Publish integration JSON and factual report
+      - name: Build factual integration report
+        if: always()
         shell: bash
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          E2_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          base="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация"
-          run_id="$GITHUB_RUN_ID"
-          result_dir="$base/Результаты интеграции/run-$run_id"
-          mkdir -p "$result_dir"
-          cp "$RUNNER_TEMP/sfra-integration-results/"*.json "$result_dir/"
+          summary="$RUNNER_TEMP/sfra-integration-results/integration_summary.json"
+          if [ ! -s "$summary" ]; then
+            echo "No integration summary was produced; inspect the failed step logs." >&2
+            exit 0
+          fi
           python - <<'PY'
-          import json, os
+          import json, os, xml.etree.ElementTree as ET
           from pathlib import Path
-          base = Path("GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация")
           run_id = os.environ["GITHUB_RUN_ID"]
-          summary = json.loads(Path(os.environ["RUNNER_TEMP"], "sfra-integration-results", "integration_summary.json").read_text(encoding="utf-8"))
           run_url = f'{os.environ["GITHUB_SERVER_URL"]}/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run_id}'
+          temp = Path(os.environ["RUNNER_TEMP"])
+          summary = json.loads((temp / "sfra-integration-results" / "integration_summary.json").read_text(encoding="utf-8"))
+          suites_root = ET.parse(temp / "sfra-e2-pytest.xml").getroot()
+          suites = [suites_root] if suites_root.tag == "testsuite" else list(suites_root.iter("testsuite"))
+          tests = sum(int(s.get("tests", 0)) for s in suites)
+          failures = sum(int(s.get("failures", 0)) for s in suites)
+          errors = sum(int(s.get("errors", 0)) for s in suites)
+          skipped = sum(int(s.get("skipped", 0)) for s in suites)
           db = summary["structural_db"]
-          morph = summary["morphology"]
           vault = summary["vault"]
+          morph = summary["morphology"]
           lines = [
-            "# Результат интеграционной проверки SFRA — Исполнитель 2",
+            "# E2 active-only Search Engine integration result",
             "",
-            f'Статус: {summary["status"]}',
-            f'GitHub Actions: {run_url}',
-            f'Run ID: {run_id}',
+            f"- Status: {summary['status']}",
+            f"- Actions run: {run_url}",
+            f"- E2 commit under test: {os.environ['E2_COMMIT_SHA']}",
+            f"- E1 state branch SHA: {summary['state_branch_sha']}",
+            f"- E1 source commit: {summary['state_manifest']['source_commit']}",
+            f"- Manifest SHA-256: {summary['manifest_sha256']}",
+            f"- Structural SQLite SHA-256: {db['sha256']}",
+            f"- SQLite integrity check / schema: {db['integrity_check']} / {db['schema_version']}",
+            f"- Documents: {db['documents']} total; {db['active_documents']} active",
+            f"- Nodes: {db['total_nodes']} total; {db['active_nodes']} eligible active",
+            f"- Excluded node states: ambiguous={db['ambiguous_nodes_excluded']}, stale={db['stale_nodes_excluded']}, deleted={db['deleted_nodes_excluded']}; deleted documents={db['deleted_documents_excluded']}",
+            f"- Eligible active node addresses: {db['eligible_active_addresses']}",
+            f"- Active nodes missing ID/hash: {db['nodes_missing_identity']}",
             "",
-            "## Структурная база Исполнителя 1",
-            f'- SHA-256: {db["sha256"]}',
-            f'- SQLite integrity_check: {db["integrity_check"]}',
-            f'- Schema: {db["schema_version"]}',
-            f'- Документов всего / активных: {db["documents"]} / {db["active_documents"]}',
-            f'- Узлов всего / активных: {db["total_nodes"]} / {db["active_nodes"]}',
-            f'- Активных узлов без Node ID или Content Hash: {db["nodes_missing_identity"]}',
+            "## Fixture tests",
+            f"- pytest: {tests} tests; failures={failures}; errors={errors}; skipped={skipped}",
+            "- Tests use artificial SQLite fixtures and cover active/ambiguous/stale/deleted filtering, exact source retrieval, empty results, null document_hash, and CLI parser behavior.",
             "",
-            "## Морфология и поиск",
-            f'- Движок: {morph["engine"]} {morph["version"]}',
-            f'- Нормализация словоформ: {morph["lemmas"]}',
+            "## Real Vault integration",
+            f"- Morphology: {morph['engine']} {morph['version']}; normalized forms: {morph['lemmas']}",
           ]
           for item in summary["searches"]:
-            lines.append(f'- Запрос {item["query"]}: {item["hit_count"]} результатов')
+            lines.append(f"- Query {item['query']}: {item['hit_count']} hits")
           lines += [
-            f'- Общих пар node_id + content_hash между двумя запросами: {len(summary["common_node_id_content_hash"])}',
-            f'- Источников адресно получено и проверено: {summary["source_retrieval_count"]}',
+            f"- Same addresses across morphology forms: {len(summary['common_node_id_content_hash'])}",
+            f"- Original sources retrieved and SHA-256 verified: {summary['source_retrieval_count']}",
+            f"- Non-active addresses rejected by get-source: {summary['rejected_non_active_source_check_count']}",
+            f"- Vault commit: {vault['git_head']}; tracked files: {vault['tracked_files']}",
+            f"- Vault file digest before / after: {vault['digest_before']} / {vault['digest_after']}",
+            "- E1 structural database and sfra-state branch unchanged: confirmed by workflow",
+            f"- Additional persistent search database files: {len(summary['persistent_search_db_files'])}",
             "",
-            "## Неизменность источников и временный FTS5",
-            f'- Checkout Vault: {vault["git_head"]}',
-            f'- Учтённых файлов Vault: {vault["tracked_files"]}',
-            f'- SHA набора файлов до / после: {vault["digest_before"]} / {vault["digest_after"]}',
-            f'- git status и git diff каталога ГП: чисто',
-            f'- SHA структурной SQLite и HEAD ветки sfra-state совпали после поиска',
-            f'- Дополнительных файлов SQLite/DB в RUNNER_TEMP: {len(summary["persistent_search_db_files"])}',
-            f'- FTS5: {summary["fts5_storage"]}',
-            "",
-            "## Машинные результаты",
-            f'- Результаты интеграции/run-{run_id}/search_results.json',
-            f'- Результаты интеграции/run-{run_id}/source_retrieval.json',
-            f'- Результаты интеграции/run-{run_id}/integration_summary.json',
-            "",
-            "Значения сформированы workflow по результатам данного запуска. Искусственные тесты пакета не подменяют проверки реальной структурной базы."
+            "## Evidence",
+            "- search_results.json, source_retrieval.json, and integration_summary.json are included in the Actions artifact.",
+            "- Fixture tests are separate from the real-Vault integration.",
           ]
-          (base / "Результат.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          (temp / "sfra-integration-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
           PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "$result_dir" "$base/Результат.md"
-          if ! git diff --cached --quiet; then
-            git commit -m "Record SFRA Executor 2 integration results"
-            git push origin HEAD:main
-          fi
 
-      - name: Upload machine-readable integration evidence
+      - name: Upload machine-readable evidence and report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sfra-search-integration
+          name: sfra-e2-active-only-${{ github.run_id }}
           path: |
-            GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/Результаты интеграции/
-            GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/Результат.md
-          if-no-files-found: error
+            ${{ runner.temp }}/sfra-integration-results/
+            ${{ runner.temp }}/sfra-e2-pytest.xml
+            ${{ runner.temp }}/sfra-integration-report.md
+          if-no-files-found: warn
           retention-days: 90
