@@ -1,23 +1,24 @@
-# Этап В1 — интеграция Context Builder: C1
+# Этап В1 — интеграция Context Builder: C1 и E3-02
 
-**Состав:** E2 SearchAdapter, E1 public SourceReader adapter, Snapshot binding, dependency resolver integration, fixture pipeline.  
-**Состояние:** реализация закрыла прежние E3-A/E3-B defects и синхронизирована с \`main\`; PR #10 остаётся draft до независимой аналитической приёмки.  
-**Реальная проверка:** полный E2 → E3 → E1 → Context Pack успешно выполнен в изолированных Actions checkout. Fixture CI и реальный workflow учитываются отдельно.
+**Область:** E2 SearchAdapter → E3 Context Builder → E1 Source Scope API.  
+**C1:** адаптеры, snapshot binding, dependency resolver и fixture tests.  
+**E3-02:** реальная read-only интеграция и расширенная negative matrix.  
+**Состояние:** реализация и CI проверки выполнены; PR #10 остаётся draft до независимой аналитической приёмки.
 
-## 1. SearchAdapter
+## 1. E2 SearchAdapter
 
-\`E2SearchAdapter\` вызывает опубликованный \`sfra_search.runtime.search_structural_database()\`. E3 не копирует FTS/morphology/search/ranking.
+\`E2SearchAdapter\` вызывает опубликованный \`sfra_search.runtime.search_structural_database()\`. E3 не копирует E2 поиск, FTS, morphology или ranking.
 
 - Producer Node ID и Content Hash сохраняются.
-- E2 tier/BM25 и исходное направление сортировки переносятся без синтетического score.
-- E2 excerpt используется только как retrieval signal, не как источник.
-- Полный raw_text принимается только через E1 public scope API по точной паре node_id + content_hash и сверяется по UTF-8 SHA-256.
-- E2 generation не подменяет document-local generation E1.
-- Empty results, runtime error, truncated/limit-sized results, post-filter и source rejection имеют отдельную диагностику.
+- Tier/BM25 и исходное направление сортировки переносятся без синтетического score.
+- E2 excerpt остаётся retrieval signal и не становится source text.
+- Полный raw_text поступает только через E1 public reader API по точной паре node_id + content_hash.
+- E2 index_generation не подменяет E1 document-local generation.
+- Empty results, runtime errors, limit/truncation, post-filter и source rejection отражаются отдельно.
 
-## 2. E1 SourceReader
+## 2. E1 SourceReader и DependencyResolver
 
-E3 вызывает только публичные функции E1:
+Используются только публичные E1 функции:
 
 \`\`\`python
 read_source_scope(
@@ -30,66 +31,120 @@ resolve_current_node(
 ) -> CurrentNodeAddress
 \`\`\`
 
-\`E1SourceReader\` принимает E1 dataclass results и их публичный \`to_dict()\`, а не внутренние SQLite таблицы. Нативный shape \`SourceScopeResult\` включает \`snapshot_id/scope/status/fragments/anchor/parent/previous/next/document/error\`; \`CurrentNodeAddress\` возвращает только current address, без raw_text.
+E3 принимает нативные E1 result dataclasses через публичный \`to_dict()\`. Прямого SQL к внутренним таблицам E1 и собственного Markdown parsing в E3 нет.
 
-На E3 boundary валидируются:
-- snapshot echo и точное совпадение scope;
-- target Node ID + Content Hash;
-- parent relation Node ID против \`target.parent_node_id\`;
-- одинаковый parent у previous/next siblings и правильный source order;
-- уникальность Node ID между ролями и отсутствие partial fragments;
-- source_path, document_hash/source_sha256, document-local index_generation;
-- SHA-256 каждого exact UTF-8 fragment и всего Markdown document;
-- типы и координаты source records.
+SourceReader проверяет:
+- snapshot echo и scope echo;
+- exact target Node ID + Content Hash;
+- parent relation Node ID против target.parent_node_id;
+- одинаковый parent у previous/next siblings и source order;
+- уникальность Node ID между ролями;
+- source_path, document_hash/source_sha256 и document-local index_generation;
+- SHA-256 exact UTF-8 текста и координаты;
+- отсутствие partial fragments при любом error status.
 
-Fixtures — отдельный fake E1 provider. Они не выполняют SQL и не разбирают Markdown.
+DependencyResolver сначала вызывает \`resolve_current_node()\`, затем читает exact current Content Hash через node scope. Fuzzy/historical fallback отсутствуют. Resolver diagnostics очищаются на границе каждого pipeline run.
 
-## 3. Snapshot binding
+## 3. Snapshot binding и token budget
 
-E3 фиксирует SnapshotRef до первого E1 вызова:
+E3 создаёт SnapshotRef до первого E1 вызова:
+- Vault HEAD совпадает с manifest source_commit;
+- sidecar HEAD относится к чистой ветке sfra-state;
+- SQLite SHA совпадает с manifest database_sha256;
+- manifest SHA вычислен по точным байтам manifest.json;
+- Vault root находится внутри pinned Vault checkout.
 
-- \`vault_commit_sha\` совпадает с actual Vault checkout HEAD и manifest \`source_commit\` (или согласованным \`vault_commit_sha\`);
-- \`sidecar_commit_sha\` — actual HEAD чистого checkout ветки \`sfra-state\`;
-- \`manifest_sha256\` — SHA-256 точных байтов manifest;
-- E1 \`verify_state_directory()\` подтверждает manifest/SQLite, а database hash совпадает с manifest;
-- Vault root расположен внутри pinned Vault checkout.
+Один SnapshotRef передаётся в search, dependency resolution и каждый Source Scope вызов. E1 получает только opaque snapshot_id и возвращает его без изменений.
 
-E1 получает только непрозрачный \`snapshot_id\` и возвращает его без изменений. Git refs, checkout и branch resolution остаются ответственностью E3.
+Token budget принадлежит E3 через B1 TokenCounterProtocol. E1 возвращает полный source text. E3 не обрезает raw_text: при превышении бюджета возвращается budget_exceeded без fragments либо контекст откладывается атомарно.
 
-## 4. DependencyResolver и token budget
+При отсутствии фактических policy metadata E3 применяет B1 defaults normal / () / False и помечает их как policy defaults, а не как source annotations.
 
-Для dependency Node ID E3 выполняет:
-1. \`resolve_current_node(node_id, snapshot_id)\`;
-2. читает точный текущий hash через \`read_source_scope(scope="node")\`;
-3. сверяет snapshot, current Node ID, hash и provenance.
+## 4. C1 fixture CI
 
-Fuzzy/historical fallback отсутствуют. При stale/ambiguous/deleted/not_found/integrity errors dependency остаётся unresolved, required group не включается частично. Диагностики resolver очищаются в начале каждого pipeline run.
+[Run 44030495828](https://github.com/yeatu/obsidianGP/actions/runs/44030495828): success.
 
-Token budget принадлежит E3. E1 возвращает полный текст; E3 считает токены через B1 \`TokenCounterProtocol\`. При превышении budget E3 откладывает контекст/atomic group или возвращает \`budget_exceeded\` с пустым fragments. Source text не обрезается и E1 не получает budget argument.
+- B1 regression: **45 passed**.
+- C1 fixture/contract suite: **56 passed**.
+- Включены adversarial checks для wrong parent, sibling under another parent, reversed source order и duplicate Node IDs.
+- Проверяется отсутствие diagnostic leakage между последовательными pipeline runs.
+- Также покрыты hash/snapshot/generation errors, budget atomicity и pipeline error path.
 
-Если E1 не передал реальную policy metadata, E3 применяет \`preservation="normal"\`, \`required_with=()\`, \`parent_context_required=False\` как defaults B1 и обозначает их диагностикой. Это не source annotations.
+Эти тесты используют fake E1 provider и не считаются доказательством реальной интеграции.
 
-## 5. Fixture CI и real integration — раздельные доказательства
+## 5. Real E2 → E3 → E1 → Context Pack
 
-C1 CI использует опубликованный пакет E2 и fake E1 provider:
-- B1 regression: 45 tests;
-- C1 fixture/contract: 56 tests;
-- отдельные adversarial cases для wrong parent, sibling from another parent, reversed order, duplicate IDs;
-- regression для диагностики на двух последовательных \`pipeline.run()\`;
-- wrong hash, stale/ambiguous/deleted/not_found, snapshot mismatch, path/hash/generation, budget atomicity.
+[Run 44030495939](https://github.com/yeatu/obsidianGP/actions/runs/44030495939): **success**, все workflow steps и cleanup jobs завершились. Machine-readable artifact: [sfra-e3-real-integration-44030495939, ID 14305311024](https://github.com/yeatu/obsidianGP/actions/runs/44030495939).
 
-Real integration workflow использует отдельные checkout:
-- E3 branch under review;
-- E1 PR #11 public API branch;
-- production \`sfra-state\` checkout без записей;
-- Vault checkout на commit, указанном в manifest.
+Проверенные implementation refs:
+- E3 code HEAD: \`6e7b4fde4ed1d9eb73cb26f200975199842506f2\`.
+- E1 public API HEAD: \`a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef\`.
 
-Workflow выполняет реальный E2 search, E1 current-node resolution, dependency resolution, четыре scope, ContextBuilder и проверку Context Pack. Runner фиксирует E1/E3 commit SHA, SnapshotRef, source identities и machine-readable отчёт. До/после сравниваются SQLite, manifest, tracked sidecar tree, Vault tree, Git HEADs и clean checkout state.
+SnapshotRef:
+- Vault commit: \`2a3c54fa7a9e910f4c9621c8fe00f41a061fc158\`.
+- sidecar commit: \`fb0b45ae0e5043e342c790d43e2b341ca65d7f2b\`.
+- manifest SHA-256: \`sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072\`.
+- SQLite SHA-256: \`sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674\`.
 
-**Результат последнего подтверждённого real run:** см. PR-CI / workflow artifact в PR #10. Статус Context Pack и число Included/Deferred всегда приводятся фактически; smoke не маркирует pack complete искусственно.
+E2:
+- Search status: ok; 3 hits, 3 source-verifiable candidates.
+- Top candidate tier 5, BM25 -0.3146491266567555.
+- Node ID: \`node_9ca9ad76-8f04-48d5-a2b6-d163f60bcc9e\`.
+- Content Hash: \`sha256:4efd270b3959a6c57799e94397d5583875e42be5d870967b3f3c61bdba628ed7\`.
 
-## 6. Статус и границы
+E1 current-node resolution: ok. DependencyResolver разрешил фактический parent из parent scope: \`node_9b0e90f9-ac0c-44c3-84ce-92f035e0a32c\`; content hash, source path, document hash и generation совпали.
 
-C1 implementation готова к независимой аналитической приёмке; PR #10 остаётся draft и не слит до проверки аналитиком. Реальный integration workflow уже проходит, но это не снимает аналитическую приёмку C1/E3-02.
+| Scope | Status | Fragments / roles | UTF-8 bytes |
+|---|---|---|---:|
+| node | ok | target | 37 575 |
+| parent | ok | target, parent_context | 37 575 + 37 606 |
+| neighbors | ok | target, next_neighbor | 37 575 + 4 |
+| document | ok | document | **110 809** |
 
-GitHub Issue worker, recovery sweep и MCP adapter не входят в PR #10. Отдельное техническое предложение по Issue worker/recovery ведётся самостоятельным документом, без транспортной реализации в этом PR.
+Все четыре scope и pipeline использовали один snapshot_id. Полный Markdown document совпал по SHA-256 и size_bytes; truncation отсутствовала.
+
+## 6. E3-02 real negative matrix
+
+Следующие проверки выполнены тем же real runner через публичные E1/E3 boundaries.
+
+### Production-pinned snapshot и временная копия source
+- Wrong Content Hash: \`stale_source\`, fragments пуст.
+- Unknown Node ID: \`not_found\`, address отсутствует.
+- Повреждённая временная копия исходного Markdown: E1 вернул \`stale_source\`, fragments пуст. Production Vault не менялся.
+- Изменённый snapshot echo от E1: E3 отверг \`snapshot_mismatch\`.
+- Запрос с другим SnapshotRef: E3 отверг \`snapshot_mismatch\` до чтения source.
+- Подменённый document hash: E3 отверг \`document_hash_mismatch\`.
+- Подменённый document generation: E3 отверг \`snapshot_generation_mismatch\`.
+
+### Disposable E1 lifecycle indexes
+
+Ambiguous/deleted состояния не присутствуют в текущем production snapshot, поэтому они созданы в отдельных временных Vault/SQLite copies через публичный E1 \`index_vault()\`. E3 не выполняет SQL и не меняет production state.
+
+- Ambiguous immediate sibling после one-to-many remap: публичный E1 scope API вернул \`ambiguous\`; fragments пуст.
+- Удалённый документ после E1 re-index: публичный E1 scope API вернул \`deleted\`; fragments пуст.
+- В отчёте оба результата явно помечены как disposable E1 lifecycle fixtures, а не как состояния production sidecar.
+
+### Token budget и Context Pack
+
+- Scope document при бюджете 1 token: E3 \`budget_exceeded\`, fragments пуст.
+- Context Pack при request budget 6000: \`budget_limited\`, **1 Included / 2 Deferred**. Это фактический результат, не \`complete\`.
+
+### Read-only assertions
+
+В run 44030495939:
+- SQLite SHA до/после совпал;
+- manifest SHA до/после совпал;
+- tracked sidecar tree SHA совпал;
+- Vault tree SHA совпал;
+- sidecar и Vault HEAD не изменились;
+- оба checkout остались clean.
+
+Production \`sfra-state\` и Vault использовались только для чтения. Ambiguous/deleted lifecycle tests использовали отдельные disposable paths.
+
+## 7. Границы и следующий шаг
+
+C1 implementation и E3-02 integration/negative matrix выполнены на проверенном runner commit \`6e7b4fd\`. После последующего sync/doc-only commit требуется повторить оба workflow на окончательном PR HEAD.
+
+PR #10 остаётся draft и не слит до независимой аналитической приёмки. E3 не выставляет analyst/coordinator status и не отмечает их checklist.
+
+GitHub Issue worker, recovery sweep и MCP adapter не входят в PR #10. Отдельное предложение V2 содержится в PR #12 и не включает transport implementation.
