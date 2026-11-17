@@ -11,6 +11,9 @@
     "sfra-search-prototype.tar.xz.part06": "sha1-git-blob:d554c9de51e45d465873fb953b74dabae46d096d"
   },
   "source_root": ".",
+  "compatibility_overlays": [
+    "empty_source_span_line_end=line_start-1; raw_text must be empty"
+  ],
   "files": [
     ".gitignore",
     "README.md",
