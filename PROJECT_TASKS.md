@@ -525,3 +525,41 @@ PR #21 остаётся Open / not merged. При сравнении с теку
 
 **Принцип работы:** исполнители начинают свободные задачи по CLAIM без ожидания координатора; аналитики проверяют точные HEAD и evidence; координатор принимает решения только там, где есть архитектурная зависимость, safety boundary или финальная приёмка.
 
+
+
+## 15. Координаторская приёмка E2 — 2026-11-18
+
+### 15.1. PR #21 принят и объединён
+
+Координаторская проверка завершена после A2 sync-only review.
+
+- PR [#21](https://github.com/yeatu/obsidianGP/pull/21) успешно объединён в `main`.
+- Merge commit: `2bb84ea536e60605c33be3bb03f5a4da7dee30af`.
+- Проверенный PR HEAD: `f7fa3eca587c3a39a0d7c11804a8e9271657e0c5`.
+- Post-sync CI: [44184089775](https://github.com/yeatu/obsidianGP/actions/runs/44184089775) — success.
+- Artifact: [14372014537](https://github.com/yeatu/obsidianGP/actions/runs/44184089775/artifacts/14372014537), digest `sha256:da59255fa8262aca8fbefc083060bf18ab65dad9a462d1906e015e347fb3b336`.
+- A2 review [5947396014](https://github.com/yeatu/obsidianGP/pull/21#pullrequestreview-5947396014) подтвердил исправление P2, неизменность benchmark runner/corpus/tests/workflow после предыдущего review и отсутствие новых blocking findings.
+- Benchmark: 12 synthetic nodes, 9 queries, 8/8 gated cases, 7 unit tests; recall@1 0.9167, recall@3 1.0000, precision@3 0.3889, MRR 1.0000; стабильность порядка 8/8, дубликатов 0.
+- [Issue #18](https://github.com/yeatu/obsidianGP/issues/18) закрыта как completed.
+
+Решение: **COORDINATOR_ACCEPTED_AND_MERGED** в пределах synthetic-only benchmark scope. Это не меняет runtime semantics lexical search и не разрешает расширять retrieval scope.
+
+### 15.2. Остальные потоки
+
+| Направление | Текущее состояние | Следующий координаторский шаг |
+|---|---|---|
+| E1 / Issue #17 / PR #22/#23 | BLOCKED: требуется execution host с disposable Vault/SQLite fixtures. | Не запускать real-Vault workflows. Проверять только после появления изолированного хоста. |
+| E3 / PR #16 / V2.2 | Предыдущая приёмка non-production scope действительна; последний известный HEAD `d54173901543f6f2a2a1db3d3f774dd8842a89d8`, CI [44183680450](https://github.com/yeatu/obsidianGP/actions/runs/44183680450) успешен, A3 sync-only review [5947349629](https://github.com/yeatu/obsidianGP/pull/16#pullrequestreview-5947349629) завершён. | Повторно сверить текущий PR/base после merge E2. Не объединять автоматически: проверить актуальный diff allowlist и CI. |
+| E3 / Issue #24 | OPEN | Проверить CLAIM и затем фактический PR по empty SourceSpan. |
+| E3 / Issue #25 | OPEN | Проверить CLAIM и затем фактический PR по SnapshotRef TOCTOU. |
+| E3 / Issue #26 | OPEN | Проверить CLAIM и затем фактический PR по facets completeness. |
+| A1 / Issue #19 | RELEASED | Повторный аудит не нужен; findings остаются на координаторском контроле. |
+
+### 15.3. Изменение приоритетов координатора
+
+1. E2 benchmark больше не является открытым блокером: PR #21 merged, Issue #18 completed.
+2. После merge PR #21 повторно проверить актуальный base PR #16; старое утверждение о синхронизации на `d541739` не считать автоматически актуальным.
+3. Проверить открытые E3 Issues #24–#26 по реальному коду и PR evidence; не подменять реализацию повторным описанием задач.
+4. E1 остаётся заблокированным на безопасном тестовом хосте. Никакие реальные данные не публиковать в публичных артефактах или комментариях.
+
+**Последняя координаторская операция:** merge PR #21, commit `2bb84ea536e60605c33be3bb03f5a4da7dee30af`.
