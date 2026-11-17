@@ -77,7 +77,7 @@
 | ID | Исполнитель | Задача | Статус аналитика | Зависимость |
 |---|---|---|---|---|
 | SFRA-E1-01 | E1 | Единый атомарный Source Scope API и разрешение актуального узла | **WAITING_FOR_IMPLEMENTATION** | Нет |
-| SFRA-E3-01 | E3 | Проверка C1 на fixtures | **WAITING_FOR_ANALYST** | Нет |
+| SFRA-E3-01 | E3 | Проверка C1 на fixtures | **ANALYST_REVIEW_IN_PROGRESS** | Нет |
 | SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack | **BLOCKED_BY_SFRA-E1-01** | E1-01 |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **ANALYST_COMPLETE_UNREVIEWED**; координаторская приёмка уже зафиксирована отдельно | Новая реализация не требуется |
 
@@ -169,13 +169,15 @@
 ### SFRA-E3-01 — C1: SearchAdapter, SourceReader boundary и Snapshot binding
 
 **Исполнитель:** E3  
-**Статус:** WAITING_FOR_ANALYST  
+**Статус:** ANALYST_REVIEW_IN_PROGRESS  
 **Текущий PR:** [#10 — E3 C1: add E2 SearchAdapter boundary and snapshot binding](https://github.com/yeatu/obsidianGP/pull/10)  
 **Текущая ветка:** `executor-3/context-integration-stage-c1`  
-**HEAD на момент последней сверки:** `c99d90223370aaeb822b1c76ab86299745510a31`  
-**Состояние PR:** open, draft.
+**Проверенный HEAD аналитика:** `c5398cd2495586dcc5fdc49bb89ef7cc7797a838`  
+**Состояние PR:** open, draft, mergeable. На момент проверки ветка ahead 14 / behind 3 относительно актуального `main` (`09f269ba9e0b30059d9d8ebc05087c49c96856ea`).
 
-**Что заявлено в PR:** SearchAdapter вызывает опубликованный E2 runtime; SourceReader изолирован за публичным портом E1; fixture-тесты покрывают четыре scope, snapshot echo, точные хеши, отсутствие частичных fragments и budget atomicity. Pipeline проходит SearchAdapter → ContextBuilder → ContextPack → SourceReader. Указаны 45 B1 regression tests и 43 C1 fixture tests; CI run [44013424816](https://github.com/yeatu/obsidianGP/actions/runs/44013424816) отмечен как success.
+**Результат проверки CI на текущем HEAD:** [run 44018830452](https://github.com/yeatu/obsidianGP/actions/runs/44018830452) — success; B1: **45 passed**, C1: **48 passed**. Журнал подтверждает установку опубликованного E2 package и выполнение обоих наборов тестов.
+
+**Фактически проверено:** E2 runtime запускается на временной SQLite fixture; E1 scope boundary и четыре scope проверяются через fake E1 provider; Snapshot binder читает фактические Git HEAD и проверяет чистоту checkout; бюджет считается на стороне E3, исходный текст не обрезается; production E1/Vault end-to-end не заявляется. PR body и README пока содержат устаревшие сведения о предыдущем HEAD и количестве тестов.
 
 **Что требуется от E3:**
 
@@ -188,24 +190,33 @@
 
 #### Чек-лист аналитика E3 / C1
 
-- [ ] Аналитик проверил фактический PR HEAD и diff, а не только описание PR.
-- [ ] CI успешен на проверяемом HEAD; результаты 45 B1 и 43 C1 тестов воспроизводимы либо актуальные изменения тестов объяснены.
-- [ ] Проверено использование реального опубликованного E2 SearchAdapter runtime в тестовом прогоне.
-- [ ] Fixture E1 проверяет четыре scope и негативные случаи, но нигде не выдаётся за real-E1 integration.
-- [ ] Snapshot binding, snapshot echo и отказ при mismatch проверены.
-- [ ] Проверены budget atomicity и отсутствие source truncation.
-- [ ] Подтверждено отсутствие прямого SQL-доступа E3 к внутренней схеме E1.
-- [ ] Аналитик явно указал, что реальная E1/Vault интеграция остаётся отдельной задачей SFRA-E3-02.
+- [x] Аналитик проверил фактический PR HEAD и diff, а не только описание PR.
+- [x] CI успешен на проверяемом HEAD: 45 B1 и 48 C1 тестов; результаты подтверждены журналом run 44018830452.
+- [x] Проверено использование реального опубликованного E2 SearchAdapter runtime в тестовом прогоне на временной SQLite fixture.
+- [ ] Fixture E1 проверяет четыре scope и негативные случаи, но пока не проверяет ошибочные parent/sibling relationships: wrong parent ID, sibling under another parent, reversed order и duplicate Node ID между ролями.
+- [x] Snapshot binding, snapshot echo и отказ при mismatch проверены; binder получает Git HEAD через `git rev-parse` и отказывает при dirty checkout.
+- [x] Проверены budget atomicity и отсутствие source truncation; token counter принадлежит E3, budget не передаётся в E1 API.
+- [x] Подтверждено отсутствие прямого SQL-доступа E3 к внутренней схеме E1.
+- [x] Аналитик явно указал, что реальная E1/Vault интеграция остаётся отдельной задачей SFRA-E3-02.
+
+**Остаточные замечания аналитика:**
+
+1. `source_reader.py`: фрагмент не обязан содержать `parent_node_id`; `parent_context.node_id` не сверяется с `target_source.parent_node_id`. Для neighbors не проверяются общий parent, порядок относительно target и уникальность Node ID между ролями. Нужны проверки и adversarial tests.
+2. `Контракты/E1_Source_Scope_API_v1.md` всё ещё включает `budget_tokens` в сигнатуру E1 и описывает передачу budget в E1. Это противоречит утверждённому правилу: E1 возвращает полный текст, бюджет считает E3. README также устарел: он сообщает, что PR #11 предоставляет только `get_node_by_id`, и содержит прежние CI/head значения. PR description ссылается на предыдущий HEAD `c99d902`.
+3. `E1DependencyResolver.diagnostics` накапливается в экземпляре между вызовами `ContextIntegrationPipeline.run()`. Повторный запуск может повторно включить старые diagnostics в новый Context Pack. Нужен сброс/изоляция диагностик по запросу и regression test.
+4. Ветка PR #10 отстаёт от актуального `main` на три коммита. После устранения замечаний синхронизировать ветку и повторить CI на финальном HEAD.
+
+**Снято с прежних замечаний:** получение фактических Git HEAD теперь реализовано и протестировано. Policy defaults `preservation="normal"`, `required_with=()`, `parent_context_required=False` допустимы согласно текущему `PROJECT_TASKS.md`; отсутствие этих полей больше не рассматривается как блокер C1.
 
 **Итог C1 от аналитика**
 - [ ] Аналитик считает C1 завершённым и готовым в рамках fixture/contract границ.
 - [ ] Если C1 закрывает весь текущий спектр E3 на данном этапе: аналитик отмечает `ANALYST_SCOPE_COMPLETE` и передаёт координатору один сводный отчёт.
 - [ ] Если возникло изменение контракта или неразрешимое ограничение: аналитик отмечает `ANALYST_BLOCKED_NEEDS_COORDINATOR`.
 
-Проверенный HEAD аналитика: `не указан`  
-Дата проверки: `не указана`  
-Ссылка на отчёт/артефакты: `не указана`  
-Статус аналитика: **WAITING_FOR_ANALYST**
+Проверенный HEAD аналитика: `c5398cd2495586dcc5fdc49bb89ef7cc7797a838`  
+Дата проверки: `2026-11-17`  
+Ссылка на отчёт/артефакты: [PR #10](https://github.com/yeatu/obsidianGP/pull/10), [CI 44018830452](https://github.com/yeatu/obsidianGP/actions/runs/44018830452)  
+Статус аналитика: **ANALYST_REVIEW_IN_PROGRESS**
 
 #### Отдельный чек-лист координатора E3 / C1 — НЕ ПРОВЕРЕНО
 
@@ -328,9 +339,9 @@
 
 - [ ] **SCOPE COMPLETE:** весь текущий спектр E3 проверен и завершён; координатору передан сводный отчёт.
 - [ ] **BLOCKED:** обнаружено ограничение, требующее решения координатора; сформулирован конкретный вопрос.
-- [ ] **IN PROGRESS:** продолжаю работу по уже утверждённому контракту; вызов координатора не требуется.
+- [x] **IN PROGRESS:** проверка C1 продолжается в рамках утверждённого контракта; вызов координатора по текущим замечаниям не требуется. E3-02 остаётся `BLOCKED_BY_SFRA-E1-01`.
 
-Сводка / ссылки: `не заполнено`
+Сводка / ссылки: PR #10, HEAD `c5398cd2495586dcc5fdc49bb89ef7cc7797a838`; CI run 44018830452 — 45 B1 / 48 C1 passed. Остаточные замечания внесены в раздел SFRA-E3-01.
 
 ---
 
