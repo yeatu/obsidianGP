@@ -301,10 +301,14 @@ def test_ambiguous_dependency_is_not_replaced_and_is_diagnosed(tmp_path):
     result = pipeline.run(_request())
 
     included_ids = {entry["node_id"] for entry in result.context_pack["Included"]}
-    assert included_ids == {"node_target"}
+    # Required groups are atomic: an ambiguous dependency defers the entire group.
+    assert included_ids == set()
     assert any(
         item["code"] == "dependency_current_node_unavailable"
         and item["details"]["e1_status"] == "ambiguous"
         for item in result.context_pack["Diagnostics"]
     )
     assert all(call[2] != "node_parent" for call in api.scope_calls)
+    assert "node_target" in {
+        item["node_id"] for item in result.context_pack["Deferred"]
+    }
