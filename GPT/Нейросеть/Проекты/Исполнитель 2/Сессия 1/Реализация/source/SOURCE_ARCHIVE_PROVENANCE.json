@@ -12,7 +12,8 @@
   },
   "source_root": ".",
   "compatibility_overlays": [
-    "empty_source_span_line_end=line_start-1; raw_text must be empty"
+    "empty_source_span_line_end=line_start-1; raw_text must be empty",
+    "ambiguous_nodes_excluded_from_E2_import_and_source_retrieval"
   ],
   "files": [
     ".gitignore",

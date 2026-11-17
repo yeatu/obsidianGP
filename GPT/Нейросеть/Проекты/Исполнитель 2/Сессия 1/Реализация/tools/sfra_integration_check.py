@@ -107,9 +107,9 @@ def main() -> int:
     db = sqlite3.connect(uri, uri=True)
     try:
         db.execute("PRAGMA query_only = ON")
-        integrity = db.execute("PRAGMA quick_check").fetchone()[0]
+        integrity = db.execute("PRAGMA integrity_check").fetchone()[0]
         if integrity != "ok":
-            raise RuntimeError(f"SQLite quick_check failed: {integrity}")
+            raise RuntimeError(f"SQLite integrity_check failed: {integrity}")
         schema_version = db.execute(
             "SELECT schema_version FROM schema_info WHERE singleton=1"
         ).fetchone()[0]
@@ -121,14 +121,57 @@ def main() -> int:
         ).fetchone()[0]
         total_nodes = db.execute("SELECT COUNT(*) FROM structural_nodes").fetchone()[0]
         active_nodes = db.execute(
-            "SELECT COUNT(*) FROM structural_nodes "
-            "WHERE status IN ('active','ambiguous') AND stale_generation IS NULL"
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='active'
+                 AND n.stale_generation IS NULL"""
         ).fetchone()[0]
         missing_ids = db.execute(
-            "SELECT COUNT(*) FROM structural_nodes "
-            "WHERE status IN ('active','ambiguous') AND stale_generation IS NULL "
-            "AND (node_id IS NULL OR content_hash IS NULL)"
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='active'
+                 AND n.stale_generation IS NULL
+                 AND (n.node_id IS NULL OR n.content_hash IS NULL)"""
         ).fetchone()[0]
+        ambiguous_nodes = db.execute(
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='ambiguous'
+                 AND n.stale_generation IS NULL"""
+        ).fetchone()[0]
+        stale_nodes = db.execute(
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active'
+                 AND (n.status='stale' OR n.stale_generation IS NOT NULL)"""
+        ).fetchone()[0]
+        deleted_nodes = db.execute(
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='deleted'"""
+        ).fetchone()[0]
+        nodes_in_deleted_documents = db.execute(
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status!='active'"""
+        ).fetchone()[0]
+        eligible_source_pairs = {
+            (row[0], row[1])
+            for row in db.execute(
+                """SELECT n.node_id,n.content_hash FROM structural_nodes n
+                   JOIN documents d ON d.document_pk=n.document_pk
+                   WHERE d.status='active' AND n.status='active'
+                     AND n.stale_generation IS NULL
+                     AND n.node_id IS NOT NULL AND n.content_hash IS NOT NULL"""
+            ).fetchall()
+        }
+        rejected_source_samples = db.execute(
+            """SELECT n.node_id,n.content_hash,n.status,n.stale_generation,d.status
+               FROM structural_nodes n JOIN documents d ON d.document_pk=n.document_pk
+               WHERE n.node_id IS NOT NULL AND n.content_hash IS NOT NULL
+                 AND (d.status!='active' OR n.status!='active' OR n.stale_generation IS NOT NULL)
+               ORDER BY n.source_path,n.line_start LIMIT 20"""
+        ).fetchall()
         if missing_ids:
             raise RuntimeError(f"{missing_ids} active structural nodes lack node_id/content_hash")
     finally:
@@ -170,6 +213,32 @@ def main() -> int:
     env["PYTHONUTF8"] = "1"
     env["SFRA_REQUIRE_PYMORPHY3"] = "1"
 
+    rejected_source_checks: list[dict[str, Any]] = []
+    for row in rejected_source_samples:
+        node_id, content_hash, node_status, stale_generation, document_status = row
+        completed = subprocess.run(
+            [
+                cli, "get-source", "--source-db", str(args.source_db),
+                "--node-id", node_id, "--content-hash", content_hash,
+            ],
+            text=True, capture_output=True, env=env,
+        )
+        if completed.returncode != 2:
+            raise RuntimeError(
+                "get-source exposed a non-active, stale, or deleted E1 node: "
+                f"node_id={node_id}, node_status={node_status}, "
+                f"stale_generation={stale_generation}, document_status={document_status}, "
+                f"exit_code={completed.returncode}, stdout={completed.stdout[-1000:]}"
+            )
+        rejected_source_checks.append({
+            "node_id": node_id,
+            "content_hash": content_hash,
+            "node_status": node_status,
+            "stale_generation": stale_generation,
+            "document_status": document_status,
+            "rejected": True,
+        })
+
     queries = ["реанимации", "реанимацию"]
     searches: list[dict[str, Any]] = []
     hit_maps: list[dict[tuple[str, str], dict[str, Any]]] = []
@@ -182,6 +251,12 @@ def main() -> int:
         if not hits:
             raise RuntimeError(f"No search hits returned for query: {query}")
         hit_map = {(h["node_id"], h["content_hash"]): h for h in hits}
+        disallowed_pairs = sorted(set(hit_map) - eligible_source_pairs)
+        if disallowed_pairs:
+            raise RuntimeError(
+                f"Search returned non-active or stale source addresses for {query!r}: "
+                f"{disallowed_pairs[:10]}"
+            )
         hit_maps.append(hit_map)
         searches.append({
             "query": query,
@@ -300,6 +375,8 @@ def main() -> int:
             f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
             f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}"
         ),
+        "implementation_commit": os.environ.get("GITHUB_SHA"),
+        "manifest_sha256": "sha256:" + digest(args.manifest),
         "state_branch_sha": args.state_branch_sha,
         "state_manifest": manifest,
         "structural_db": {
@@ -311,6 +388,11 @@ def main() -> int:
             "total_nodes": total_nodes,
             "active_nodes": active_nodes,
             "nodes_missing_identity": missing_ids,
+            "ambiguous_nodes_excluded": ambiguous_nodes,
+            "stale_nodes_excluded": stale_nodes,
+            "deleted_nodes_excluded": deleted_nodes,
+            "nodes_in_deleted_documents_excluded": nodes_in_deleted_documents,
+            "eligible_source_pairs": len(eligible_source_pairs),
         },
         "vault": {
             "git_head": git("rev-parse", "HEAD"),
@@ -334,6 +416,7 @@ def main() -> int:
             {"node_id": node_id, "content_hash": ch} for node_id, ch in sorted(common)
         ],
         "source_retrieval_count": len(retrieved),
+        "rejected_source_lookup_checks": rejected_source_checks,
         "persistent_search_db_files": db_files,
         "fts5_storage": "runtime process; no additional SQLite file detected under RUNNER_TEMP",
     }

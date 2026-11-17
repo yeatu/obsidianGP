@@ -2,9 +2,14 @@ name: SFRA search integration (Executor 2)
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "executor-2/**"
     paths:
       - ".github/workflows/sfra-search-integration.yml"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/sfra_integration_check.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/tools/unpack_search_package.py"
   workflow_dispatch:
 
 permissions:
@@ -22,7 +27,7 @@ jobs:
       - name: Check out E2 implementation branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: true
 
       - name: Check out persisted structural state
@@ -80,6 +85,7 @@ jobs:
             --destination "$GITHUB_WORKSPACE/$base/source"
 
       - name: Publish unpacked Python source files into the repository
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -157,6 +163,7 @@ jobs:
           echo "sfra-state branch head unchanged: $remote_state_sha"
 
       - name: Publish integration JSON and factual report
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -231,7 +238,7 @@ jobs:
         with:
           name: sfra-search-integration
           path: |
-            GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/Результаты интеграции/
-            GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/Результат.md
+            ${{ runner.temp }}/sfra-integration-results/
+            GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/SOURCE_ARCHIVE_PROVENANCE.json
           if-no-files-found: error
           retention-days: 90

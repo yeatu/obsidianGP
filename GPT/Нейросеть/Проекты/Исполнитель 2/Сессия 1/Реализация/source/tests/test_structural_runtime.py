@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -262,3 +264,142 @@ def test_empty_source_span_preserves_executor1_zero_end_line(tmp_path):
     assert source["line_end"] == 0
     assert source["raw_text"] == ""
     assert sha256_file(db_path) == before
+
+
+def _insert_non_active_status_nodes(db_path: Path) -> dict[str, tuple[str, str]]:
+    texts = {
+        "ambiguous": "неоднозначный маркер sfra",
+        "stale_status": "устаревший статус маркер sfra",
+        "stale_generation": "устаревшее поколение маркер sfra",
+        "deleted": "удалённый статус маркер sfra",
+    }
+    rows = [
+        (5, 1, "node_ambiguous", 1, "quote", "[]", 4, 4, 65, 65 + len(texts["ambiguous"]),
+         calculate_content_hash(texts["ambiguous"]), texts["ambiguous"], "ambiguous", None),
+        (6, 1, "node_stale_status", 1, "quote", "[]", 5, 5, 120, 120 + len(texts["stale_status"]),
+         calculate_content_hash(texts["stale_status"]), texts["stale_status"], "stale", 2),
+        (7, 1, "node_stale_generation", 1, "quote", "[]", 6, 6, 180, 180 + len(texts["stale_generation"]),
+         calculate_content_hash(texts["stale_generation"]), texts["stale_generation"], "active", 3),
+        (8, 1, "node_deleted_status", 1, "quote", "[]", 7, 7, 250, 250 + len(texts["deleted"]),
+         calculate_content_hash(texts["deleted"]), texts["deleted"], "deleted", None),
+    ]
+    connection = sqlite3.connect(db_path)
+    connection.executemany(
+        """INSERT INTO structural_nodes
+           (node_pk,document_pk,node_id,parent_node_pk,node_type,heading_path_json,
+            line_start,line_end,char_start,char_end,content_hash,raw_text,status,stale_generation)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        rows,
+    )
+    connection.commit()
+    connection.close()
+    suffixes = {
+        "ambiguous": "ambiguous",
+        "stale_status": "stale_status",
+        "stale_generation": "stale_generation",
+        "deleted": "deleted_status",
+    }
+    return {
+        key: (f"node_{suffixes[key]}", calculate_content_hash(value))
+        for key, value in texts.items()
+    }
+
+
+def test_active_only_policy_excludes_ambiguous_stale_and_deleted_nodes(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    active_node_id, active_hash, _ = create_executor1_database(db_path)
+    rejected = _insert_non_active_status_nodes(db_path)
+
+    nodes, summary = load_current_nodes(db_path)
+    node_ids = {node["node_id"] for node in nodes}
+    assert node_ids == {"node_executor1_root", active_node_id}
+    assert summary.nodes_current == 2
+
+    active_report = search_structural_database(db_path, "остановка кровообращения")
+    active_hits = active_report["search"]["results"]
+    assert any(hit["node_id"] == active_node_id for hit in active_hits)
+    active_source = get_source_node(db_path, active_node_id, active_hash)
+    assert active_source is not None
+    assert active_source["content_hash"] == active_hash
+
+    for query in (
+        "неоднозначный маркер",
+        "устаревший статус маркер",
+        "устаревшее поколение маркер",
+        "удалённый статус маркер",
+        "old",
+    ):
+        report = search_structural_database(db_path, query)
+        assert report["search"]["status"] == "not_found_in_retrieval"
+        assert report["search"]["results"] == []
+
+    for node_id, content_hash in rejected.values():
+        assert get_source_node(db_path, node_id, content_hash) is None
+    assert get_source_node(
+        db_path, "node_deleted_doc", calculate_content_hash("old")
+    ) is None
+
+
+def test_snapshot_without_active_source_reports_not_found_in_retrieval(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    node_id, content_hash, _ = create_executor1_database(db_path)
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        "UPDATE structural_nodes SET status='ambiguous', stale_generation=NULL WHERE document_pk=1"
+    )
+    connection.commit()
+    connection.close()
+
+    nodes, summary = load_current_nodes(db_path)
+    assert nodes == []
+    assert summary.nodes_current == 0
+
+    report = search_structural_database(db_path, "остановка кровообращения")
+    assert report["search"]["status"] == "not_found_in_retrieval"
+    assert report["search"]["results"] == []
+    assert get_source_node(db_path, node_id, content_hash) is None
+
+
+def test_null_document_hash_is_preserved_and_never_replaced_by_node_hash(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    create_executor1_database(db_path)
+    text = "документ без хеша содержит уникальный маркер"
+    node_id = "node_no_document_hash"
+    node_hash = calculate_content_hash(text)
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        "INSERT INTO documents VALUES (3, 'hashless/Документ.md', 'active', NULL)"
+    )
+    connection.execute(
+        """INSERT INTO structural_nodes VALUES
+           (9, 3, ?, NULL, 'document', '[]', 1, 1, 0, ?, ?, ?, 'active', NULL)""",
+        (node_id, len(text), node_hash, text),
+    )
+    connection.commit()
+    connection.close()
+
+    nodes, _ = load_current_nodes(db_path)
+    node = next(item for item in nodes if item["node_id"] == node_id)
+    assert node["document_hash"] is None
+    assert node["content_hash"] == node_hash
+
+    report = search_structural_database(db_path, "уникальный маркер")
+    hit = next(item for item in report["search"]["results"] if item["node_id"] == node_id)
+    assert hit["document_hash"] is None
+    assert hit["content_hash"] == node_hash
+    assert hit["document_hash"] != hit["content_hash"]
+
+    source = get_source_node(db_path, node_id, node_hash)
+    assert source is not None
+    assert source["document_hash"] is None
+    assert source["content_hash"] == node_hash
+
+
+def test_integration_verifier_cli_help_has_one_package_dir_option():
+    script = Path(__file__).resolve().parents[2] / "tools" / "sfra_integration_check.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        text=True, capture_output=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.count("--package-dir") == 1
