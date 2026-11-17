@@ -170,7 +170,7 @@ def main() -> int:
                FROM structural_nodes n JOIN documents d ON d.document_pk=n.document_pk
                WHERE n.node_id IS NOT NULL AND n.content_hash IS NOT NULL
                  AND (d.status!='active' OR n.status!='active' OR n.stale_generation IS NOT NULL)
-               ORDER BY n.source_path,n.line_start LIMIT 20"""
+               ORDER BY d.source_path,n.line_start LIMIT 20"""
         ).fetchall()
         if missing_ids:
             raise RuntimeError(f"{missing_ids} active structural nodes lack node_id/content_hash")
