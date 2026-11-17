@@ -1338,7 +1338,18 @@ def test_source_scope_sqlite_integrity_error_is_fail_closed_and_read_only(
 
     assert result.status is NodeLookupStatus.INTEGRITY_ERROR
     assert result.error_code == "raw_text_hash_mismatch"
-    _assert_empty_scope_failure(result, snapshot_id)
+    assert result.snapshot_id == snapshot_id
+    assert result.fragments == ()
+    assert result.anchor is None
+    assert result.parent is None
+    assert result.previous is None
+    assert result.next is None
+    assert result.document is None
+    payload = result.to_dict()
+    assert payload["fragments"] == []
+    assert payload["anchor"] is None
+    assert payload["document"] is None
+    assert "Target paragraph" not in json.dumps(payload)
     assert db_path.read_bytes() == database_before
     assert note.read_bytes() == source_before
 
