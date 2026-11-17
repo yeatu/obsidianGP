@@ -1,6 +1,18 @@
 name: SFRA E3 real E1/E2 integration (manual)
 
 on:
+  push:
+    branches:
+      - executor-3/context-integration-stage-c1
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - ".github/workflows/sfra-e3-real-e1-integration.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - ".github/workflows/sfra-e3-real-e1-integration.yml"
   workflow_dispatch:
     inputs:
       e1_ref:
@@ -37,7 +49,7 @@ jobs:
       - name: Checkout requested E1 API implementation
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.e1_ref }}
+          ref: ${{ inputs.e1_ref || 'executor-1/e1-source-read-api-mainline' }}
           path: e1
           persist-credentials: false
 
@@ -102,8 +114,8 @@ jobs:
           SFRA_E1_ROOT: ${{ github.workspace }}/e1/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация
           SFRA_SIDECAR_ROOT: ${{ github.workspace }}/sidecar
           SFRA_VAULT_GIT_ROOT: ${{ github.workspace }}/vault
-          SFRA_VAULT_SUBDIR: ${{ inputs.vault_subdir }}
-          SFRA_QUERY: ${{ inputs.query }}
+          SFRA_VAULT_SUBDIR: ${{ inputs.vault_subdir || 'ГП' }}
+          SFRA_QUERY: ${{ inputs.query || 'реанимация' }}
         run: |
           cd e3
           PYTHONPATH="src:${PYTHONPATH}" python "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/run_real_e1_integration.py"

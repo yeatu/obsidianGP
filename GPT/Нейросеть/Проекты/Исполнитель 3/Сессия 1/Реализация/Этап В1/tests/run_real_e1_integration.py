@@ -39,6 +39,15 @@ def _tracked_tree_digest(repo_root: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def _git_head(repo_root: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def _git_status(repo_root: Path) -> str:
     return subprocess.run(
         ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=all"],
@@ -74,7 +83,10 @@ def main() -> int:
 
     database_before = _sha256_bytes(pinned.database_path.read_bytes())
     manifest_before = _sha256_bytes(pinned.manifest_path.read_bytes())
+    sidecar_tree_before = _tracked_tree_digest(sidecar_root)
     vault_before = _tracked_tree_digest(vault_git_root)
+    sidecar_head_before = _git_head(sidecar_root)
+    vault_head_before = _git_head(vault_git_root)
     sidecar_status_before = _git_status(sidecar_root)
     vault_status_before = _git_status(vault_git_root)
     if sidecar_status_before or vault_status_before:
@@ -185,7 +197,10 @@ def main() -> int:
 
     database_after = _sha256_bytes(pinned.database_path.read_bytes())
     manifest_after = _sha256_bytes(pinned.manifest_path.read_bytes())
+    sidecar_tree_after = _tracked_tree_digest(sidecar_root)
     vault_after = _tracked_tree_digest(vault_git_root)
+    sidecar_head_after = _git_head(sidecar_root)
+    vault_head_after = _git_head(vault_git_root)
     sidecar_status_after = _git_status(sidecar_root)
     vault_status_after = _git_status(vault_git_root)
 
@@ -193,8 +208,12 @@ def main() -> int:
         raise RuntimeError("E1 SQLite changed during real integration test")
     if manifest_after != manifest_before:
         raise RuntimeError("E1 manifest changed during real integration test")
+    if sidecar_tree_after != sidecar_tree_before:
+        raise RuntimeError("A tracked file in the pinned sfra-state checkout changed")
     if vault_after != vault_before:
         raise RuntimeError("Pinned Vault files changed during real integration test")
+    if sidecar_head_after != sidecar_head_before or vault_head_after != vault_head_before:
+        raise RuntimeError("A pinned Git checkout HEAD moved during the integration test")
     if sidecar_status_after or vault_status_after:
         raise RuntimeError("Real integration test left checkout changes")
 
@@ -206,6 +225,7 @@ def main() -> int:
             "sidecar_commit_sha": pinned.ref.sidecar_commit_sha,
             "manifest_sha256": pinned.ref.manifest_sha256,
             "database_sha256": database_before,
+            "sidecar_tree_sha256": sidecar_tree_before,
             "vault_tree_sha256": vault_before,
         },
         "e2": {
@@ -241,7 +261,10 @@ def main() -> int:
         "read_only": {
             "sqlite_unchanged": database_before == database_after,
             "manifest_unchanged": manifest_before == manifest_after,
+            "sidecar_tree_unchanged": sidecar_tree_before == sidecar_tree_after,
             "vault_unchanged": vault_before == vault_after,
+            "sidecar_head_unchanged": sidecar_head_before == sidecar_head_after,
+            "vault_head_unchanged": vault_head_before == vault_head_after,
             "sidecar_clean": not sidecar_status_after,
             "vault_checkout_clean": not vault_status_after,
         },
