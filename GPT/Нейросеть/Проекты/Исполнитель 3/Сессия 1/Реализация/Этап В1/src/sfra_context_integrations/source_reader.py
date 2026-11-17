@@ -71,8 +71,8 @@ class E1SourceReader:
             raise ValueError(f"unsupported source scope: {scope!r}")
         if not isinstance(snapshot, SnapshotRef):
             raise TypeError("snapshot must be a SnapshotRef")
-        if budget_tokens is not None and not _is_non_negative_int(budget_tokens):
-            raise ValueError("budget_tokens must be a non-negative integer or None")
+        if budget_tokens is not None and (not _is_non_negative_int(budget_tokens) or budget_tokens < 1):
+            raise ValueError("budget_tokens must be an integer >= 1 or None")
 
         try:
             response = self._scope_api.read_scope(

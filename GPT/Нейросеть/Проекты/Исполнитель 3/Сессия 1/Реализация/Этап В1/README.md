@@ -1,48 +1,65 @@
-# Этап В1 — интеграция Context Builder: C1
+# Этап В1 — интеграция Context Builder: контрольный рубеж C1
 
-**Статус:** пакет C1 подготовлен к независимой проверке.  
-**Объём:** E2 SearchAdapter, snapshot binding, E1 source-read port, fixtures и unit-тесты.  
-**Не входит:** реализация E1 SourceReader, Issue worker, recovery, MCP.
+**Статус:** C1 реализован на уровне адаптеров и fixtures; ожидает повторной проверки аналитиком. PR #10 остаётся draft.
+**Доказано:** реальный E2 runtime на временной SQLite fixture, сборка Context Pack на полном fixture-сценарии, четыре scope через тестовый E1 API, snapshot pinning и B1 regression.
+**Не доказано:** интеграция с production E1 Source Scope API и полный проход по реальному Vault.
 
-## Фактическая исходная точка
+## 1. E2 SearchAdapter
 
-- B1 Context Builder принят и находится в `main`.
-- E2 предоставляет `search_structural_database(source_database, query, entities=..., limit=..., entity_config=...)`.
-- Search hit содержит locator, excerpt, `match_type`, `match_reasons` и `relevance.tier/bm25`.
-- E2 `excerpt` — поисковая подсказка, не первоисточник.
-- E2 `index_generation` создаётся производным поисковым индексом и не равен E1 `documents.generation`.
-- E1 публикует проект `get_node_by_id` только для scope `node`. В документе E1 прямо указано, что реализация API не начиналась; `parent`, `neighbors` и `document` не входят в текущий контракт.
+Адаптер вызывает существующий публичный runtime E2: sfra_search.runtime.search_structural_database(source_database, query, entities, limit, entity_config).
 
-Последний E2 real-Vault report: [run 43997334585](https://github.com/yeatu/obsidianGP/actions/runs/43997334585). Он подтверждает существующий поиск и получение узлов из E1 SQLite, но не новый E1 Source API и не четыре scope-read.
+- Не копирует поиск, FTS5 или морфологию.
+- Сохраняет Node ID, Content Hash, path, heading, line coordinates, match type, match reasons, tier и BM25.
+- Сохраняет порядок E2: tier ascending, BM25 ascending; отдельный score не синтезирует.
+- Передаёт excerpt только как signals.match_excerpt.
+- Берёт raw_text только через E1 reader по точной паре node_id + content_hash.
+- Отвергает несовпадающие locator поля и SHA-256 полного текста.
+- Не использует E2 index_generation как E1 document-local generation.
+- Различает not_found_in_retrieval, ошибку runtime и неполную выдачу.
+- Ровно limit hits считает потенциально усечёнными, так как E2 не возвращает total_count/cursor.
+- Не изобретает facet signals; зоны фильтруются только по точному первому сегменту path и консервативно помечают выдачу неполной.
 
-## Реализовано в C1
+## 2. SourceReader
 
-1. `E2SearchAdapter` вызывает существующий E2 runtime или injected callable.
-2. E2 hit используется только как locator/ranking record.
-3. Полный `raw_text` поступает только через injected `E1NodeReader` по `node_id + content_hash` и тому же `SnapshotRef`.
-4. E2 `excerpt` сохраняется только как `signals.match_excerpt`.
-5. Tier/BM25 сохраняются без инверсии; BM25 — ascending.
-6. `match_reasons` сохраняются в `unmapped_match_reasons`: неизвестным кодам не приписываются новые значения или веса.
-7. E2 generation не используется как E1 document generation.
-8. Пустой успешный поиск отличается от ошибки; E2 exception не маскируется под empty result.
-9. Ровно `limit` результатов считаются потенциально усечёнными: E2 не возвращает `total_count` или `cursor`.
-10. Snapshot binder проверяет `manifest.source_commit` против реального pinned Vault commit, DB SHA-256 и SHA-256 точных байтов manifest. E1 integrity verifier вызывается через официальный `verify_state_directory` callback.
+E1SourceReader — транспортно-независимая проверяющая обёртка над публичным портом E1ScopeAPI. Она принимает scopes: node, parent, neighbors, document.
 
-## Открытая зависимость E1
+Проверяются snapshot_id, requested node address, document path, document-local generation, whole-document hash, exact fragment SHA-256 и отсутствие частичных fragments при ошибочном статусе. Ошибки stale_source, ambiguous, deleted, not_found, budget_exceeded, source_unavailable и integrity_error остаются явными.
 
-До C2 E1 должен согласовать и реализовать контракт из `Контракты/E1_Source_Scope_API_v1.md`: `node`, `parent`, `neighbors`, `document`.
+Fixtures реализуют четыре режима на заранее описанных записях и sibling-связях. Они не выполняют SQL к E1, не парсят Markdown и не вычисляют соседей из текста.
 
-Для parent/neighbors/document нужны E1 `document_hash` и document-local `index_generation`. E3 не подменяет hash документа хешем узла.
+**Ограничение:** открытый PR #11 E1 публикует exact node lookup (get_node_by_id), но не полный четырёхрежимный Source Scope API. Поэтому C1 имеет рабочий E3 SourceReader boundary и fixture implementation, но не E1-backed production scope reader. Реальные parent/neighbors/document остаются заблокированы до согласования и реализации публичного API E1.
 
-Источник `preservation`, `required_with` и `parent_context_required` пока не подтверждён. E3 не выводит эти флаги из текста, excerpt или match reasons.
+## 3. Snapshot binding и pipeline
 
-## Следующие gates
+SnapshotRef собирается из:
+- vault_commit_sha — фактический pinned Vault HEAD, равный manifest.source_commit;
+- sidecar_commit_sha — фактический pinned checkout HEAD ветки sfra-state;
+- manifest_sha256 — SHA-256 точных байтов state/manifest.json.
+
+Snapshot binder требует официальный E1 verify_state_directory, сверяет manifest и SQLite digest. ContextIntegrationPipeline передаёт один и тот же SnapshotRef в E2 adapter, B1 dependency resolver и каждый последующий SourceReader scope-read.
+
+Fixture-сценарий запускает:
+real E2 runtime fixture → SearchAdapter → SearchBatch → ContextBuilder (B1) → ContextPack → SourceReader fixture (node / parent / neighbors / document).
+
+Дополнительно проверяются dependency resolution, mismatch document-local generation, атомарный token budget, stale/ambiguous, полный hash и отказ при другом SnapshotRef.
+
+## 4. Проверки
+
+GitHub Actions workflow: .github/workflows/sfra-context-integration-c1-tests.yml.
+
+- B1 regression suite: 45 tests.
+- C1 fixture suite: на head c86301d было 42 passed; добавленный после этого run тест нулевого scope budget требует следующего итогового CI.
+- Python 3.11.
+- E2 package устанавливается из опубликованного source проекта Исполнителя 2; реальный search_structural_database вызывается на временной структурной SQLite fixture.
+- Тест проверяет, что digest временной SQLite не изменился. Это не production Vault и не production sfra-state.
+
+## 5. Gates
 
 | Gate | Условие |
 |---|---|
-| C1 | Аналитик принимает E2 mapping, Snapshot binder, fixtures и запрос к E1 |
-| C2 | E1 реализует node / parent / neighbors / document API |
-| C3 | E3 подключает SourceReader и DependencyResolver через публичный E1 API; fixtures пройдены |
-| C4 | Real-Vault search → Context Pack → все read scopes на одном pinned snapshot, Vault/sidecar read-only |
+| C1 | Аналитик принимает E2 mapping, E1 scope boundary, snapshot binder и fixture pipeline |
+| C2 | E1 реализует node / parent / neighbors / document API и current-node resolver для B1 dependency edges |
+| C3 | E3 подключает production SourceReader / DependencyResolver только через публичный E1 API |
+| C4 | Real-Vault search → Context Pack → все scopes на одном pinned snapshot; Vault и SQLite только read-only |
 
-CI на fixtures не является real-Vault integration test. Следующий gate не начинается автоматически после публикации PR.
+GitHub Issue worker, recovery sweep и MCP adapter в этот PR не входят. Реальный Vault не изменялся.

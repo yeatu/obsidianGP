@@ -147,6 +147,21 @@ def test_source_reader_rejects_modified_fragment_text():
     assert error.value.code == "content_hash_mismatch"
 
 
+def test_source_reader_rejects_zero_scope_budget():
+    pinned = snapshot()
+    api = FixtureE1ScopeAPI(pinned)
+    reader = E1SourceReader(api)
+
+    with pytest.raises(ValueError, match="budget_tokens"):
+        reader.read_scope(
+            "node_target",
+            _target_hash(api),
+            "node",
+            pinned,
+            budget_tokens=0,
+        )
+
+
 def test_source_reader_refuses_partial_fragments_on_budget_exceeded():
     pinned = snapshot()
     api = FixtureE1ScopeAPI(pinned)
