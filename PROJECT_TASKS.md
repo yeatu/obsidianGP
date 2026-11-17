@@ -599,4 +599,4 @@ PR #28 and PR #29 were closed as superseded after their changes were consolidate
 5. Do not mistake the successful read-only manifest-pinned integration run for permission to run the E1 indexer against the production Vault. The former validated E3 reads; the latter mutates/indexes production state and remains blocked.
 6. V2.3/V2.4 remain frozen. The V2.2 merge does not authorize production GitHub transport or source-content publication.
 
-**Координаторская точка восстановления:** main HEAD 05a067e1348b2871e403159f060d49b61d4fef7d; E2 benchmark, E3 contract fixes and V2.2 non-production core accepted and merged. Единственный текущий стопор — E1 fixture-only execution environment.
+**Координаторская точка восстановления:** implementation HEAD 05a067e1348b2871e403159f060d49b61d4fef7d (последний кодовый merge; далее был только registry-only commit). E2 benchmark, E3 contract fixes and V2.2 non-production core accepted and merged. Единственный текущий стопор — E1 fixture-only execution environment.
