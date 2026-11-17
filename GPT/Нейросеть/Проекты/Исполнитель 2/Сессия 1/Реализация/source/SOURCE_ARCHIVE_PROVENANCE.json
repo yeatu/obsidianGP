@@ -1,0 +1,38 @@
+{
+  "archive": "sfra-search-prototype.tar.xz assembled from seven tracked parts",
+  "archive_sha256": "sha256:cadc03980b8685a22d85fc55270ccd23f892dc66983e4027a1ebb0b231f8c4b5",
+  "part_sha256": {
+    "sfra-search-prototype.tar.xz.part00": "sha1-git-blob:14801202f70116b5861b4d105b97839f247877a1",
+    "sfra-search-prototype.tar.xz.part01": "sha1-git-blob:6da4e587cc65aaacb57d54de961c6e6ab6d4da02",
+    "sfra-search-prototype.tar.xz.part02": "sha1-git-blob:fb7da08d6ca63949ade4676f5e699be9338338dc",
+    "sfra-search-prototype.tar.xz.part03": "sha1-git-blob:783e99162fb65e43dfee29827bd8b19a606a3c54",
+    "sfra-search-prototype.tar.xz.part04": "sha1-git-blob:3cbebaf1075cb0ae339e5d3c5ffcfbb83fb1dfda",
+    "sfra-search-prototype.tar.xz.part05": "sha1-git-blob:cbfc0f190a3285632394daa4dea2ecbee1fff888",
+    "sfra-search-prototype.tar.xz.part06": "sha1-git-blob:d554c9de51e45d465873fb953b74dabae46d096d"
+  },
+  "source_root": ".",
+  "files": [
+    ".gitignore",
+    "README.md",
+    "config/entities.example.json",
+    "contracts/node-batch-v1.schema.json",
+    "contracts/node-v1.schema.json",
+    "fixtures/import-manifest.json",
+    "fixtures/nodes.sample.jsonl",
+    "pyproject.toml",
+    "requirements-dev.txt",
+    "requirements.txt",
+    "src/sfra_search/__init__.py",
+    "src/sfra_search/__main__.py",
+    "src/sfra_search/adapter.py",
+    "src/sfra_search/cli.py",
+    "src/sfra_search/db.py",
+    "src/sfra_search/normalize.py",
+    "src/sfra_search/runtime.py",
+    "src/sfra_search/structural.py",
+    "tests/conftest.py",
+    "tests/test_search_index.py",
+    "tests/test_structural_runtime.py",
+    "Результат.md"
+  ]
+}
