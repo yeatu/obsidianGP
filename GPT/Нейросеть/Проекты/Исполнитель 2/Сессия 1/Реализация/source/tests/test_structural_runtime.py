@@ -407,3 +407,20 @@ def test_integration_check_cli_has_no_duplicate_package_dir_argument():
     assert completed.returncode == 0, completed.stderr
     source = script.read_text(encoding="utf-8")
     assert source.count('parser.add_argument("--package-dir"') == 1
+
+
+def test_active_child_does_not_expose_ambiguous_parent_address(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    node_id, content_hash, _ = create_executor1_database(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE structural_nodes SET status='ambiguous' WHERE node_id='node_executor1_root'"
+        )
+
+    nodes, _ = load_current_nodes(db_path)
+    assert [node["node_id"] for node in nodes] == [node_id]
+    assert nodes[0]["parent_node_id"] is None
+
+    source = get_source_node(db_path, node_id, content_hash)
+    assert source is not None
+    assert source["parent_node_id"] is None
