@@ -115,3 +115,22 @@ E1:
 ## 7. Границы
 
 PR #10 не содержит GitHub Issue worker, recovery sweep или MCP adapter. Отдельное предложение V2 находится в PR #12. PR #10 остаётся draft до независимой аналитической приёмки; E3 не выставляет analyst/coordinator status.
+
+
+---
+
+## Финальная сверка после sync с main — 2026-11-17
+
+- Code-under-review HEAD: `88926a254e61e299714dc0dae19378ee7c0f1332`.
+- Branch synced: `main` = `83b86216fd70f3f4335bedbd216ce14e24ae2abd`; compare ahead 34 / behind 0.
+- [C1 PR-CI run 44032512776](https://github.com/yeatu/obsidianGP/actions/runs/44032512776): success, **45 B1 + 56 C1 passed**.
+- [Real E1/E2/E3 integration run 44032505574](https://github.com/yeatu/obsidianGP/actions/runs/44032505574): success, event push; artifact ID `14305902690`, SHA-256 `sha256:1a34a60425700534fe4ed7666433abad2d26c301ac816787d458c8a7c8d19afe`.
+- E2: 3 hits / 3 candidates; tier 5; BM25 -0.3146491266567555.
+- E1: current-node resolver `ok`; actual parent dependency resolved; all four scopes `node / parent / neighbors / document` returned `ok` on one SnapshotRef.
+- Real negative matrix: stale hash, unknown node, corrupt source copy, ambiguous neighbor, deleted node, snapshot echo/request mismatch, document hash mismatch and generation mismatch all failed closed with empty fragments.
+- Document scope returned full 110,809-byte UTF-8 Markdown. No truncation.
+- E3 Context Pack: `budget_limited`, 1 included / 2 deferred. One-token scope: `budget_exceeded`, no fragments.
+- Production SQLite, manifest, sidecar tree, Vault tree and HEADs unchanged; both checkouts clean.
+- PR #10 remains open / Draft / not merged. No analyst or coordinator acceptance is claimed by E3.
+
+The CI and real integration runs above target this code-under-review HEAD. Documentation-only registry sync did not alter E3 implementation files. PR body and handoff identify the exact tested commit and evidence.
