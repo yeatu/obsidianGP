@@ -9,6 +9,7 @@ on:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1/**"
       - ".github/workflows/sfra-e3-v2-1-application-tests.yml"
+      - ".github/workflows/sfra-e3-real-e1-integration.yml"
   pull_request:
     branches:
       - main
