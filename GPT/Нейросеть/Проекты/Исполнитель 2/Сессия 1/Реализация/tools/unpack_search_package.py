@@ -127,8 +127,22 @@ def main() -> int:
         raise RuntimeError(
             "Canonical structural.py must hide ambiguous/stale parent Node IDs in both source queries"
         )
-    if "test_active_only_policy_excludes_ambiguous_stale_and_deleted_nodes" not in canonical_tests_text:
-        raise RuntimeError("Canonical source tests do not contain the active-only status regressions")
+    required_regressions = (
+        "test_ambiguous_node_is_excluded_from_import_search_and_source_lookup",
+        "test_ambiguous_node_without_identity_does_not_block_active_import",
+        "test_stale_and_deleted_nodes_are_neither_indexed_nor_retrievable",
+        "test_no_active_source_is_reported_as_not_found",
+        "test_null_document_hash_is_not_replaced_with_node_hash",
+        "test_active_child_does_not_expose_ambiguous_parent_address",
+    )
+    missing_regressions = [
+        name for name in required_regressions if name not in canonical_tests_text
+    ]
+    if missing_regressions:
+        raise RuntimeError(
+            "Canonical source tests are missing active-only status regressions: "
+            + ", ".join(missing_regressions)
+        )
 
     shutil.rmtree(args.destination, ignore_errors=True)
     args.destination.parent.mkdir(parents=True, exist_ok=True)
