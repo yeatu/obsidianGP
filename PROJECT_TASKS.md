@@ -4,7 +4,7 @@
 >
 > **Координатора вызывают только по сигналу аналитика:** весь его спектр задач завершён либо возникло ограничение, требующее архитектурного решения или нового указания. Координатор не обновляет файл после каждого промежуточного отчёта.
 >
-> Последняя координаторская пакетная сверка: **2026-11-17**, PR #11 HEAD `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`, PR #10 HEAD `6e7b4fde4ed1d9eb73cb26f200975199842506f2`, main на момент сверки `aaf85dd3854bfbd200ad79b8883829847dff8f18`.
+> Последняя координаторская проверка E3: **2026-11-17**, PR #10 HEAD `a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe`; E1 API HEAD `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`; main на момент проверки `84f51e36dfaa029ea059d00fbf29efc066b9c298`.
 
 ## 1. Роли и статусы
 
@@ -66,8 +66,8 @@
 | ID | Исполнитель | Работа | Статус | Что блокирует / следующий шаг |
 |---|---|---|---|---|
 | SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **COORDINATOR_ACCEPTED_NOT_MERGED** | Приёмка координатора сохранена по implementation tree `433a474147b9353afdd4dee4af205a79dc21253d`; аналитик завершил спектр. PR #11 HEAD `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`, open / non-draft. На момент сверки ahead 12 / behind 4 относительно main `aaf85dd3854bfbd200ad79b8883829847dff8f18`; входящие коммиты изменяли только реестры. CI [44026684195](https://github.com/yeatu/obsidianGP/actions/runs/44026684195): E1 job 88 passed, `unit-tests` skipped; [44026684168](https://github.com/yeatu/obsidianGP/actions/runs/44026684168): structural 88 passed. Перед merge синхронизировать registry drift; код E1 не возвращать на реализацию. |
-| SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency resolver, E1 adapter и Snapshot binding | **WAITING_FOR_ANALYST** | Текущий PR #10 HEAD `6e7b4fde4ed1d9eb73cb26f200975199842506f2`, open / Draft; ahead 30 / behind 4 относительно main `aaf85dd3854bfbd200ad79b8883829847dff8f18`. C1 CI [44030503164](https://github.com/yeatu/obsidianGP/actions/runs/44030503164): success, 45 B1 + 56 C1 passed. Новый real negative-matrix runner успешно завершился [44030503204](https://github.com/yeatu/obsidianGP/actions/runs/44030503204). Требуется независимая аналитическая проверка этого HEAD и sync с main; coordinator acceptance не выставлена. |
-| SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **WAITING_FOR_IMPLEMENTATION** | Новый real run [44030503204](https://github.com/yeatu/obsidianGP/actions/runs/44030503204) завершился success на E3 HEAD `6e7b4fd` и E1 HEAD `a9ba344`. Проверены ambiguous/deleted/corrupt source, snapshot echo/request mismatch, document hash и generation mismatch; все ошибки fail-closed. Четыре scope и реальная parent dependency успешны; read-only guards прошли. Context Pack `budget_limited` (1 included / 2 deferred), scope budget `budget_exceeded`. Последний аналитический статус `WAITING_FOR_IMPLEMENTATION` зафиксирован до этого run и ещё не обновлён аналитиком; требуется его независимая проверка и обновление статуса. |
+| SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency resolver, E1 adapter и Snapshot binding | **COORDINATOR_ACCEPTED_NOT_MERGED** | Координаторская приёмка по PR #10 HEAD `a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe`. Аналитик завершил C1: PR CI [44032755769](https://github.com/yeatu/obsidianGP/actions/runs/44032755769) и push CI [44032747813](https://github.com/yeatu/obsidianGP/actions/runs/44032747813), по 45 B1 + 56 C1 passed. SourceReader, relationship integrity, resolver diagnostics lifecycle, native E1 adapter, snapshot binding и E3-owned budget проверены. PR #10 open / Draft / not merged. Относительно текущего main `84f51e36dfaa029ea059d00fbf29efc066b9c298`: ahead 36 / behind 2; оба входящих коммита меняют только `PROJECT_TASKS.md`, implementation tree не затронут. Перед merge синхронизировать registry drift и повторить проверки на финальном HEAD. |
+| SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **COORDINATOR_ACCEPTED_NOT_MERGED** | Координаторская приёмка по real PR run [44032755754](https://github.com/yeatu/obsidianGP/actions/runs/44032755754) и push run [44032747843](https://github.com/yeatu/obsidianGP/actions/runs/44032747843) на E3 HEAD `a100239`, E1 HEAD `a9ba344`. Artifacts `14306375346` и `14304974673`. Подтверждены 4 scope, current-node resolver, реальная parent dependency, stale/not_found/corrupt/ambiguous/deleted/snapshot/document/generation negative matrix, fail-closed и read-only guards. Ambiguous/deleted воспроизведены на disposable E1 indexes, mismatch cases — fault injection на E3 boundary; это не выдаётся за состояние production sidecar. Context Pack `budget_limited` (1 included / 2 deferred), scope budget `budget_exceeded`; pack не `complete`. PR открыт, Draft, не объединён. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **COORDINATOR_ACCEPTED_NOT_MERGED** | Приёмка сохраняется на проверенном HEAD `af4469d3badf0aa902568ae1926f5b5309a70655`; PR #7 открыт и не объединён. Повторная реализация E2 не требуется. |
 
 ---
@@ -91,56 +91,51 @@
 ### PR #10 — E3 C1 и real negative matrix
 
 - [PR #10 — E3 C1: E2 SearchAdapter and snapshot binding](https://github.com/yeatu/obsidianGP/pull/10)
-- Текущий PR HEAD: `6e7b4fde4ed1d9eb73cb26f200975199842506f2`; состояние: open / Draft / not merged.
-- Main на момент сверки: `aaf85dd3854bfbd200ad79b8883829847dff8f18`. Compare: ahead 30 / behind 4. Входящие main-коммиты на момент сравнения касались только `PROJECT_TASKS.md` и координационного реестра; код E3 ими не менялся.
-- Commit `6e7b4fd` устранил падение disposable lifecycle runner: временный Markdown теперь собирается реальными строками и parser/hash функции E1 передаются в изолированные сценарии.
+- Проверенный PR HEAD аналитика и координатора: `a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe`.
+- PR #10: open / Draft / not merged.
+- Main: `84f51e36dfaa029ea059d00fbf29efc066b9c298`. Compare: ahead 36 / behind 2. Два входящих main-коммита содержат только изменения `PROJECT_TASKS.md`; реализационные файлы E3 не изменились.
+- PR description соответствует проверенному HEAD и его CI / real integration evidence.
 
-**C1 CI на HEAD 6e7b4fd**
-- [Run 44030503164](https://github.com/yeatu/obsidianGP/actions/runs/44030503164): success; B1 **45 passed**, C1 **56 passed**.
+#### C1 CI и кодовая проверка
 
-**Real E1/E2/E3 integration и negative matrix**
-- [Run 44030503204](https://github.com/yeatu/obsidianGP/actions/runs/44030503204): **success**.
-- E3 HEAD: `6e7b4fde4ed1d9eb73cb26f200975199842506f2`; E1 API HEAD: `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`.
-- Machine-readable artifact: `sfra-e3-real-integration-44030503204`, ID `14305690505`, ZIP SHA-256 `sha256:2a521dd2e4b67817993abed2759c099e32b2ab872ff43fb3d09db68f01a91d43`.
+- [PR CI 44032755769](https://github.com/yeatu/obsidianGP/actions/runs/44032755769): success, **45 B1 + 56 C1 passed**.
+- [Push CI 44032747813](https://github.com/yeatu/obsidianGP/actions/runs/44032747813): success, **45 B1 + 56 C1 passed**.
+- Проверены E1 native `SourceScopeResult` / `CurrentNodeAddress` adapters через `to_dict()`.
+- SourceReader проверяет exact parent identity, общий parent у siblings, source order previous → target → next, cross-role unique Node IDs, provenance, UTF-8 SHA, source/document hash, generation и coordinates.
+- Четыре adversarial tests покрывают wrong parent, sibling с чужим parent, reversed neighbors и duplicate Node IDs.
+- Resolver diagnostics очищаются в начале каждого `pipeline.run()`; regression на последовательных запросах проходит.
+- B1 defaults `normal / () / False` применяются как policy defaults, а не source annotations.
+- Snapshot binder проверяет фактические Git HEADs, чистый `sfra-state`, manifest raw SHA, SQLite digest и чистоту checkout.
+- E3 владеет token budget; E1 возвращает полный source text; truncation не используется; error responses fail-closed.
 
-Pinned snapshot:
-- Vault commit: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`;
-- sidecar commit: `fb0b45ae0e5043e342c790d43e2b341ca65d7f2b`;
-- manifest SHA-256: `sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`;
-- SQLite SHA-256: `sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674`.
+#### Реальная интеграция и negative matrix
 
-Отчёт run 44030503204 подтвердил:
-- E2: 3 hits / 3 source-verifiable candidates; current-node resolver: `ok`.
-- DependencyResolver разрешил реальную `parent_context` dependency; address/hash соответствуют current source.
-- node / parent / neighbors / document: четыре scope `ok` на одном SnapshotRef.
-- Wrong hash → `stale_source`; unknown Node ID → `not_found`.
-- Corrupt source copy → `stale_source`, fragments empty.
-- Ambiguous sibling scope → `ambiguous`, fragments empty.
-- Deleted node scope → `deleted`, fragments empty.
-- Snapshot echo fault и request SnapshotRef mismatch → `snapshot_mismatch`.
-- Document hash fault → `document_hash_mismatch`; generation fault → `snapshot_generation_mismatch`.
-- Scope budget → `budget_exceeded` без partial fragments.
-- Context Pack → `budget_limited`, 1 Included / 2 Deferred при request budget 6000; это не `complete`.
-- SQLite, manifest, sidecar tree, Vault tree и HEADs не изменились; sidecar и Vault checkout clean.
+- [PR-triggered real integration 44032755754](https://github.com/yeatu/obsidianGP/actions/runs/44032755754): success; artifact `14306375346`, digest `sha256:d6175f30641bb7221232817df3e5cd09c10e92e81f7a99079ab28090ba519fa5`.
+- [Push-triggered real integration 44032747843](https://github.com/yeatu/obsidianGP/actions/runs/44032747843): success; artifact `14304974673`, digest `sha256:eb99af10b8706815627dea361d1eecaf55ef3d9c231b213968c6e3cdca06c9b1`.
+- Оба прогона использовали E3 `a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe` и E1 `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`.
 
-**Статус и оставшиеся действия**
-1. Тестовый дефект из run [44029568490](https://github.com/yeatu/obsidianGP/actions/runs/44029568490) исправлен на HEAD `6e7b4fd`; новый real run 44030503204 прошёл и создал artifact.
-2. Синхронизировать E3 branch с актуальным main (на момент сверки behind 4) и повторить C1 CI + real integration на синхронизированном HEAD.
-3. Независимый аналитик должен проверить HEAD `6e7b4fd`, CI 44030503164 и artifact 14305690505, затем обновить собственные статусы.
-4. PR #10 остаётся Draft; coordinator acceptance и merge не выполнялись.
+Подтверждены:
+- E2: 3 hits / 3 source-verifiable candidates; current-node resolver `ok`.
+- Реальная `parent_context` dependency разрешена через current address и exact source read; identity/hash/path/document generation совпали.
+- Все четыре scope `node / parent / neighbors / document` прошли на одном SnapshotRef.
+- Document scope вернул полный Markdown: 110 809 UTF-8 bytes, hash/size совпали, truncation отсутствует.
+- Wrong hash → `stale_source`; unknown Node ID → `not_found`; corrupt isolated source copy → `stale_source`.
+- Ambiguous neighbor → `ambiguous`, deleted node → `deleted`. Эти статусы воспроизведены через публичный E1 `index_vault()` / Source Scope API на disposable Vault/SQLite; они не заявляются как существующие в production sidecar.
+- Snapshot echo/request mismatch → `snapshot_mismatch`; tampered document hash → `document_hash_mismatch`; generation mismatch → `snapshot_generation_mismatch`. Это fault-injection проверки E3 boundary.
+- Все failure responses вернули пустые fragments.
+- Scope budget в 1 token → `budget_exceeded`, без partial fragments.
+- Context Pack: `budget_limited`, 1 Included / 2 Deferred при request budget 6000. Это ожидаемый ограниченный pack, не `complete`.
+- Production SQLite, manifest, sidecar tree, Vault tree и HEADs не изменились; оба checkout остались clean.
 
-#### Чек-лист аналитика E3 / C1
+#### Итог аналитика
 
-- [x] Relationship identity/order, unique IDs и четыре adversarial relationship tests на implementation tree.
-- [x] Resolver diagnostics lifecycle regression.
-- [x] Policy defaults отделены от source annotations.
-- [x] C1 CI на HEAD 6e7b4fd: 45 B1 + 56 C1 passed.
-- [x] Real E1/E2/E3 integration на HEAD 6e7b4fd завершилась success.
-- [x] Ambiguous / deleted / corrupt source scenarios прошли fail-closed.
-- [x] Snapshot echo/request mismatch, document hash и generation mismatch отвергнуты.
-- [x] Четыре scope, parent dependency, budget handling и final read-only guards подтверждены.
-- [ ] Аналитик независимо принимает C1 и E3-02 на HEAD 6e7b4fd.
-- [ ] E3 branch синхронизирована с актуальным main; после sync повторены CI и real integration.
+Аналитик завершил C1 и E3-02 в согласованном scope: `ANALYST_COMPLETE_UNREVIEWED / ANALYST_SCOPE_COMPLETE`. Все аналитические пункты и доказательства зафиксированы в основном реестре.
+
+#### Решение координатора
+
+**C1 и E3-02 принимаются: `COORDINATOR_ACCEPTED_NOT_MERGED` на проверенном code HEAD `a100239`.** Архитектурных или реализационных блокеров в согласованном scope не осталось. PR #10 открыт, Draft, не объединён.
+
+Два коммита текущего main сверх PR base меняют только `PROJECT_TASKS.md`; это registry drift, не implementation drift. Перед merge следует синхронизировать ветку и повторить C1 CI + real integration на финальном HEAD. Merge не выполнялся.
 
 ## 4. E2 — ранее принятая работа
 
@@ -174,20 +169,30 @@ Pinned snapshot:
 
 **Решение:** `COORDINATOR_ACCEPTED_NOT_MERGED`. E1 к реализации не возвращать. На момент сверки PR отставал от main на 4 коммита; incoming changes касались только координационных файлов. Перед merge синхронизировать ветку и повторно подтвердить PR state.
 
-### E3 / PR #10 — HEAD `6e7b4fde4ed1d9eb73cb26f200975199842506f2`
+### E3 / PR #10 — HEAD `a10023930c4dbf75adcf9ce4bb200af2cd3fe3fe`
 
-- [x] Проверен PR: open, Draft, not merged.
-- [x] C1 CI [44030503164](https://github.com/yeatu/obsidianGP/actions/runs/44030503164): 45 B1 + 56 C1 passed.
-- [x] Relationship identity/order, duplicate IDs, четыре adversarial tests и diagnostics lifecycle regression подтверждены на ранее проверенном implementation tree.
-- [x] Исправленный real integration runner прошёл все добавленные negative scenarios.
-- [x] Проверен machine-readable artifact 14305690505 и статусы ambiguous/deleted/corrupt/hash/snapshot/generation.
-- [x] Проверены четыре scope, real parent dependency, budget handling и production read-only guards.
-- [ ] Аналитик независимо принимает C1 и E3-02 на HEAD 6e7b4fd.
-- [ ] E3 branch синхронизирована с актуальным main; после sync повторены CI и real integration.
-- [ ] Coordinator acceptance C1 / E3-02.
+- [x] Проверен PR: open / Draft / not merged.
+- [x] Проверен актуальный HEAD аналитика `a100239`; реализационный diff и ключевые модули SourceReader, SearchAdapter, DependencyResolver, Pipeline и Snapshot binder изучены.
+- [x] C1 PR CI [44032755769](https://github.com/yeatu/obsidianGP/actions/runs/44032755769): 45 B1 + 56 C1 passed.
+- [x] C1 push CI [44032747813](https://github.com/yeatu/obsidianGP/actions/runs/44032747813): 45 B1 + 56 C1 passed.
+- [x] SourceReader native E1 adapter, четыре scope, parent/sibling identity/order, duplicate IDs, exact hashes/generation/coordinates подтверждены.
+- [x] Четыре adversarial relationship tests проверены.
+- [x] Diagnostics isolation между последовательными pipeline runs подтверждена.
+- [x] B1 policy defaults отделены от E1 source annotations.
+- [x] Snapshot binder подтверждён: actual Git HEAD, clean sidecar branch, manifest raw SHA, SQLite SHA, Vault/sidecar clean guards.
+- [x] PR-triggered real run [44032755754](https://github.com/yeatu/obsidianGP/actions/runs/44032755754) успешен; artifact 14306375346.
+- [x] Push-triggered real run [44032747843](https://github.com/yeatu/obsidianGP/actions/runs/44032747843) успешен; artifact 14304974673.
+- [x] Проверены четыре scope, current-node resolver и реальная parent dependency на одном SnapshotRef.
+- [x] Negative matrix подтверждена: stale hash, not_found, corrupt source, ambiguous, deleted, snapshot echo/request mismatch, document hash и generation mismatch.
+- [x] Уточнены границы доказательств: ambiguous/deleted — disposable E1 lifecycle indexes; mismatch — fault injection; эти сценарии не приписываются production sidecar.
+- [x] Budget и read-only guards подтверждены; Context Pack `budget_limited` (1 included / 2 deferred), не complete.
+- [x] Аналитик завершил спектр: `ANALYST_SCOPE_COMPLETE`.
+- [x] Координаторская приёмка C1 и E3-02 выполнена.
+- [ ] Ветка синхронизирована с текущим main: сейчас ahead 36 / behind 2; оба входящих коммита — только `PROJECT_TASKS.md`.
+- [ ] После registry sync повторены C1 CI и real integration на финальном PR HEAD.
 - [ ] PR #10 merged.
 
-**Решение:** Real negative matrix теперь подтверждена успешным run 44030503204; предыдущий failed run 44029568490 superseded исправленным HEAD. Реализация выглядит готовой к независимой аналитической приёмке, но PR остаётся Draft, coordinator acceptance не выставлена, merge не выполнялся.
+**Решение:** `COORDINATOR_ACCEPTED_NOT_MERGED` для C1 и E3-02 на code HEAD `a100239`. Implementation/code gates приняты. Два коммита отставания затрагивают только проектный реестр, не E3 implementation. Перед merge синхронизировать registry drift и повторить проверки. PR остаётся open / Draft; merge не выполнялся.
 
 ### E2 / PR #7
 
