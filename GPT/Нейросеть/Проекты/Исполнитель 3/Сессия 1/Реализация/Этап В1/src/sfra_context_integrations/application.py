@@ -104,7 +104,7 @@ class ReadSourceRequest:
                 "invalid_content_hash",
                 "expected_hash must be sha256:<64 lowercase hex>",
             )
-        if self.scope not in _ALLOWED_SCOPES:
+        if not isinstance(self.scope, str) or self.scope not in _ALLOWED_SCOPES:
             raise ApplicationServiceError(
                 "unsupported_scope", f"Unsupported source scope: {self.scope!r}"
             )
@@ -295,6 +295,16 @@ class ReadSourceService:
                 details={
                     "expected_snapshot_id": request.snapshot.snapshot_id,
                     "actual_snapshot_id": raw.get("snapshot_id"),
+                },
+            )
+
+        if raw.get("scope") != request.scope:
+            raise ApplicationServiceContractError(
+                "scope_mismatch",
+                "SourceReader result does not match the requested scope",
+                details={
+                    "expected_scope": request.scope,
+                    "actual_scope": raw.get("scope"),
                 },
             )
 
