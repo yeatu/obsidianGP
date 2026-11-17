@@ -9,6 +9,11 @@ from .source_protocol import (
     SourceReader,
 )
 from .source_reader import E1SourceReader, SourceReaderContractError
+from .pipeline import (
+    ContextIntegrationPipeline,
+    ContextIntegrationResult,
+    SourceReadRequest,
+)
 
 __all__ = [
     "E1DependencyReader",
@@ -23,4 +28,7 @@ __all__ = [
     "PinnedSnapshot",
     "SnapshotBindingError",
     "bind_pinned_snapshot",
+    "ContextIntegrationPipeline",
+    "ContextIntegrationResult",
+    "SourceReadRequest",
 ]

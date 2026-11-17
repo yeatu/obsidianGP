@@ -127,6 +127,16 @@ class E2SearchAdapter:
         self._search_limit = search_limit
         self._entity_config = entity_config
 
+    @property
+    def pinned_snapshot(self) -> PinnedSnapshot:
+        """Expose the immutable snapshot bound to this adapter."""
+        return self._snapshot
+
+    @property
+    def source_reader(self) -> E1NodeReader:
+        """Expose the E1 reader so orchestration can enforce one read boundary."""
+        return self._source_reader
+
     def search(self, request: SearchRequest) -> SearchAdapterResult:
         if not isinstance(request, SearchRequest):
             raise TypeError("request must be a SearchRequest")
