@@ -82,16 +82,9 @@ class IssueWorkerCore:
             # transport status with a fabricated body digest can be persisted.
             raise IssueWorkerError("Issue body cannot be represented as exact UTF-8 bytes") from exc
 
-        try:
-            self._parser.validate_issue_metadata(issue)
-        except IssueRequestError as exc:
-            return self._store_status(self._rejected(
-                issue_number=issue_number,
-                body_hash=material.request_body_sha256,
-                worker_sha=worker_commit_sha,
-                error_code=exc.code,
-            ))
-
+        # Bind the immutable first-seen digest before metadata validation. Even
+        # an Issue rejected for title/repository/author metadata has been observed;
+        # changing its body before correcting metadata must never create a new baseline.
         baseline = self._status_store.bind_request_body_sha256(
             issue_number, material.request_body_sha256
         )
@@ -101,6 +94,16 @@ class IssueWorkerCore:
                 body_hash=material.request_body_sha256,
                 worker_sha=worker_commit_sha,
                 error_code="request_body_changed",
+            ))
+
+        try:
+            self._parser.validate_issue_metadata(issue)
+        except IssueRequestError as exc:
+            return self._store_status(self._rejected(
+                issue_number=issue_number,
+                body_hash=material.request_body_sha256,
+                worker_sha=worker_commit_sha,
+                error_code=exc.code,
             ))
 
         try:
