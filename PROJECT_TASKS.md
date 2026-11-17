@@ -80,7 +80,7 @@
 
 - [PR #11 — E1 atomic Source Scope API and current-node resolver](https://github.com/yeatu/obsidianGP/pull/11)
 - Финальный проверенный PR HEAD: `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5`.
-- Implementation tree: `433a474147b9353afdd4dee4af205a79dc21253d`; финальный HEAD дополнительно содержит merge-sync с актуальным `main) и аналитическую запись.
+- Implementation tree: `433a474147b9353afdd4dee4af205a79dc21253d`; финальный HEAD дополнительно содержит merge-sync с актуальным `main` и аналитическую запись.
 - Состояние: open, not merged, mergeable.
 - Ветка `executor-1/e1-source-read-api-mainline`: **ahead 10 / behind 0** относительно `main` на момент проверки.
 - Force-push не использовался.
@@ -101,7 +101,7 @@
 - В E1 не добавлены token budget и синтезированные policy metadata; SQLite schema v2 не изменялась.
 
 **Production snapshot / Vault integration**
-- Production `sfra-state` checkout использован с `persist-credentials=false); manifest и SQLite скопированы в `/tmp/e1-production-snapshot`. Integrity verification и все четыре scope + resolver исполнялись на изолированной копии.
+- Production `sfra-state` checkout использован с `persist-credentials=false`; manifest и SQLite скопированы в `/tmp/e1-production-snapshot`. Integrity verification и все четыре scope + resolver исполнялись на изолированной копии.
 - Manifest source ref: `executor-1/sfra-indexer-session-1`; Vault commit: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`.
 - Opaque snapshot ID: `sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`.
 - Real Vault: 66 документов, 9 080 узлов, 21 Passage, 2 пустых документа. Повторный индексатор пропустил 66 неизменённых документов; stale/ambiguous nodes — 0. Diff/status guards Vault прошли.
