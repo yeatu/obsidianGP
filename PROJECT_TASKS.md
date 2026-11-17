@@ -690,3 +690,43 @@ PR #28 and PR #29 were closed as superseded after their changes were consolidate
 - PR [#12](https://github.com/yeatu/obsidianGP/pull/12) остаётся proposal-only. V2.3/V2.4, production GitHub transport, real Issue writes, event triggers и recovery остаются неавторизованными.
 
 **Текущая координаторская позиция:** реализованные E1/E2/E3 contract blockers сняты; E1 PR CI сделан fixture-only; исторический Search smoke-test issue очищен и закрыт. Следующий decision gate — независимый A1 follow-up, после которого можно выбирать следующий продуктовый этап без переноса старых блокеров в новую версию.
+
+
+
+## 20. Координаторская проверка A1-01…A1-05 — 2026-11-18
+
+Этот раздел supersedes раздел 19.2 и все предыдущие формулировки, что проект ожидает независимый A1 follow-up как блокирующий шаг.
+
+### 20.1. Координаторская перепроверка завершена
+
+- Проверенная кодовая база: `main` HEAD `bb2275ece19f3d7cf1aa655b89d8d037803976c6`.
+- Итоговая координаторская матрица закрытия размещена в [Issue #19, comment 6964076953](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964076953).
+- [Issue #19](https://github.com/yeatu/obsidianGP/issues/19) закрыта как completed.
+- Предыдущий A1 follow-up CLAIM [6963802002](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6963802002) superseded coordinator disposition. Дополнительный status report не является условием продолжения проекта.
+
+| Finding | Результат текущей проверки | Evidence |
+|---|---|---|
+| A1-01 / F-01 — Node ID без lifecycle provenance | **CLOSED** | E1 fail-closed event/generation checks + regressions обоих public APIs; E1 106 tests passed в run 44195690306. |
+| A1-02 / F-03 — empty SourceSpan E2→E3 | **CLOSED** | E2 и E3 принимают только точный пустой диапазон; positive и malformed cases в C1 tests; run 44193376079. |
+| A1-03 — SnapshotRef TOCTOU | **CLOSED** | Revalidation path/HEAD/branch/clean state/manifest/SQLite digest, before/after E1/E2 boundaries; mutation tests в test_snapshot.py; run 44193376079. |
+| A1-04 / F-02 — real Vault indexing в E1 PR CI | **CONTAINED** | PR #32 merged; текущий stage-B workflow fixture-only, E1 tests + CLI + boundary guard, run 44197904583 success. Исторический запрещённый run остаётся в incident history и не стирается. |
+| A1-05 — unsupported facets не отражались в completeness | **CLOSED** | Warning + `not_evaluated` + SearchBatch.complete=false; B1 coverage propagation test; run 44193376079. |
+
+### 20.2. Подтверждённые CI результаты
+
+- Run [44195690306](https://github.com/yeatu/obsidianGP/actions/runs/44195690306): 106 E1 tests + 19 V2.1 tests; CLI success; temporary fixtures only.
+- Run [44193376079](https://github.com/yeatu/obsidianGP/actions/runs/44193376079): B1 45 + C1 66; success.
+- Run [44193376078](https://github.com/yeatu/obsidianGP/actions/runs/44193376078): B1 45 + C1 66 + V2.1 18; dependency/import guard success.
+- Run [44197904583](https://github.com/yeatu/obsidianGP/actions/runs/44197904583): E1 PR CI complete suite, CLI and fixture-only boundary guard; success.
+- Run [44193376053](https://github.com/yeatu/obsidianGP/actions/runs/44193376053): earlier manifest-pinned read-only E1→E2→E3 integration; success. Не повторялся в рамках этой координаторской перепроверки.
+
+### 20.3. Текущая точка восстановления
+
+Основные E1/E2/E3 contract findings закрыты в принятом scope. E1 обычный PR/push CI использует synthetic fixtures и не индексирует repository Vault. Публичные source-specific поля старого Search smoke-test Issue #4 удалены; Issue #4 закрыта.
+
+Остаются только governance/proposal вопросы:
+- Issue #20 — governance protocol;
+- PR #12 — proposal-only, без реализации production worker/recovery;
+- V2.3/V2.4 — FROZEN до отдельного readiness/security/scope decision.
+
+**Координаторское решение:** проект не ожидает A1 или исполнителя, чтобы считать текущую контрактную стабилизацию завершённой. Следующий шаг — отдельное решение о следующей продуктовой версии; production indexing/persistence и production GitHub transport не запускаются автоматически.
