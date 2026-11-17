@@ -2,7 +2,19 @@
 
 from .identity import MatchPlan, build_match_plan, content_hash
 from .indexer import IndexResult, get_database_summary, index_vault, read_markdown_file
-from .lookup import NodeLookupResult, NodeLookupStatus, NodeRecord, get_node_by_id
+from .lookup import (
+    DocumentLookupResult,
+    DocumentRecord,
+    NodeLookupResult,
+    NodeLookupStatus,
+    NodeRecord,
+    NodeNeighborsResult,
+    NodeParentResult,
+    get_document_by_id,
+    get_neighbors_by_id,
+    get_node_by_id,
+    get_parent_by_id,
+)
 from .models import ParsedDocument, Passage, SourceSpan, StructuralNode
 from .parser import (
     build_passages,
@@ -25,6 +37,13 @@ __all__ = [
     "NodeLookupStatus",
     "NodeRecord",
     "get_node_by_id",
+    "NodeParentResult",
+    "NodeNeighborsResult",
+    "DocumentRecord",
+    "DocumentLookupResult",
+    "get_parent_by_id",
+    "get_neighbors_by_id",
+    "get_document_by_id",
     "MatchPlan",
     "build_match_plan",
     "content_hash",

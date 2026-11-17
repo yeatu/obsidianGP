@@ -520,3 +520,51 @@ Persistence workflow принимает параметр `vault_ref`; его з�
 - `get_node_by_id` открывает только существующую SQLite в read-only/query-only режиме.
 - Тесты не используют production `sfra-state` и не изменяют Vault.
 - Production Persistence workflow остаётся ограниченным своей рабочей веткой; E1 changes are prepared in a separate PR branch to avoid unintended production publication before review.
+
+
+## 15. Расширенный публичный контракт для E3
+
+E1 предоставляет E3 четыре готовые операции чтения. E3 не обращается к SQLite самостоятельно и не повторяет логику source validation.
+
+| Режим | Публичная функция | Результат |
+|---|---|---|
+| Узел | get_node_by_id(db_path, node_id, expected_hash, vault_root) | NodeLookupResult с текущим source-verified node |
+| Родитель | get_parent_by_id(db_path, node_id, expected_hash, vault_root) | NodeParentResult с anchor node и непосредственным parent |
+| Соседи | get_neighbors_by_id(db_path, node_id, expected_hash, vault_root) | NodeNeighborsResult с anchor и непосредственными previous/next |
+| Документ | get_document_by_id(db_path, node_id, expected_hash, vault_root) | DocumentLookupResult с anchor и полным исходным документом |
+
+### Общие правила
+
+1. Все режимы адресуются одной и той же парой Node ID + expected Content Hash. Hash относится к текущей версии узла, а не к полному документу.
+2. db_path и vault_root передаются явно. vault_root должен указывать на корень выбранного checkout папки ГП/; никаких скрытых глобальных настроек нет.
+3. Каждый выданный дополнительный NodeRecord сам проходит актуальную проверку ID + Hash + source slice. Текст не берётся из node_versions как историческая замена.
+4. Любая ошибка anchor или связанного узла приводит к статусу операции и отсутствию частичного содержимого. Статусы stale_source, deleted, ambiguous, not_found, invalid_request, integrity_error имеют ту же семантику, что у get_node_by_id.
+
+### Режим parent
+
+get_parent_by_id(...) возвращает исходный узел и его непосредственного родителя из актуального parent_node_pk. Связь дополнительно сверяется с node_versions.parent_node_id. Родитель отдельно читается по своему Node ID и текущему Content Hash. Для document root отсутствие родителя — нормальный успешный результат: status="ok", parent=null. Неактуальный или неоднозначный родитель означает отказ всего запроса без частичного anchor.
+
+### Режим neighbors
+
+get_neighbors_by_id(...) возвращает только ближайшего предыдущего и следующего соседа среди текущих структурных детей того же родителя и документа. Порядок: char_start, затем char_end, затем node_pk как tie-breaker. На границе списка соответствующая сторона равна null. Неоднозначный непосредственный сосед не пропускается ради более дальнего: статус всей операции — ambiguous, без node/neighbor payload. Выдаваемые соседи независимо проходят source verification.
+
+### Режим document
+
+get_document_by_id(...) использует проверенную пару Node ID + Hash как адрес-якорь документа. Возвращает полный Markdown только после повторного безопасного чтения текущего файла и сверки полного SHA-256 с documents.source_sha256. Текст декодируется как строгий UTF-8 без преобразования CRLF/LF или Unicode. Если файл меняется между проверкой anchor и чтением документа, результат — stale_source, текст не выдаётся.
+
+### Публичные типы
+
+- NodeParentResult(status, node, parent, error_code, message);
+- NodeNeighborsResult(status, node, previous, next, error_code, message);
+- DocumentRecord(source_path, source_sha256, size_bytes, raw_text);
+- DocumentLookupResult(status, anchor, document, error_code, message).
+
+Все типы экспортированы через sfra_indexer и имеют to_dict(). E3 использует эти операции как единственный публичный путь чтения узла/родителя/соседей/документа; внутренние таблицы SQLite остаются деталью реализации E1.
+
+### Проверяемые условия
+
+- Неверный/устаревший expected Hash anchor блокирует все четыре режима.
+- parent не выбирает похожий узел; при отсутствии родителя у корневого документа возвращается null.
+- neighbors не пропускает ближайшего ambiguous-соседа.
+- document не возвращает файл, если адрес-якорь не прошёл проверку или полный source hash изменился.
+- Любой отказ возвращает null в полях содержимого и не сериализует source excerpt.

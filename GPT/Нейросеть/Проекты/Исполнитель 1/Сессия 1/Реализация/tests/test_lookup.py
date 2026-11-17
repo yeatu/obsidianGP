@@ -61,7 +61,32 @@ def _insert_event(connection, document_pk, generation, event_type, node_id,
             event_type,
             node_id,
             json.dumps(candidates or []),
-            json.dumps({"reason": "lookup test"}),
+            json.dumps(
+                (
+                    {"old_local_key": _node_row(connection, node_id)["local_key"]}
+                    if event_type in {"stale", "stale_ambiguous_candidate", "document_deleted"}
+                    else {
+                        "node_type": (
+                            connection.execute(
+                                "SELECT node_type FROM structural_nodes WHERE node_id=?",
+                                (node_id,),
+                            ).fetchone() or ["paragraph"]
+                        )[0],
+                        "reason": (
+                            event_type
+                            if event_type in {
+                                "document_root", "unique_content_hash", "unique_heading_key",
+                                "unique_sibling_heading_key", "unique_sibling_slot",
+                            }
+                            else None
+                        ),
+                    }
+                ) if event_type in {
+                    "document_root", "unique_content_hash", "unique_heading_key",
+                    "unique_sibling_heading_key", "unique_sibling_slot", "new",
+                    "ambiguous", "stale", "stale_ambiguous_candidate", "document_deleted",
+                } else {}
+            ),
         ),
     )
 
@@ -404,6 +429,360 @@ def test_missing_database_is_a_typed_invalid_request(tmp_path):
     assert result.status is NodeLookupStatus.INVALID_REQUEST
     assert result.node is None
     assert result.to_dict()["node"] is None
+
+
+
+
+def _prepare_deleted_document(connection, document_pk):
+    rows = connection.execute(
+        """SELECT node_pk, node_id, local_key FROM structural_nodes
+           WHERE document_pk = ? AND status IN ('active', 'ambiguous')
+             AND stale_generation IS NULL""",
+        (document_pk,),
+    ).fetchall()
+    generation = connection.execute(
+        "SELECT generation FROM documents WHERE document_pk=?",
+        (document_pk,),
+    ).fetchone()[0] + 1
+    for item in rows:
+        connection.execute(
+            """UPDATE structural_nodes
+               SET local_key=?, status='stale', stale_generation=?
+               WHERE node_pk=?""",
+            (f"__deleted__{item['node_pk']}", generation, item["node_pk"]),
+        )
+        connection.execute(
+            """INSERT INTO node_match_events(
+                document_pk, generation, new_local_key, event_type, node_id,
+                candidate_node_ids_json, details_json
+            ) VALUES (?, ?, NULL, 'document_deleted', ?, '[]', ?)""",
+            (
+                document_pk,
+                generation,
+                item["node_id"],
+                json.dumps({"old_local_key": item["local_key"]}),
+            ),
+        )
+    connection.execute(
+        "UPDATE documents SET status='deleted', generation=? WHERE document_pk=?",
+        (generation, document_pk),
+    )
+    return generation
+
+
+def _assert_db_only_failure_without_source_read(monkeypatch, operation):
+    def fail_open(*args, **kwargs):
+        raise AssertionError("DB-only preflight must not open the Markdown source")
+
+    monkeypatch.setattr("sfra_indexer.lookup._read_source_file", fail_open)
+    result = operation()
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.node is None
+    payload = result.to_dict()
+    assert payload["node"] is None
+    assert "raw_text" not in json.dumps(payload)
+
+
+def test_empty_document_root_can_be_read_exactly(tmp_path):
+    vault = tmp_path / "empty-vault"
+    vault.mkdir()
+    source_file = vault / "empty.md"
+    source_file.write_bytes(b"")
+    index_result = index_vault(vault, tmp_path / "empty-sidecar")
+    db_path = Path(index_result.database_path)
+
+    connection = _connect(db_path)
+    root = connection.execute(
+        """SELECT n.node_id, n.content_hash
+           FROM structural_nodes n
+           JOIN documents d ON d.document_pk=n.document_pk
+           WHERE n.node_type='document' AND d.source_path='empty.md'"""
+    ).fetchone()
+    connection.close()
+
+    result = get_node_by_id(db_path, root["node_id"], root["content_hash"], vault)
+
+    assert result.status is NodeLookupStatus.OK
+    assert result.node is not None
+    assert result.node.raw_text == ""
+    assert result.node.char_start == result.node.char_end == 0
+    assert result.node.byte_start == result.node.byte_end == 0
+    assert (result.node.line_start, result.node.line_end) == (1, 0)
+
+
+def test_deleted_document_with_unsafe_source_path_is_db_only_integrity_error(
+    tmp_path, monkeypatch
+):
+    vault, _, db_path, node_id, _, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    _prepare_deleted_document(connection, row["doc_pk"])
+    connection.execute(
+        "UPDATE documents SET source_path='../outside.md' WHERE document_pk=?",
+        (row["doc_pk"],),
+    )
+    connection.commit()
+    connection.close()
+
+    _assert_db_only_failure_without_source_read(
+        monkeypatch,
+        lambda: get_node_by_id(db_path, node_id, "sha256:" + ("0" * 64), vault),
+    )
+
+
+def test_deleted_document_current_row_mismatch_with_latest_version_fails_preflight(
+    tmp_path, monkeypatch
+):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    _prepare_deleted_document(connection, row["doc_pk"])
+    connection.execute(
+        "UPDATE structural_nodes SET char_start=char_start+1 WHERE node_id=?",
+        (node_id,),
+    )
+    connection.commit()
+    connection.close()
+
+    _assert_db_only_failure_without_source_read(
+        monkeypatch,
+        lambda: get_node_by_id(db_path, node_id, expected_hash, vault),
+    )
+
+
+def test_deleted_document_raw_text_hash_mismatch_fails_preflight(tmp_path, monkeypatch):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    _prepare_deleted_document(connection, row["doc_pk"])
+    connection.execute(
+        "UPDATE structural_nodes SET raw_text=raw_text || 'tampered' WHERE node_id=?",
+        (node_id,),
+    )
+    connection.commit()
+    connection.close()
+
+    _assert_db_only_failure_without_source_read(
+        monkeypatch,
+        lambda: get_node_by_id(db_path, node_id, expected_hash, vault),
+    )
+
+
+def test_deleted_document_unknown_event_in_history_fails_preflight(tmp_path, monkeypatch):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    generation = _prepare_deleted_document(connection, row["doc_pk"])
+    _insert_event(
+        connection,
+        row["doc_pk"],
+        generation,
+        "future_unrecognized_event",
+        node_id,
+    )
+    connection.commit()
+    connection.close()
+
+    _assert_db_only_failure_without_source_read(
+        monkeypatch,
+        lambda: get_node_by_id(db_path, node_id, expected_hash, vault),
+    )
+
+
+@pytest.mark.parametrize(
+    ("replacement", "event_type"),
+    [
+        ({"node_type": "paragraph"}, "new"),
+        ({"node_type": "paragraph", "reason": "wrong_reason"}, "document_root"),
+    ],
+)
+def test_event_details_json_is_validated_by_event_type(
+    tmp_path, replacement, event_type
+):
+    source = "# Header\n\nTarget paragraph.\n"
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path, source)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    if event_type == "document_root":
+        # The first indexing generation uses 'new' for each node. A synthetic
+        # reused-event row exercises the exact reason field required by storage.py.
+        _insert_event(
+            connection,
+            row["doc_pk"],
+            1,
+            event_type,
+            node_id,
+            local_key="n999999",
+        )
+    else:
+        connection.execute(
+            """UPDATE node_match_events SET details_json=?
+               WHERE event_pk=(
+                   SELECT event_pk FROM node_match_events
+                   WHERE document_pk=? AND node_id=? AND event_type='new'
+                   ORDER BY event_pk LIMIT 1
+               )""",
+            (json.dumps(replacement), row["doc_pk"], node_id),
+        )
+    if event_type == "document_root":
+        connection.execute(
+            """UPDATE node_match_events SET details_json=?
+               WHERE event_pk=(SELECT MAX(event_pk) FROM node_match_events
+                               WHERE document_pk=? AND node_id=?)""",
+            (json.dumps(replacement), row["doc_pk"], node_id),
+        )
+    connection.commit()
+    connection.close()
+
+    result = get_node_by_id(db_path, node_id, expected_hash, vault)
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.node is None
+    assert "raw_text" not in json.dumps(result.to_dict())
+
+
+def test_deleted_document_event_payload_requires_old_local_key(tmp_path):
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    connection = _connect(db_path)
+    row = _node_row(connection, node_id)
+    generation = _prepare_deleted_document(connection, row["doc_pk"])
+    connection.execute(
+        """UPDATE node_match_events SET details_json='{}'
+           WHERE document_pk=? AND generation=? AND event_type='document_deleted'
+             AND node_id=?""",
+        (row["doc_pk"], generation, node_id),
+    )
+    connection.commit()
+    connection.close()
+
+    result = get_node_by_id(db_path, node_id, expected_hash, vault)
+
+    assert result.status is NodeLookupStatus.INTEGRITY_ERROR
+    assert result.node is None
+    assert "raw_text" not in json.dumps(result.to_dict())
+
+
+def test_get_parent_by_id_returns_verified_parent_and_handles_root(tmp_path):
+    from sfra_indexer import get_parent_by_id
+
+    vault, _, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path)
+    child_result = get_parent_by_id(db_path, node_id, expected_hash, vault)
+
+    assert child_result.status is NodeLookupStatus.OK
+    assert child_result.node is not None
+    assert child_result.parent is not None
+    assert child_result.parent.node_type == "heading"
+    assert child_result.parent.raw_text.startswith("# Header")
+
+    connection = _connect(db_path)
+    root = connection.execute(
+        "SELECT node_id, content_hash FROM structural_nodes WHERE node_type='document'"
+    ).fetchone()
+    connection.close()
+    root_result = get_parent_by_id(
+        db_path, root["node_id"], root["content_hash"], vault
+    )
+    assert root_result.status is NodeLookupStatus.OK
+    assert root_result.node is not None
+    assert root_result.parent is None
+
+
+def test_get_neighbors_by_id_returns_immediate_source_ordered_siblings(tmp_path):
+    from sfra_indexer import get_neighbors_by_id
+
+    source = "# Header\n\nFirst paragraph.\n\nMiddle paragraph.\n\nLast paragraph.\n"
+    vault, _, db_path, _, _, _ = _indexed_note(tmp_path, source)
+    connection = _connect(db_path)
+    rows = connection.execute(
+        """SELECT node_id, content_hash, raw_text FROM structural_nodes
+           WHERE node_type='paragraph' AND status='active'
+           ORDER BY char_start"""
+    ).fetchall()
+    connection.close()
+
+    result = get_neighbors_by_id(
+        db_path, rows[1]["node_id"], rows[1]["content_hash"], vault
+    )
+
+    assert result.status is NodeLookupStatus.OK
+    assert result.node is not None
+    assert result.previous is not None
+    assert result.next is not None
+    assert result.previous.raw_text == rows[0]["raw_text"]
+    assert result.next.raw_text == rows[2]["raw_text"]
+
+
+def test_get_neighbors_by_id_does_not_skip_ambiguous_immediate_sibling(tmp_path):
+    from sfra_indexer import get_neighbors_by_id
+
+    source = "# Header\n\nFirst paragraph.\n\nMiddle paragraph.\n\nLast paragraph.\n"
+    vault, _, db_path, _, _, _ = _indexed_note(tmp_path, source)
+    connection = _connect(db_path)
+    rows = connection.execute(
+        """SELECT node_id, content_hash, local_key, document_pk, node_type
+           FROM structural_nodes WHERE node_type='paragraph' ORDER BY char_start"""
+    ).fetchall()
+    connection.execute(
+        "UPDATE structural_nodes SET status='ambiguous' WHERE node_id=?",
+        (rows[0]["node_id"],),
+    )
+    _insert_event(
+        connection,
+        rows[0]["document_pk"],
+        1,
+        "ambiguous",
+        rows[0]["node_id"],
+        local_key=rows[0]["local_key"],
+        candidates=["node_" + str(uuid.uuid4())],
+    )
+    connection.commit()
+    connection.close()
+
+    result = get_neighbors_by_id(
+        db_path, rows[1]["node_id"], rows[1]["content_hash"], vault
+    )
+
+    assert result.status is NodeLookupStatus.AMBIGUOUS
+    assert result.node is None
+    assert result.previous is None
+    assert result.next is None
+
+
+def test_get_document_by_id_returns_exact_complete_markdown(tmp_path):
+    from sfra_indexer import get_document_by_id
+
+    source = "# Заголовок\n\nПолный исходный текст 🧪.\r\n"
+    vault, note, db_path, node_id, expected_hash, _ = _indexed_note(tmp_path, source)
+    result = get_document_by_id(db_path, node_id, expected_hash, vault)
+
+    assert result.status is NodeLookupStatus.OK
+    assert result.anchor is not None
+    assert result.document is not None
+    assert result.document.raw_text == source
+    assert result.document.raw_text.encode("utf-8") == note.read_bytes()
+    assert result.document.source_sha256 == "sha256:" + hashlib.sha256(
+        note.read_bytes()
+    ).hexdigest()
+
+
+def test_related_read_modes_propagate_anchor_stale_hash_without_partial_content(tmp_path):
+    from sfra_indexer import (
+        get_document_by_id,
+        get_neighbors_by_id,
+        get_parent_by_id,
+    )
+
+    vault, _, db_path, node_id, _, _ = _indexed_note(tmp_path)
+    wrong_hash = "sha256:" + ("0" * 64)
+    operations = (
+        get_parent_by_id,
+        get_neighbors_by_id,
+        get_document_by_id,
+    )
+    for operation in operations:
+        result = operation(db_path, node_id, wrong_hash, vault)
+        assert result.status is NodeLookupStatus.STALE_SOURCE
+        assert result.to_dict()["node"] is None if "node" in result.to_dict() else result.to_dict()["anchor"] is None
 
 
 def test_source_path_replacement_during_read_fails_closed(tmp_path, monkeypatch):

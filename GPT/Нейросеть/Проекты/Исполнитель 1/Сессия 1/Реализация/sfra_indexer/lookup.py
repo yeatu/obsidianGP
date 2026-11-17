@@ -278,7 +278,7 @@ def _validate_events(
     document_pk: int,
     document_generation: int,
 ) -> list[dict[str, Any]]:
-    """Validate every event payload for this document before status resolution."""
+    """Validate every event's exact schema as emitted by storage.py."""
     try:
         rows = connection.execute(
             """SELECT event_pk, generation, new_local_key, event_type, node_id,
@@ -295,6 +295,32 @@ def _validate_events(
             "The node matching history could not be read.",
         )
 
+    reused_event_types = {
+        "document_root",
+        "unique_content_hash",
+        "unique_heading_key",
+        "unique_sibling_heading_key",
+        "unique_sibling_slot",
+    }
+    stale_event_types = {
+        "stale",
+        "stale_ambiguous_candidate",
+        "document_deleted",
+    }
+    valid_node_types = {
+        "document",
+        "heading",
+        "paragraph",
+        "list",
+        "list_item",
+        "quote",
+        "callout",
+        "table",
+        "code_block",
+        "html_block",
+        "thematic_break",
+    }
+
     events: list[dict[str, Any]] = []
     previous_generation = 0
     for row in rows:
@@ -309,6 +335,7 @@ def _validate_events(
             or generation < 1
             or generation > document_generation
             or generation < previous_generation
+            or not isinstance(event_type, str)
             or event_type not in _EVENT_TYPES
             or not _valid_node_id(node_id)
         ):
@@ -319,17 +346,13 @@ def _validate_events(
             )
 
         local_key = row["new_local_key"]
-        if local_key is not None and (not isinstance(local_key, str) or not local_key):
+        if local_key is not None and (
+            not isinstance(local_key, str) or not local_key.strip()
+        ):
             _raise(
                 NodeLookupStatus.INTEGRITY_ERROR,
                 "match_event_payload_invalid",
-                "The node matching history contains an invalid event payload.",
-            )
-        if event_type in _MATCH_EVENT_TYPES and local_key is None:
-            _raise(
-                NodeLookupStatus.INTEGRITY_ERROR,
-                "match_event_payload_invalid",
-                "The node matching history contains an incomplete event payload.",
+                "The node matching history contains an invalid local node key.",
             )
 
         candidates = _decode_json(
@@ -344,17 +367,57 @@ def _validate_events(
             "match_event_payload_invalid",
             "The node matching history contains invalid event details.",
         )
+
         if (
             any(not _valid_node_id(candidate) for candidate in candidates)
             or len(candidates) != len(set(candidates))
-            or (event_type == "ambiguous" and not candidates)
-            or (event_type != "ambiguous" and candidates)
             or not all(isinstance(key, str) for key in details)
         ):
             _raise(
                 NodeLookupStatus.INTEGRITY_ERROR,
                 "match_event_payload_invalid",
                 "The node matching history contains an invalid event payload.",
+            )
+
+        if event_type in reused_event_types:
+            valid_details = (
+                set(details) == {"node_type", "reason"}
+                and isinstance(details["node_type"], str)
+                and details["node_type"] in valid_node_types
+                and details["reason"] == event_type
+                and isinstance(local_key, str)
+                and bool(local_key.strip())
+                and not candidates
+            )
+        elif event_type in {"new", "ambiguous"}:
+            valid_details = (
+                set(details) == {"node_type", "reason"}
+                and isinstance(details["node_type"], str)
+                and details["node_type"] in valid_node_types
+                and details["reason"] is None
+                and isinstance(local_key, str)
+                and bool(local_key.strip())
+                and (
+                    (event_type == "ambiguous" and bool(candidates))
+                    or (event_type == "new" and not candidates)
+                )
+            )
+        elif event_type in stale_event_types:
+            valid_details = (
+                set(details) == {"old_local_key"}
+                and isinstance(details["old_local_key"], str)
+                and bool(details["old_local_key"].strip())
+                and local_key is None
+                and not candidates
+            )
+        else:
+            valid_details = False
+
+        if not valid_details:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "match_event_payload_invalid",
+                "The node matching history contains a payload inconsistent with its event type.",
             )
 
         events.append(
@@ -1257,9 +1320,392 @@ def get_node_by_id(
             connection.close()
 
 
+
+
+@dataclass(frozen=True, slots=True)
+class NodeParentResult:
+    """Verified node and its immediate parent; parent is None for a document root."""
+
+    status: NodeLookupStatus
+    node: NodeRecord | None = None
+    parent: NodeRecord | None = None
+    error_code: str | None = None
+    message: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "status": self.status.value,
+            "node": self.node.to_dict() if self.node else None,
+            "parent": self.parent.to_dict() if self.parent else None,
+        }
+        if self.error_code:
+            result["error"] = {"code": self.error_code, "message": self.message}
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class NodeNeighborsResult:
+    """Verified immediate previous/next siblings in source order."""
+
+    status: NodeLookupStatus
+    node: NodeRecord | None = None
+    previous: NodeRecord | None = None
+    next: NodeRecord | None = None
+    error_code: str | None = None
+    message: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "status": self.status.value,
+            "node": self.node.to_dict() if self.node else None,
+            "previous": self.previous.to_dict() if self.previous else None,
+            "next": self.next.to_dict() if self.next else None,
+        }
+        if self.error_code:
+            result["error"] = {"code": self.error_code, "message": self.message}
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentRecord:
+    """An entire Markdown document read from the verified source checkout."""
+
+    source_path: str
+    source_sha256: str
+    size_bytes: int
+    raw_text: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentLookupResult:
+    """A document retrieval anchored by a verified Node ID + Content Hash pair."""
+
+    status: NodeLookupStatus
+    anchor: NodeRecord | None = None
+    document: DocumentRecord | None = None
+    error_code: str | None = None
+    message: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "status": self.status.value,
+            "anchor": self.anchor.to_dict() if self.anchor else None,
+            "document": self.document.to_dict() if self.document else None,
+        }
+        if self.error_code:
+            result["error"] = {"code": self.error_code, "message": self.message}
+        return result
+
+
+def _related_failure(result, result_type):
+    return result_type(
+        status=result.status,
+        error_code=result.error_code,
+        message=result.message,
+    )
+
+
+def _relation_anchor_row(
+    connection: sqlite3.Connection,
+    node_id: str,
+    anchor: NodeRecord,
+) -> dict[str, Any]:
+    rows = connection.execute(
+        """SELECT n.node_pk, n.document_pk, n.parent_node_pk, n.content_hash,
+                  n.status, n.stale_generation, n.char_start, n.char_end,
+                  d.source_path,
+                  (SELECT p.node_id FROM structural_nodes AS p
+                   WHERE p.node_pk = n.parent_node_pk) AS parent_node_id
+           FROM structural_nodes AS n
+           JOIN documents AS d ON d.document_pk = n.document_pk
+           WHERE n.node_id = ?""",
+        (node_id,),
+    ).fetchall()
+    if len(rows) != 1:
+        _raise(
+            NodeLookupStatus.INTEGRITY_ERROR,
+            "relation_anchor_changed",
+            "The address changed while resolving the requested relationship.",
+        )
+    row = dict(rows[0])
+    if (
+        row["content_hash"] != anchor.content_hash
+        or row["source_path"] != anchor.source_path
+        or row["parent_node_id"] != anchor.parent_node_id
+    ):
+        _raise(
+            NodeLookupStatus.INTEGRITY_ERROR,
+            "relation_anchor_changed",
+            "The address changed while resolving the requested relationship.",
+        )
+    if row["status"] != "active" or row["stale_generation"] is not None:
+        _raise(
+            NodeLookupStatus.STALE_SOURCE,
+            "relation_anchor_not_current",
+            "The requested node is no longer the active source address.",
+        )
+    return row
+
+
+def _load_parent_locator(
+    db_path: str | Path,
+    node_id: str,
+    anchor: NodeRecord,
+) -> dict[str, Any] | None:
+    connection = _read_only_connection(db_path)
+    try:
+        _verify_database(connection)
+        child = _relation_anchor_row(connection, node_id, anchor)
+        if child["parent_node_pk"] is None:
+            return None
+        rows = connection.execute(
+            """SELECT node_pk, document_pk, node_id, content_hash, status,
+                      stale_generation
+               FROM structural_nodes
+               WHERE node_pk = ?""",
+            (child["parent_node_pk"],),
+        ).fetchall()
+        if (
+            len(rows) != 1
+            or rows[0]["document_pk"] != child["document_pk"]
+            or not _valid_node_id(rows[0]["node_id"])
+            or not _valid_hash(rows[0]["content_hash"])
+        ):
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "parent_reference_invalid",
+                "The stored parent reference is inconsistent.",
+            )
+        return dict(rows[0])
+    finally:
+        try:
+            connection.rollback()
+        except sqlite3.Error:
+            pass
+        connection.close()
+
+
+def get_parent_by_id(
+    db_path: str | Path,
+    node_id: str,
+    expected_hash: str,
+    vault_root: str | Path,
+) -> NodeParentResult:
+    """Resolve and source-verify the requested node and its immediate parent."""
+    anchor_result = get_node_by_id(db_path, node_id, expected_hash, vault_root)
+    if anchor_result.status is not NodeLookupStatus.OK:
+        return _related_failure(anchor_result, NodeParentResult)
+    anchor = anchor_result.node
+    assert anchor is not None
+
+    try:
+        parent_locator = _load_parent_locator(db_path, node_id, anchor)
+        if parent_locator is None:
+            return NodeParentResult(status=NodeLookupStatus.OK, node=anchor)
+        parent_result = get_node_by_id(
+            db_path,
+            parent_locator["node_id"],
+            parent_locator["content_hash"],
+            vault_root,
+        )
+        if parent_result.status is not NodeLookupStatus.OK:
+            return _related_failure(parent_result, NodeParentResult)
+        return NodeParentResult(
+            status=NodeLookupStatus.OK,
+            node=anchor,
+            parent=parent_result.node,
+        )
+    except _LookupFailure as exc:
+        return NodeParentResult(
+            status=exc.status,
+            error_code=exc.code,
+            message=exc.safe_message,
+        )
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        return NodeParentResult(
+            status=NodeLookupStatus.INTEGRITY_ERROR,
+            error_code="parent_lookup_failed",
+            message="The requested parent could not be verified safely.",
+        )
+
+
+def _load_neighbor_locators(
+    db_path: str | Path,
+    node_id: str,
+    anchor: NodeRecord,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    connection = _read_only_connection(db_path)
+    try:
+        _verify_database(connection)
+        target = _relation_anchor_row(connection, node_id, anchor)
+        rows = connection.execute(
+            """SELECT node_pk, node_id, content_hash, status, stale_generation
+               FROM structural_nodes
+               WHERE document_pk = ?
+                 AND parent_node_pk IS ?
+                 AND stale_generation IS NULL
+               ORDER BY char_start, char_end, node_pk""",
+            (target["document_pk"], target["parent_node_pk"]),
+        ).fetchall()
+        siblings = [dict(row) for row in rows]
+        for sibling in siblings:
+            if (
+                sibling["status"] not in {"active", "ambiguous"}
+                or not _valid_node_id(sibling["node_id"])
+                or not _valid_hash(sibling["content_hash"])
+            ):
+                _raise(
+                    NodeLookupStatus.INTEGRITY_ERROR,
+                    "sibling_state_invalid",
+                    "A current sibling record is inconsistent.",
+                )
+        positions = [
+            index for index, sibling in enumerate(siblings)
+            if sibling["node_id"] == node_id
+        ]
+        if len(positions) != 1:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "sibling_address_missing",
+                "The requested node is missing from its current sibling sequence.",
+            )
+        position = positions[0]
+        previous = siblings[position - 1] if position > 0 else None
+        following = siblings[position + 1] if position + 1 < len(siblings) else None
+        return previous, following
+    finally:
+        try:
+            connection.rollback()
+        except sqlite3.Error:
+            pass
+        connection.close()
+
+
+def get_neighbors_by_id(
+    db_path: str | Path,
+    node_id: str,
+    expected_hash: str,
+    vault_root: str | Path,
+) -> NodeNeighborsResult:
+    """Resolve and verify the immediate previous/next structural siblings.
+
+    Neighbors are direct children of the same structural parent ordered by
+    source character position. Ambiguous adjacent siblings fail the whole
+    result; they are never silently skipped to find a more distant neighbor.
+    """
+    anchor_result = get_node_by_id(db_path, node_id, expected_hash, vault_root)
+    if anchor_result.status is not NodeLookupStatus.OK:
+        return _related_failure(anchor_result, NodeNeighborsResult)
+    anchor = anchor_result.node
+    assert anchor is not None
+
+    try:
+        previous_locator, next_locator = _load_neighbor_locators(db_path, node_id, anchor)
+        related: list[NodeRecord | None] = []
+        for locator in (previous_locator, next_locator):
+            if locator is None:
+                related.append(None)
+                continue
+            result = get_node_by_id(
+                db_path,
+                locator["node_id"],
+                locator["content_hash"],
+                vault_root,
+            )
+            if result.status is not NodeLookupStatus.OK:
+                return _related_failure(result, NodeNeighborsResult)
+            related.append(result.node)
+        return NodeNeighborsResult(
+            status=NodeLookupStatus.OK,
+            node=anchor,
+            previous=related[0],
+            next=related[1],
+        )
+    except _LookupFailure as exc:
+        return NodeNeighborsResult(
+            status=exc.status,
+            error_code=exc.code,
+            message=exc.safe_message,
+        )
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        return NodeNeighborsResult(
+            status=NodeLookupStatus.INTEGRITY_ERROR,
+            error_code="neighbors_lookup_failed",
+            message="The requested neighboring nodes could not be verified safely.",
+        )
+
+
+def get_document_by_id(
+    db_path: str | Path,
+    node_id: str,
+    expected_hash: str,
+    vault_root: str | Path,
+) -> DocumentLookupResult:
+    """Read the complete source Markdown document, anchored by a verified node."""
+    anchor_result = get_node_by_id(db_path, node_id, expected_hash, vault_root)
+    if anchor_result.status is not NodeLookupStatus.OK:
+        return _related_failure(anchor_result, DocumentLookupResult)
+    anchor = anchor_result.node
+    assert anchor is not None
+
+    try:
+        canonical_root = Path(vault_root).expanduser().resolve(strict=True)
+        components = _safe_source_components(anchor.source_path)
+        source_bytes = _read_source_file(canonical_root, components)
+        actual_hash = _digest_bytes(source_bytes)
+        if actual_hash != anchor.source_sha256:
+            _raise(
+                NodeLookupStatus.STALE_SOURCE,
+                "source_hash_mismatch",
+                "The Markdown file changed while the complete document was being read.",
+            )
+        try:
+            source_text = source_bytes.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "source_encoding_invalid",
+                "The indexed source file is not valid UTF-8.",
+            )
+        document = DocumentRecord(
+            source_path=anchor.source_path,
+            source_sha256=actual_hash,
+            size_bytes=len(source_bytes),
+            raw_text=source_text,
+        )
+        return DocumentLookupResult(
+            status=NodeLookupStatus.OK,
+            anchor=anchor,
+            document=document,
+        )
+    except _LookupFailure as exc:
+        return DocumentLookupResult(
+            status=exc.status,
+            error_code=exc.code,
+            message=exc.safe_message,
+        )
+    except (OSError, ValueError, TypeError):
+        return DocumentLookupResult(
+            status=NodeLookupStatus.INTEGRITY_ERROR,
+            error_code="document_lookup_failed",
+            message="The source document could not be verified safely.",
+        )
+
+
+
 __all__ = [
+    "DocumentLookupResult",
+    "DocumentRecord",
     "NodeLookupResult",
     "NodeLookupStatus",
     "NodeRecord",
+    "NodeNeighborsResult",
+    "NodeParentResult",
+    "get_document_by_id",
+    "get_neighbors_by_id",
     "get_node_by_id",
+    "get_parent_by_id",
 ]
