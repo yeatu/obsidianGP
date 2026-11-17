@@ -433,3 +433,51 @@ MCP может рассматриваться позднее как отдель
 - comments — проверяемый status/result store.
 
 Предложение не включает транспортный код, не изменяет C1 PR #10 и не даёт оснований считать smoke workflow готовым worker. Следующий этап после независимой проверки документа — отдельная постановка V2.1 на application services.
+
+---
+
+## 13. Координаторское решение — 2026-11-17
+
+### Статус и scope
+
+Основной E1/E2/E3 retrieval/context контур уже объединён в main. Следующая разрешённая задача — **SFRA-E3-V2.1: transport-independent application services**.
+
+- Реализовать SearchVaultService поверх существующих E2 SearchAdapter и E3 ContextIntegrationPipeline/ContextBuilder.
+- Реализовать ReadSourceService поверх публичных E1 read_source_scope() и resolve_current_node().
+- Ввести typed request/result contracts и unit/contract tests для обоих сервисов.
+- Сохранить единственный SnapshotRef, exact provenance, fail-closed semantics и E3-owned budget policy.
+- Не добавлять GitHub SDK, Issue parsing, comments, status store, recovery, Actions workflow или прямой SQL к E1 в V2.1.
+- Сервисы должны вызываться из тестов/CLI harness как обычные application API; транспорт будет отдельным адаптером следующего этапа.
+
+### Data publication decision
+
+**DENY BY DEFAULT для публикации source content в публичных GitHub Issues/comments.** Репозиторий публичный, поэтому Issue и все comments рассматриваются как публичный канал.
+
+- Запрещено публиковать raw_text, excerpts, цитаты, заголовки исходных документов, source paths и иные содержательные фрагменты Vault.
+- До отдельного разрешения worker может публиковать только транспортный статус и безопасные агрегированные метаданные, не раскрывающие текст и расположение источника.
+- Исключение возможно только после corpus-level public-export allowlist, проверенного владельцем данных, и отдельного maintainer approval на конкретный Issue. Без обоих условий source publication disabled.
+- Allowlist Issue authors по умолчанию содержит только точный GitHub login yeatu. Пустой или отсутствующий allowlist означает fail-closed.
+
+### Protocol and transport status
+
+- Request envelope сохраняется как sfra.issue.v1; transport-specific fields не добавляются в request payload.
+- Status record получает status_schema_version=2, request_body_sha256 и worker_commit_sha.
+- Body hash рассчитывается по точным UTF-8 bytes первоначального Issue body; любое последующее изменение блокирует исполнение изменённого запроса.
+- Retry обязан сохранять первоначальный SnapshotRef; запрещено молча переключаться на новую версию Vault или sfra-state.
+
+### Initial limits and operations
+
+- Issue request body: максимум 32 KiB UTF-8.
+- Result chunk: максимум 45 KiB UTF-8; aggregate serialized result: максимум 256 KiB.
+- Worker timeout: 30 минут; RUNNING lease: 35 минут.
+- Recovery interval: 5 минут; max-parallel: 5.
+- Retry: максимум 3 attempts; backoff 5 минут, затем 15 минут.
+- Per-Issue concurrency: без cancel-in-progress; повторная проверка автора, body hash, status, attempt и SnapshotRef перед каждым исполнением.
+- Единственный владелец первичного rollout и incident response: repository owner/admin yeatu.
+- Budget остаётся под контролем E3. Транспорт не может повышать token budget, обрезать source text или менять business status budget_limited на complete.
+
+### Release gates
+
+V2.1 разрешён к реализации. Production Issue worker, recovery scheduler и любые операции публикации SourceReadResult/ContextPack в GitHub остаются disabled до отдельной V2.2–V2.4 security/readiness acceptance. Требуются тестовый Issue, review permissions, author allowlist, status schema, body hash, snapshot pinning, fault-injection recovery и подтверждение безопасного результата.
+
+MCP остаётся optional и не является зависимостью GitHub Issue MVP.
