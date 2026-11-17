@@ -6,6 +6,9 @@ import json
 import pytest
 
 from sfra_context_integrations.snapshot import SnapshotBindingError, bind_pinned_snapshot
+from sfra_context_integrations.search_adapter import E2SearchAdapter, SearchAdapterError
+from sfra_context_integrations.source_reader import E1SourceReader, SourceReaderContractError
+from sfra_context_builder.models import SearchRequest, SnapshotRef
 
 
 def _sha(data: bytes) -> str:
@@ -129,3 +132,93 @@ def test_rejects_sidecar_checkout_not_on_sfra_state_branch(tmp_path):
     sidecar, vault_git, vault_root, manifest, _, _ = _fixture(tmp_path)
     with pytest.raises(SnapshotBindingError, match="sfra-state"):
         _binder(sidecar, vault_git, vault_root, manifest, branch="main")
+
+
+class _Counter:
+    def count(self, text):
+        return len(text)
+
+    def metadata(self):
+        return {"name": "fixture-counter", "version": "1"}
+
+
+class _ReadApi:
+    def __init__(self, *, mutate=None):
+        self.calls = []
+        self.mutate = mutate
+
+    def resolve_current_node(self, db_path, node_id, *, snapshot_id):
+        self.calls.append(("resolve", db_path, node_id, snapshot_id))
+        if self.mutate is not None:
+            self.mutate()
+        return {"status": "not_found", "snapshot_id": snapshot_id}
+
+    def read_source_scope(self, db_path, vault_root, node_id, expected_hash, *, scope, snapshot_id):
+        self.calls.append(("read", db_path, vault_root, node_id, expected_hash, scope, snapshot_id))
+        if self.mutate is not None:
+            self.mutate()
+        return {"status": "not_found", "snapshot_id": snapshot_id, "scope": scope}
+
+
+def test_source_reader_rejects_sidecar_replacement_before_e1_read(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
+    pinned = _binder(sidecar, vault_git, vault_root, manifest)
+    api = _ReadApi()
+    reader = E1SourceReader(api, pinned, _Counter())
+
+    database.write_bytes(b"replacement sidecar database")
+
+    with pytest.raises(SourceReaderContractError) as error:
+        reader.resolve_current_node("node_fixture", pinned.ref)
+
+    assert error.value.code == "snapshot_changed"
+    assert api.calls == []
+
+
+def test_source_reader_discards_e1_result_if_sidecar_changes_during_read(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
+    pinned = _binder(sidecar, vault_git, vault_root, manifest)
+
+    def replace_sidecar():
+        database.write_bytes(b"replacement during E1 read")
+
+    api = _ReadApi(mutate=replace_sidecar)
+    reader = E1SourceReader(api, pinned, _Counter())
+
+    with pytest.raises(SourceReaderContractError) as error:
+        reader.resolve_current_node("node_fixture", pinned.ref)
+
+    assert error.value.code == "snapshot_changed"
+    assert len(api.calls) == 1
+
+
+def test_search_adapter_discards_e2_result_if_sidecar_changes_during_search(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
+    pinned = _binder(sidecar, vault_git, vault_root, manifest)
+
+    class _NodeReader:
+        def __init__(self):
+            self.calls = []
+
+        def read_node(self, node_id, expected_hash, snapshot):
+            self.calls.append(node_id)
+            return {"status": "not_found", "node": None}
+
+    reader = _NodeReader()
+
+    def search_call(*args, **kwargs):
+        database.write_bytes(b"replacement during E2 search")
+        return {"search": {"status": "not_found_in_retrieval", "results": []}}
+
+    request = SearchRequest(
+        query="fixture",
+        task=None,
+        budget_tokens=100,
+    )
+    adapter = E2SearchAdapter(pinned, reader, search_call=search_call)
+
+    with pytest.raises(SearchAdapterError) as error:
+        adapter.search(request)
+
+    assert error.value.code == "snapshot_changed"
+    assert reader.calls == []

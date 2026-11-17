@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 from pathlib import Path
@@ -25,7 +25,12 @@ class SnapshotBindingError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class PinnedSnapshot:
-    """Immutable local paths and exact identities used for one Context Pack."""
+    """Snapshot identity plus operation-boundary verification for mutable paths.
+
+    Paths are retained for compatibility with the existing E1/E2 ports, but
+    production instances created by bind_pinned_snapshot carry a verifier that
+    re-checks their Git and content identities before and after every read.
+    """
 
     ref: SnapshotRef
     sidecar_root: Path
@@ -34,6 +39,14 @@ class PinnedSnapshot:
     vault_git_root: Path
     vault_root: Path
     manifest: Mapping[str, Any]
+    _verify_current: Callable[[], None] | None = field(
+        default=None, repr=False, compare=False
+    )
+
+    def verify_current(self) -> None:
+        """Fail closed if any bound checkout, manifest or database changed."""
+        if self._verify_current is not None:
+            self._verify_current()
 
 
 def _sha256_file(path: Path) -> str:
@@ -195,6 +208,114 @@ def bind_pinned_snapshot(
         sidecar_commit_sha=sidecar_commit_sha,
         manifest_sha256=manifest_digest,
     )
+
+    def verify_current() -> None:
+        """Revalidate identities immediately around each E1/E2 read boundary."""
+        # Detect path/symlink substitution rather than following a new target
+        # under the previously issued SnapshotRef.
+        try:
+            resolved_paths = (
+                sidecar.resolve(),
+                database_file.resolve(),
+                manifest_file.resolve(),
+                vault_git.resolve(),
+                vault.resolve(),
+            )
+        except OSError as exc:
+            raise SnapshotBindingError("A pinned snapshot path is no longer available") from exc
+        if resolved_paths != (sidecar, database_file, manifest_file, vault_git, vault):
+            raise SnapshotBindingError("A pinned snapshot path was replaced or redirected")
+
+        try:
+            current_sidecar_head = git_head_reader(sidecar).strip()
+            current_vault_head = git_head_reader(vault_git).strip()
+            current_branch = git_branch_reader(sidecar).strip()
+        except Exception as exc:
+            raise SnapshotBindingError(
+                f"Could not revalidate pinned Git identity ({type(exc).__name__})"
+            ) from exc
+        if current_sidecar_head.lower() != ref.sidecar_commit_sha:
+            raise SnapshotBindingError("Pinned sidecar Git HEAD changed after binding")
+        if current_vault_head.lower() != ref.vault_commit_sha:
+            raise SnapshotBindingError("Pinned Vault Git HEAD changed after binding")
+        if current_branch != expected_sidecar_branch:
+            raise SnapshotBindingError("Pinned sidecar branch changed after binding")
+
+        for name, root in (("sidecar", sidecar), ("Vault", vault_git)):
+            try:
+                dirty = git_status_reader(root)
+            except Exception as exc:
+                raise SnapshotBindingError(
+                    f"Could not revalidate {name} checkout status"
+                ) from exc
+            if dirty:
+                raise SnapshotBindingError(
+                    f"Pinned {name} checkout became dirty after binding"
+                )
+
+        try:
+            current_manifest_bytes = manifest_file.read_bytes()
+            current_manifest = json.loads(current_manifest_bytes.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise SnapshotBindingError(
+                "Pinned E1 manifest changed or became unreadable after binding"
+            ) from exc
+        current_manifest_digest = (
+            "sha256:" + hashlib.sha256(current_manifest_bytes).hexdigest()
+        )
+        if current_manifest_digest != ref.manifest_sha256:
+            raise SnapshotBindingError("Pinned E1 manifest digest changed after binding")
+        if not isinstance(current_manifest, dict) or current_manifest != manifest:
+            raise SnapshotBindingError("Pinned E1 manifest content changed after binding")
+
+        try:
+            current_verified_manifest = state_verifier(sidecar)
+        except Exception as exc:
+            raise SnapshotBindingError(
+                f"E1 state verification failed after binding ({type(exc).__name__})"
+            ) from exc
+        if not isinstance(current_verified_manifest, Mapping):
+            raise SnapshotBindingError("E1 state verifier returned an invalid manifest")
+        if dict(current_verified_manifest) != current_manifest:
+            raise SnapshotBindingError(
+                "E1 state verifier result changed after snapshot binding"
+            )
+
+        expected_current_db_hash = current_manifest.get("database_sha256")
+        if (
+            not isinstance(expected_current_db_hash, str)
+            or not _HASH_RE.fullmatch(expected_current_db_hash)
+            or _sha256_file(database_file) != expected_current_db_hash
+        ):
+            raise SnapshotBindingError(
+                "Pinned SQLite database digest changed after snapshot binding"
+            )
+
+        # Close the verification window as much as possible: re-read the exact
+        # manifest and database digests after E1's verifier has inspected them.
+        try:
+            final_manifest_bytes = manifest_file.read_bytes()
+        except OSError as exc:
+            raise SnapshotBindingError("Pinned E1 manifest disappeared during verification") from exc
+        if (
+            "sha256:" + hashlib.sha256(final_manifest_bytes).hexdigest()
+            != ref.manifest_sha256
+            or _sha256_file(database_file) != expected_current_db_hash
+        ):
+            raise SnapshotBindingError("Pinned sidecar changed during verification")
+
+        try:
+            if git_head_reader(sidecar).strip().lower() != ref.sidecar_commit_sha:
+                raise SnapshotBindingError("Pinned sidecar Git HEAD changed during verification")
+            if git_head_reader(vault_git).strip().lower() != ref.vault_commit_sha:
+                raise SnapshotBindingError("Pinned Vault Git HEAD changed during verification")
+            if git_status_reader(sidecar) or git_status_reader(vault_git):
+                raise SnapshotBindingError("Pinned checkout became dirty during verification")
+        except SnapshotBindingError:
+            raise
+        except Exception as exc:
+            raise SnapshotBindingError("Could not complete pinned checkout verification") from exc
+
     return PinnedSnapshot(
         ref=ref,
         sidecar_root=sidecar,
@@ -203,4 +324,5 @@ def bind_pinned_snapshot(
         vault_git_root=vault_git,
         vault_root=vault,
         manifest=manifest,
+        _verify_current=verify_current,
     )
