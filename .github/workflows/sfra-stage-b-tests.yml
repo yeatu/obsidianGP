@@ -64,9 +64,10 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import os
           import re
 
-          path = Path(".github/workflows/sfra-stage-b-tests.yml")
+          path = Path(os.environ["GITHUB_WORKSPACE"]) / ".github/workflows/sfra-stage-b-tests.yml"
           # Ignore YAML comments; only executable workflow content is scanned.
           executable = "\n".join(
               line.split("#", 1)[0]
