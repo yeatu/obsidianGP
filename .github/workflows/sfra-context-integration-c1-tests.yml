@@ -34,7 +34,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e "$B1_DIR"
           python -m pip install -e "$C1_DIR[test]"
-      - name: Run adapter contract tests
+      - name: Run B1 regression tests
+        run: |
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          python -m pytest -q "$B1_DIR/tests"
+      - name: Run C1 adapter contract tests
         run: |
           C1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
           python -m pytest -q "$C1_DIR/tests"
