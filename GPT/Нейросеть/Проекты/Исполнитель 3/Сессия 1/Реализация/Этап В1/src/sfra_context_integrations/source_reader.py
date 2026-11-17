@@ -9,7 +9,7 @@ from typing import Any
 
 from sfra_context_builder.models import SnapshotRef, TokenCounterProtocol
 
-from .snapshot import PinnedSnapshot
+from .snapshot import PinnedSnapshot, SnapshotBindingError
 from .source_protocol import E1PublicSourceAPI
 
 
@@ -87,6 +87,15 @@ class E1SourceReader:
                 code="snapshot_mismatch",
             )
 
+    def _verify_pinned_snapshot(self) -> None:
+        try:
+            self._pinned.verify_current()
+        except SnapshotBindingError as exc:
+            raise SourceReaderContractError(
+                "Pinned snapshot changed after binding; source read rejected",
+                code="snapshot_changed",
+            ) from exc
+
     @staticmethod
     def _mapping(value: Any, name: str) -> Mapping[str, Any]:
         if isinstance(value, Mapping):
@@ -106,6 +115,7 @@ class E1SourceReader:
         """Resolve a current address using E1's CurrentNodeAddress result."""
         _required_text(node_id, "node_id")
         self._check_snapshot(snapshot)
+        self._verify_pinned_snapshot()
         try:
             native = self._source_api.resolve_current_node(
                 str(self._pinned.database_path),
@@ -113,11 +123,13 @@ class E1SourceReader:
                 snapshot_id=snapshot.snapshot_id,
             )
         except Exception as exc:
+            self._verify_pinned_snapshot()
             raise SourceReaderContractError(
                 f"E1 resolve_current_node failed ({type(exc).__name__})",
                 code="e1_resolve_current_node_failed",
             ) from exc
 
+        self._verify_pinned_snapshot()
         response = self._mapping(native, "E1 resolve_current_node response")
         self._check_echoed_snapshot(response, snapshot)
         status = response.get("status")
@@ -170,6 +182,7 @@ class E1SourceReader:
         if scope not in SCOPES:
             raise ValueError(f"unsupported scope: {scope!r}")
         self._check_snapshot(snapshot)
+        self._verify_pinned_snapshot()
         if budget_tokens is not None and (
             isinstance(budget_tokens, bool)
             or not isinstance(budget_tokens, int)
@@ -187,11 +200,13 @@ class E1SourceReader:
                 snapshot_id=snapshot.snapshot_id,
             )
         except Exception as exc:
+            self._verify_pinned_snapshot()
             raise SourceReaderContractError(
                 f"E1 read_source_scope failed ({type(exc).__name__})",
                 code="e1_read_source_scope_failed",
             ) from exc
 
+        self._verify_pinned_snapshot()
         response = self._mapping(native, "E1 read_source_scope response")
         self._check_echoed_snapshot(response, snapshot)
         if response.get("scope") != scope:
