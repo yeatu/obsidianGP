@@ -181,12 +181,13 @@ class E2SearchAdapter:
             )
 
         diagnostics: list[Mapping[str, Any]] = []
-        if request.facets:
+        unsupported_facets = bool(request.facets)
+        if unsupported_facets:
             diagnostics.append(_diagnostic(
                 "facet_match_signal_unavailable",
-                "info",
-                "E2 exposes no facet parameter or explicit facet-match signal; no facet match was inferred.",
-                details={"requested_facets": list(request.facets)},
+                "warning",
+                "E2 has no facet retrieval channel; requested facets were not evaluated and SearchBatch is incomplete.",
+                details={"requested_facets": list(request.facets), "evaluation": "not_evaluated"},
             ))
 
         candidates: list[RetrievalCandidate] = []
@@ -449,7 +450,7 @@ class E2SearchAdapter:
 
         truncated = len(raw_hits) >= self._search_limit
         complete = status == "not_found_in_retrieval" or (status == "ok" and not truncated)
-        if truncated or zone_requested or source_rejections:
+        if truncated or zone_requested or source_rejections or unsupported_facets:
             complete = False
 
         return SearchAdapterResult(

@@ -491,7 +491,7 @@ PR #21 остаётся Open / not merged. При сравнении с теку
 ### 14.2. Действия координатора опубликованы в GitHub
 
 - **PR #16 / E3:** опубликован запрос Аналитику 3 на sync-only review точного HEAD `d54173901543f6f2a2a1db3d3f774dd8842a89d8`, с CI [44183680450](https://github.com/yeatu/obsidianGP/actions/runs/44183680450), diff allowlist из 17 путей и запретом на merge до координаторского решения. Комментарий [6962335161](https://github.com/yeatu/obsidianGP/pull/16#issuecomment-6962335161).
-- **Issue #18 / E2:** опубликован запрос Аналитику 2 на короткий sync-only review текущего E2 PR после исправления отчёта. Проверяемый HEAD на момент handoff: `f7fa3eca587c3a39a0d7c11804a8e9271657e0c5`, CI [44184089775](https://github.com/yeatu/obsidianGP/actions/runs/44184089775). Комментарий [6962335937](https://github.com/yeatu/obsidianGP/issues/18#issuecomment-6962335937).
+- **Issue #18 / E2:** A2 завершил запрошенный sync-only review на точном HEAD `f7fa3eca587c3a39a0d7c11804a8e9271657e0c5`. Review [5947396014](https://github.com/yeatu/obsidianGP/pull/21#pullrequestreview-5947396014), итоговый handoff [6962327914](https://github.com/yeatu/obsidianGP/issues/18#issuecomment-6962327914), RELEASE [6962334934](https://github.com/yeatu/obsidianGP/issues/18#issuecomment-6962334934). Подтверждено: после предыдущего проверенного HEAD изменился только `Результат.md`; runner, corpus, tests, README и benchmark workflow совпадают по blob SHA. P2 со старыми ссылками закрыт; новых blocking findings нет. Post-sync CI [44184089775](https://github.com/yeatu/obsidianGP/actions/runs/44184089775) — success; artifact [14372014537](https://github.com/yeatu/obsidianGP/actions/runs/44184089775/artifacts/14372014537), digest `sha256:da59255fa8262aca8fbefc083060bf18ab65dad9a462d1906e015e347fb3b336`. Результат передан координатору; A2 не выдавал APPROVE и не сливал PR.
 - **Issue #17 / E1:** опубликовано координаторское решение не запускать повторно E1 workflows, которые индексируют реальный Vault или копируют production `sfra-state`. Требуется только disposable-fixture execution host. Комментарий [6962336735](https://github.com/yeatu/obsidianGP/issues/17#issuecomment-6962336735).
 
 ### 14.3. Текущий диспетчерский снимок
@@ -499,7 +499,7 @@ PR #21 остаётся Open / not merged. При сравнении с теку
 | Направление | Статус | Следующий конкретный шаг |
 |---|---|---|
 | E1 / Issue #17 / PR #22/#23 | **BLOCKED** | E1 сохраняет claim; тестовый host недоступен. Desktop Commander device `DESKTOP-TFAJCL6` Offline. Нужен доступный host с disposable Vault/SQLite fixtures. Не запускать текущие real-Vault workflows. |
-| E2 / Issue #18 / PR #21 | **REVIEW → coordinator acceptance pending** | A2 завершил полный benchmark review; E2 исправил P2 evidence docs, синхронизировал ветку и получил passing CI на HEAD `f7fa3ec`. Остался короткий sync-only confirmation A2, затем координаторская приёмка. |
+| E2 / Issue #18 / PR #21 | **ANALYST_COMPLETE_UNREVIEWED / coordinator acceptance pending** | Короткий sync-only review A2 завершён на HEAD `f7fa3eca587c3a39a0d7c11804a8e9271657e0c5`; подтверждены исправление P2, неизменность benchmark implementation/tests/workflow и синхронизация с main. Post-sync CI [44184089775](https://github.com/yeatu/obsidianGP/actions/runs/44184089775) — success. Review [5947396014](https://github.com/yeatu/obsidianGP/pull/21#pullrequestreview-5947396014). Следующий шаг — пакетная приёмка координатором; PR остаётся Open/non-Draft/unmerged. |
 | E3 / PR #16 / V2.2 | **Analyst 3 review requested** | E3 синхронизировал branch с main на HEAD `d541739`; CI 174/174 success. A3 должен подтвердить sync-only diff на этом SHA; затем координаторская финальная приёмка. PR остаётся Draft/Open/unmerged. |
 | A1 / Issue #19 | **Audit complete / RELEASED** | Аудит передал пять findings A1-01…A1-05. Issue остаётся открытой как evidence/triage thread; A1 не должен повторять аудит без нового поручения. |
 | E3 / Issue #24 | **OPEN / свободна до CLAIM** | Самостоятельный CLAIM E3, затем исправление empty SourceSpan. |
@@ -517,7 +517,7 @@ PR #21 остаётся Open / not merged. При сравнении с теку
 
 ### 14.5. Что остаётся у координатора
 
-1. После A2 sync-only confirmation провести приёмку E2 benchmark PR #21 в согласованном synthetic-only scope.
+1. **A2 sync-only confirmation получено** на HEAD `f7fa3eca587c3a39a0d7c11804a8e9271657e0c5`; провести пакетную приёмку E2 benchmark PR #21 в согласованном synthetic-only scope.
 2. После A3 sync-only review провести финальную проверку PR #16. Ни review, ни CI не дают автоматического разрешения на merge.
 3. Разобрать A1-01 и safety boundary A1-04 совместно с E1; не обходить BLOCKED запуском прежних workflows.
 4. Контролировать три новых E3 Issues #24–#26 через самостоятельные CLAIM и фактические доказательства.
