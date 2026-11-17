@@ -117,8 +117,8 @@ def test_backup_api_captures_committed_wal_data(tmp_path):
             source_db,
             state_dir,
             source_repository="yeatu/obsidianGP",
-            source_branch="executor-1/sfra-indexer-session-1",
-            source_commit="abc123",
+            vault_ref="executor-1/sfra-indexer-session-1",
+            vault_commit_sha="c" * 40,
             workflow_run_id="wal-test",
         )
 

@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -22,7 +23,7 @@ def _indexed_note(tmp_path, source: str = "# Header\n\nTarget paragraph.\n"):
     before = note.read_bytes()
 
     result = index_vault(vault, tmp_path / "sidecar")
-    db_path = result.database_path
+    db_path = Path(result.database_path)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     row = connection.execute(
@@ -262,7 +263,8 @@ def test_unicode_emoji_and_line_endings_keep_char_and_byte_offsets(tmp_path, sou
         result.node.byte_start:result.node.byte_end
     ].decode("utf-8") == raw
     assert raw == source[result.node.char_start:result.node.char_end]
-    assert "🧪" in source[:result.node.char_start]
+    assert "🧪" in raw
+    assert result.node.byte_start > result.node.char_start
 
 
 @pytest.mark.parametrize(
