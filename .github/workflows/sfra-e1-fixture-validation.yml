@@ -1,0 +1,89 @@
+name: SFRA E1 fixture-only validation
+
+on:
+  push:
+    branches:
+      - coordinator/e1-fixture-validation-3
+    paths:
+      - ".github/workflows/sfra-e1-fixture-validation.yml"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sfra-e1-fixture-validation
+  cancel-in-progress: false
+
+jobs:
+  e1-fixture-tests:
+    name: E1 isolated fixtures only
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out validation branch without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/pyproject.toml"
+      - name: Install E1 package and development dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          E1_DIR="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$E1_DIR" -r "$E1_DIR/requirements-dev.txt"
+      - name: Run the complete E1 unit and contract suite against temporary fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          E1_DIR="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+          python -m pytest -q "$E1_DIR/tests" --junitxml "$RUNNER_TEMP/e1-fixture-tests.xml"
+      - name: Verify CLI entry point
+        run: sfra-index --help >/dev/null
+      - name: Record scope boundary
+        run: |
+          echo "E1 validation used only pytest tmp_path fixtures."
+          echo "No checkout of sfra-state or Vault source was performed."
+          echo "No indexing, persistence, or production state workflow was invoked."
+
+  v2-1-consumer-tests:
+    name: V2.1 consumer contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out validation branch without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install B1, E3 and E2 packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$E3_DIR[test]"
+          python -m pip install -e "$E2_DIR"
+      - name: Run V2.1 application service contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В2.1/tests"
+          python -m pytest -q "$TEST_DIR" --junitxml "$RUNNER_TEMP/v2-1-application-tests.xml"
