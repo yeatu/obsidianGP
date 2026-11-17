@@ -68,6 +68,9 @@ def evaluate_case(case, repetitions):
     )
     expected_order = case.get("expected_order")
     order_ok = expected_order is None or first[:len(expected_order)] == expected_order
+    expected_status = case.get("expected_status")
+    statuses = [item.get("status") for item in repetitions]
+    status_ok = expected_status is None or all(status == expected_status for status in statuses)
     expected_empty = not expected and not expected_exception
     empty_ok = not first if expected_empty else True
     recall1 = recall_at_k(expected, first, 1)
@@ -80,6 +83,7 @@ def evaluate_case(case, repetitions):
         "unique_results": no_duplicates,
         "expected_exception": exception_ok,
         "expected_order": order_ok,
+        "expected_status": status_ok,
         "expected_empty": empty_ok,
         "recall_at_k": recallk == 1.0 if expected else True,
     }
@@ -93,7 +97,9 @@ def evaluate_case(case, repetitions):
         "precision_at_k": precisionk, "reciprocal_rank": mrr,
         "stable_order": stable, "no_duplicates": no_duplicates,
         "max_duplicate_count": max(duplicate_counts, default=0),
-        "expected_order_match": order_ok, "expected_empty_match": empty_ok,
+        "expected_order_match": order_ok, "expected_status_match": status_ok,
+        "expected_empty_match": empty_ok,
+        "expected_status": expected_status,
         "expected_exception": expected_exception,
         "expected_exception_match": exception_ok,
         "repetitions": len(repetitions), "checks": checks,
@@ -120,12 +126,13 @@ def render_markdown(report):
         f"| Gated cases | {report['gate_cases_passed']} / {report['gate_cases']} passed |",
         f"| Macro recall@1 | {report['macro_recall_at_1']} |",
         f"| Macro recall@3 | {report['macro_recall_at_3']} |",
+        f"| Macro precision@3 | {report['macro_precision_at_3']} |",
         f"| Macro MRR | {report['macro_mrr']} |",
         f"| Stable gated order | {report['stable_gate_cases']} / {report['gate_cases']} |",
         f"| Gated cases with duplicates | {report['duplicate_gate_cases']} |",
         "", "## Per-query results", "",
-        "| Case | Category | Query | Expected | Results | Recall@k | Stable | Gate |",
-        "|---|---|---|---|---|---:|---:|---|",
+        "| Case | Category | Query | Expected | Results | Recall@k | Precision@k | Stable | Gate |",
+        "|---|---|---|---|---|---:|---:|---:|---|",
     ]
     for item in report["cases"]:
         value = item["recall_at_k"]
@@ -134,6 +141,7 @@ def render_markdown(report):
             f"| {item['id']} | {item['category']} | {item['query']} | "
             f"{', '.join(item['expected_node_ids']) or 'empty'} | "
             f"{', '.join(item['result_node_ids']) or 'empty'} | {recall} | "
+            f"{'n/a' if item['precision_at_k'] is None else f'{item["precision_at_k"]:.3f}'} | "
             f"{'yes' if item['stable_order'] else 'no'} | {item['status']} |"
         )
     lines.extend([
@@ -207,6 +215,7 @@ def run(corpus_path, repeats, expected_engine):
             "diagnostic_cases": len(diagnostic),
             "macro_recall_at_1": avg([item["recall_at_1"] for item in scored]),
             "macro_recall_at_3": avg([recall_at_k(item["expected_node_ids"], item["result_node_ids"], 3) for item in scored]),
+            "macro_precision_at_3": avg([precision_at_k(item["expected_node_ids"], item["result_node_ids"], 3) for item in scored]),
             "macro_mrr": avg([item["reciprocal_rank"] for item in scored]),
             "stable_gate_cases": sum(bool(item["stable_order"]) for item in gated),
             "duplicate_gate_cases": sum(not item["no_duplicates"] for item in gated),
