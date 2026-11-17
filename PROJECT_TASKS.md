@@ -563,3 +563,40 @@ PR #21 остаётся Open / not merged. При сравнении с теку
 4. E1 остаётся заблокированным на безопасном тестовом хосте. Никакие реальные данные не публиковать в публичных артефактах или комментариях.
 
 **Последняя координаторская операция:** merge PR #21, commit `2bb84ea536e60605c33be3bb03f5a4da7dee30af`.
+
+## 16. Кризисная координаторская стабилизация — 2026-11-18
+
+Этот раздел supersedes устаревшие статусы раздела 15 и предыдущие упоминания PR #16 / #24–#29.
+
+### 16.1. Завершённые приёмки и merge
+
+| Область | Результат | Доказательства |
+|---|---|---|
+| E2 synthetic lexical benchmark | **MERGED** | PR [#21](https://github.com/yeatu/obsidianGP/pull/21), merge 2bb84ea536e60605c33be3bb03f5a4da7dee30af; Issue #18 completed; CI 44184089775 success. |
+| E3 empty SourceSpan | **MERGED** | PR [#27](https://github.com/yeatu/obsidianGP/pull/27), merge 4b71425f093a99882f08738e6d6243228d98416b; Issue #24 completed; C1/V2.1 fixture tests passed and manifest-pinned E1→E2→E3 integration run 44192658977 success. |
+| E3 SnapshotRef TOCTOU | **MERGED** | Включено в PR [#30](https://github.com/yeatu/obsidianGP/pull/30); Issue #25 completed. Operation-boundary verification before/after E1/E2 calls, path/HEAD/branch/clean-tree/manifest/SQLite digest revalidation, fail-closed snapshot_changed. |
+| E3 facets completeness | **MERGED** | Включено в PR [#30](https://github.com/yeatu/obsidianGP/pull/30); Issue #26 completed. Unsupported facets теперь not_evaluated, warning diagnostic и SearchBatch.complete=false, с E2→E3→B1 regression. |
+| E3 contract integration | **MERGED** | PR [#30](https://github.com/yeatu/obsidianGP/pull/30), merge 1712ef3347c3c577dd4c2c2218c277a2b75bad1b. CI on exact HEAD dc01d2cc4b1a7e89b993ea3ad1be3dc6c3c0f5f9: B1 45, C1 66, V2.1 18 passed; dependency/import guard passed; real manifest-pinned integration 44193376053 success. Artifact 14377518167 contains aggregate report only; no source text. |
+| E3 V2.2 non-production Issue core | **MERGED** | PR [#16](https://github.com/yeatu/obsidianGP/pull/16), merge 05a067e1348b2871e403159f060d49b61d4fef7d; Issue #15 completed. Independent Analyst 3 review and coordinator acceptance; CI 44183680450: 45 B1 + 56 C1 + 18 V2.1 + 55 V2.2 = 174 tests; dependency/import guard passed. |
+
+PR #28 and PR #29 were closed as superseded after their changes were consolidated into PR #30. No code from those stale branches was merged. Current main HEAD after the above merges: 05a067e1348b2871e403159f060d49b61d4fef7d.
+
+### 16.2. Remaining blockers
+
+| Направление | Статус | Решение |
+|---|---|---|
+| E1 / Issue #17 / PR #22/#23 | **BLOCKED** | Existing E1 workflows index the real Vault / production sidecar. No rerun of those workflows until disposable Vault + SQLite execution host or an approved fixture-only test route exists. PR #22/#23 remain open; tests have not been accepted. |
+| E3 V2.3/V2.4 | **NOT STARTED / FROZEN** | Do not begin transport, event triggers, recovery, GitHub writes, credentials, MCP/HTTP or deployment until a separate readiness review and explicit scope approval. |
+| E3 PR #12 | **PROPOSAL ONLY** | GitHub Issue Worker and Recovery proposal remains unimplemented; do not treat it as a running agent. |
+| A1 / Issue #19 | **RELEASED** | Audit completed; findings A1-01…A1-05 triaged into accepted fixes or E1 blocker. No repeat audit needed. |
+
+### 16.3. Coordinator's operational decision
+
+1. E2 benchmark and E3 V2.2 are now in main; do not reopen them absent a regression.
+2. Issues #24, #25, #26 and #15 are closed as completed.
+3. PR #28/#29 are closed as superseded; use PR #30 as the canonical implementation history for #25/#26.
+4. E1 is the only remaining implementation blocker in the current approved scope. It is an environment/evidence blocker, not a lack of assigned work.
+5. Do not mistake the successful read-only manifest-pinned integration run for permission to run the E1 indexer against the production Vault. The former validated E3 reads; the latter mutates/indexes production state and remains blocked.
+6. V2.3/V2.4 remain frozen. The V2.2 merge does not authorize production GitHub transport or source-content publication.
+
+**Координаторская точка восстановления:** main HEAD 05a067e1348b2871e403159f060d49b61d4fef7d; E2 benchmark, E3 contract fixes and V2.2 non-production core accepted and merged. Единственный текущий стопор — E1 fixture-only execution environment.
