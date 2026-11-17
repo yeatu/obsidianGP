@@ -55,3 +55,20 @@ def test_diagnostic_case_does_not_fail_gate():
     ])
     assert result["status"] == "diagnostic"
     assert result["reciprocal_rank"] == 0.0
+
+def test_case_evaluation_checks_expected_search_status():
+    case = {
+        "id": "noise",
+        "category": "empty-results",
+        "query": "!!!",
+        "expected_node_ids": [],
+        "expected_status": "not_found_in_retrieval",
+        "k": 3,
+        "gate": True,
+    }
+    result = evaluate_case(case, [
+        {"status": "ok", "node_ids": [], "hits": [], "exception": None},
+        {"status": "ok", "node_ids": [], "hits": [], "exception": None},
+    ])
+    assert result["status"] == "failed"
+    assert result["expected_status_match"] is False
