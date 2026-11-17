@@ -340,7 +340,7 @@ class ContextBuilder:
 
         if any(item["severity"] == "error" for item in diagnostics):
             status = "integrity_warning"
-        elif not candidates and normalized_batch.complete:
+        elif not candidates and search_complete:
             status = "empty"
         elif any(item["reason"] in {
             "budget_limit", "required_group_budget_limit", "lower_priority_budget_limit"
