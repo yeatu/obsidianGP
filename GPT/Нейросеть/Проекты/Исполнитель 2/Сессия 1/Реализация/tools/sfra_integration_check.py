@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.metadata
-import importlib.util
 import json
 import os
 import re
@@ -86,6 +85,7 @@ def main() -> int:
     parser.add_argument("--temp-root", required=True, type=Path)
     parser.add_argument("--state-branch-sha", required=True)
     parser.add_argument("--package-dir", required=True, type=Path)
+    parser.add_argument("--package-dir", required=True, type=Path)
     parser.add_argument("--max-sources", type=int, default=5)
     args = parser.parse_args()
 
@@ -141,10 +141,9 @@ def main() -> int:
     lemmas = {word: morph.parse(word)[0].normal_form for word in forms}
     if len(set(lemmas.values())) != 1:
         raise RuntimeError(f"pymorphy3 did not normalize the test forms to one lemma: {lemmas}")
-    package = importlib.util.find_spec("sfra_search")
-    if package is None or not package.submodule_search_locations:
-        raise RuntimeError("Installed sfra_search package cannot be located")
-    package_root = Path(next(iter(package.submodule_search_locations)))
+    package_root = args.package_dir.resolve()
+    if not package_root.is_dir() or not (package_root / "__init__.py").is_file():
+        raise RuntimeError(f"sfra_search package directory is invalid: {package_root}")
     python_sources = list(package_root.rglob("*.py"))
     mentions_pymorphy = any(
         "pymorphy3" in p.read_text(encoding="utf-8", errors="ignore").lower()
@@ -153,6 +152,10 @@ def main() -> int:
     )
     if not mentions_pymorphy:
         raise RuntimeError("sfra_search source does not reference pymorphy3/MorphAnalyzer")
+    from sfra_search.normalize import Morphology
+    package_morphology = Morphology()
+    if package_morphology.engine != "pymorphy3":
+        raise RuntimeError(f"sfra_search selected {package_morphology.engine}, expected pymorphy3")
 
     cli = shutil.which("sfra")
     if not cli:
