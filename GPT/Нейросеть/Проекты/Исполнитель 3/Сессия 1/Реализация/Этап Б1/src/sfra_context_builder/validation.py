@@ -194,12 +194,12 @@ def parse_candidate(
             raise ContractValidationError("candidate.relevance.tier must be between 1 and 6")
         bm25 = _number(rel["bm25"], "candidate.relevance.bm25")
 
-    score_raw = obj.get("score")
-    score = None if score_raw is None else _number(score_raw, "candidate.score")
+    score_present = "score" in obj
+    score = _number(obj["score"], "candidate.score") if score_present else None
     score_direction = obj.get("score_direction")
     if score_direction is not None and score_direction not in {"asc", "desc"}:
         raise ContractValidationError("candidate.score_direction must be asc or desc")
-    if score is not None and score_direction is None:
+    if score_present and score_direction is None:
         raise ContractValidationError(
             "score_direction is required whenever score is supplied"
         )
