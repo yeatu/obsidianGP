@@ -4,7 +4,7 @@
 >
 > **Координатора вызывают только по сигналу аналитика:** весь его спектр задач завершён либо возникло ограничение, требующее архитектурного решения или нового указания. Координатор не обновляет файл после каждого промежуточного отчёта.
 >
-> Последняя координаторская актуализация: **2026-11-17**. Основной контур E1/E2/E3 объединён в main на `d3e41965f916746225cb8f76fd4c96fc9e95486c`; PR #10 → `5e274fc`, PR #11 → `d654bdc`, PR #7 → `d3e4196`.
+> Последняя координаторская актуализация: **2026-11-17**. Основной контур E1/E2/E3 и SFRA-E3-V2.1 объединены в main; PR #10 → `5e274fc`, PR #11 → `d654bdc`, PR #7 → `d3e4196`, PR #14 → `9a0bfa0`.
 
 ## 1. Роли и статусы
 
@@ -265,7 +265,9 @@ PR [#12](https://github.com/yeatu/obsidianGP/pull/12) остаётся Draft pro
 
 Production Issue worker, recovery и публикация source content не разрешены до отдельной security/readiness проверки V2.2–V2.4. MCP остаётся optional и не является зависимостью V2 MVP.
 
-## 8. Координаторская приёмка SFRA-E3-V2.1 — 2026-11-17
+## 8. Промежуточная координаторская приёмка SFRA-E3-V2.1 — 2026-11-17 (до merge; historical)
+
+Этот раздел фиксирует состояние до объединения PR #14. Его пункты о Draft / not merged superseded финальным разделом 9 ниже.
 
 - [x] Аналитик завершил V2.1: review #5935543022, `ANALYST_COMPLETE_UNREVIEWED`, блокирующих дефектов в согласованном scope не выявлено.
 - [x] README и analyst handoff синхронизированы; прежние evidence на `9b57c68` помечены как исторические.
@@ -289,6 +291,6 @@ Production Issue worker, recovery и публикация source content не р
 - [x] Issue #13 закрыт как completed.
 - [x] README, analyst handoff, PROJECT_TASKS и Coordinator Session 3 registry обновлены после merge.
 - [x] Pre-merge C1 / V2.1 / real integration gates прошли на `516d1590744e88574bc9e67724aaaae0c5e4e13d`; implementation code не менялся после проверки.
-- [ ] Post-merge workflow verification: workflow не настроены на push в `main`; pre-merge зелёные проверки остаются evidence для неизменённого runtime code.
+- [x] Проверена конфигурация post-merge workflow triggers: целевые workflow не настроены на push в `main`, поэтому отдельный post-merge run не создан. Pre-merge зелёные проверки остаются валидным evidence для неизменённого runtime code.
 
 **Итог:** SFRA-E3-V2.1 = `DONE`. Это не включает GitHub Issue worker/recovery, MCP, HTTP/webhooks или публикацию Vault source content. Public source-content publication remains deny-by-default.
