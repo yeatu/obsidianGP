@@ -277,6 +277,18 @@ class E1SourceReader:
         if scope == "document":
             document = self._mapping(response.get("document"), "E1 document scope result")
             document_hash = document.get("document_hash", document.get("source_sha256"))
+            if (
+                document.get("source_path") != anchor.get("source_path")
+                or document_hash != anchor.get("document_hash")
+                or document.get("source_sha256") != anchor.get("document_hash")
+                or document.get("index_generation") != anchor.get("index_generation")
+                or document.get("anchor_node_id") != node_id
+                or document.get("anchor_content_hash") != expected_hash
+            ):
+                raise SourceReaderContractError(
+                    "E1 document record differs from its verified anchor provenance",
+                    code="document_hash_mismatch",
+                )
             raw_text = document.get("raw_text")
             if not isinstance(raw_text, str):
                 raise SourceReaderContractError("E1 document result must contain full raw_text")
@@ -335,15 +347,21 @@ class E1SourceReader:
                 raise SourceReaderContractError(f"Unsupported normalized scope: {scope}")
 
             # E1's authoritative named relation fields determine roles. Its
-            # fragments tuple must contain exactly the same node IDs/hashes.
+            # fragments tuple must contain exactly the same complete node records.
             expected_records = [
                 item for item in expected_records if item[0] in expected_roles
             ]
-            expected_identity = {
-                record.get("node_id"): record.get("content_hash")
-                for _, record in expected_records
+            expected_by_id = {
+                record.get("node_id"): (role, record)
+                for role, record in expected_records
             }
-            actual_identity: dict[str, str] = {}
+            actual_ids: set[str] = set()
+            provenance_fields = (
+                "node_id", "content_hash", "source_path", "node_type",
+                "parent_node_id", "heading_path", "raw_text", "line_start",
+                "line_end", "char_start", "char_end", "byte_start", "byte_end",
+                "source_sha256", "document_hash", "index_generation", "metadata",
+            )
             for raw in raw_fragments:
                 item = self._mapping(raw, "E1 scope fragment")
                 fragment_id = item.get("node_id")
@@ -351,21 +369,47 @@ class E1SourceReader:
                     raise SourceReaderContractError(
                         "E1 node fragment must contain its producer-issued node_id"
                     )
-                if fragment_id in actual_identity:
+                if fragment_id in actual_ids:
                     raise SourceReaderContractError(
                         "E1 returned a duplicate node fragment"
                     )
-                actual_identity[fragment_id] = item.get("content_hash")
-            if actual_identity != expected_identity:
-                raise SourceReaderContractError(
-                    "E1 scope fragments differ from named anchor/relationship records",
-                    code="e1_scope_fragment_set_mismatch",
-                )
-
-            for role, record in expected_records:
-                fragment = dict(record)
+                actual_ids.add(fragment_id)
+                expected_item = expected_by_id.get(fragment_id)
+                if expected_item is None:
+                    raise SourceReaderContractError(
+                        "E1 returned a node fragment not named by anchor/relationship fields",
+                        code="e1_scope_fragment_set_mismatch",
+                    )
+                role, named_record = expected_item
+                mismatches = [
+                    field for field in provenance_fields
+                    if item.get(field) != named_record.get(field)
+                ]
+                if mismatches:
+                    if {"raw_text", "content_hash"} & set(mismatches):
+                        code = "content_hash_mismatch"
+                    elif {"document_hash", "source_sha256"} & set(mismatches):
+                        code = "document_hash_mismatch"
+                    elif "index_generation" in mismatches:
+                        code = "snapshot_generation_mismatch"
+                    elif "source_path" in mismatches:
+                        code = "source_path_mismatch"
+                    else:
+                        code = "e1_scope_fragment_record_mismatch"
+                    raise SourceReaderContractError(
+                        "E1 fragment differs from its named anchor/relationship record: "
+                        + ", ".join(mismatches),
+                        code=code,
+                    )
+                fragment = dict(item)
                 fragment["role"] = role
                 normalized_fragments.append(fragment)
+
+            if actual_ids != set(expected_by_id):
+                raise SourceReaderContractError(
+                    "E1 scope fragments do not contain the complete named record set",
+                    code="e1_scope_fragment_set_mismatch",
+                )
 
             if scope == "parent" and anchor.get("parent_node_id") is not None:
                 if "parent_context" not in {item["role"] for item in normalized_fragments}:
@@ -388,6 +432,11 @@ class E1SourceReader:
             "status": "ok",
             "snapshot_id": snapshot.snapshot_id,
             "scope": scope,
+            "requested": {
+                "node_id": node_id,
+                "expected_hash": expected_hash,
+                "scope": scope,
+            },
             "target_source": dict(anchor),
             "fragments": normalized_fragments,
             "diagnostics": diagnostics,
