@@ -6,12 +6,14 @@ on:
       - executor-3/context-builder-stage-b1
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-context-builder-b1-tests.yml"
   pull_request:
     branches:
       - main
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-context-builder-b1-tests.yml"
 
 permissions:
@@ -19,6 +21,9 @@ permissions:
 
 jobs:
   unit-tests:
+    if: >-
+      github.event_name != 'pull_request' ||
+      !startsWith(github.event.pull_request.head.ref, 'executor-1/e1-source-read-api')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,3 +40,98 @@ jobs:
       - name: Run unit tests
         working-directory: "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
         run: python -m pytest -q
+
+
+  e1-source-api-tests:
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.event.pull_request.head.ref, 'executor-1/e1-source-read-api')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+    steps:
+      - name: Check out E1 pull-request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: source
+
+      - name: Check out the explicitly selected default Vault source
+        uses: actions/checkout@v4
+        with:
+          ref: executor-1/sfra-indexer-session-1
+          path: vault
+          fetch-depth: 1
+          sparse-checkout: ГП
+          sparse-checkout-cone-mode: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/pyproject.toml"
+
+      - name: Install E1 package and test dependencies
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements-dev.txt
+
+      - name: Run all structural indexer and E1 API tests
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: python -m pytest -q
+
+      - name: Check public API and CLI exports
+        working-directory: "source/GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+        run: |
+          python - <<'PY'
+          from sfra_indexer import (
+              NodeLookupResult,
+              NodeLookupStatus,
+              NodeRecord,
+              get_node_by_id,
+          )
+          assert callable(get_node_by_id)
+          assert NodeLookupStatus.OK.value == "ok"
+          print("Public source-verified lookup API exports: OK")
+          PY
+          sfra-index --help
+
+      - name: Index the selected real Vault without modifying it
+        working-directory: source
+        run: |
+          set -euo pipefail
+          sfra-index index --vault "$GITHUB_WORKSPACE/vault/ГП" --index-dir /tmp/e1-real-vault-index
+          sfra-index info --db /tmp/e1-real-vault-index/structure.sqlite3
+          python - <<'PY'
+          import sqlite3
+
+          connection = sqlite3.connect("/tmp/e1-real-vault-index/structure.sqlite3")
+          values = {
+              "documents": connection.execute(
+                  "SELECT COUNT(*) FROM documents WHERE status='active'"
+              ).fetchone()[0],
+              "nodes": connection.execute(
+                  "SELECT COUNT(*) FROM structural_nodes WHERE stale_generation IS NULL"
+              ).fetchone()[0],
+              "passages": connection.execute(
+                  "SELECT COUNT(*) FROM passages"
+              ).fetchone()[0],
+              "empty_documents": connection.execute(
+                  "SELECT COUNT(*) FROM documents WHERE status='active' AND source_size_bytes=0"
+              ).fetchone()[0],
+          }
+          print("Vault source ref: executor-1/sfra-indexer-session-1")
+          print("Real Vault counts:", values)
+          assert values == {
+              "documents": 66,
+              "nodes": 9080,
+              "passages": 21,
+              "empty_documents": 2,
+          }, values
+          connection.close()
+          PY
+          git -C "$GITHUB_WORKSPACE/vault" diff --exit-code -- ГП
+          test -z "$(git -C "$GITHUB_WORKSPACE/vault" status --porcelain -- ГП)"

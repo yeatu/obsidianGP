@@ -1,0 +1,76 @@
+name: SFRA structural indexer stages B and C
+
+on:
+  push:
+    branches:
+      - executor-1/sfra-indexer-session-1
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
+      - ".github/workflows/sfra-stage-b-tests.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
+      - ".github/workflows/sfra-stage-b-tests.yml"
+
+jobs:
+  structural-indexer-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements-dev.txt
+      - name: Run automated test suite
+        run: python -m pytest
+      - name: Check CLI
+        run: sfra-index --help
+      - name: Parse and re-scan the real repository Vault
+        run: |
+          sfra-index index --vault ../../../../../../ГП --index-dir /tmp/sfra-vault-sidecar
+          sfra-index index --vault ../../../../../../ГП --index-dir /tmp/sfra-vault-sidecar
+          sfra-index info --db /tmp/sfra-vault-sidecar/structure.sqlite3
+          python - <<'PY'
+          import sqlite3
+
+          connection = sqlite3.connect("/tmp/sfra-vault-sidecar/structure.sqlite3")
+          counts = {
+              "documents": connection.execute("SELECT COUNT(*) FROM documents WHERE status='active'").fetchone()[0],
+              "nodes": connection.execute("SELECT COUNT(*) FROM structural_nodes WHERE stale_generation IS NULL").fetchone()[0],
+              "node_ids": connection.execute("SELECT COUNT(DISTINCT node_id) FROM structural_nodes WHERE stale_generation IS NULL").fetchone()[0],
+              "hashes": connection.execute("SELECT COUNT(content_hash) FROM structural_nodes WHERE stale_generation IS NULL").fetchone()[0],
+              "versions": connection.execute("SELECT COUNT(*) FROM node_versions").fetchone()[0],
+              "events": connection.execute("SELECT COUNT(*) FROM node_match_events").fetchone()[0],
+              "passages": connection.execute("SELECT COUNT(*) FROM passages").fetchone()[0],
+              "empty_documents": connection.execute("SELECT COUNT(*) FROM documents WHERE status='active' AND source_size_bytes=0").fetchone()[0],
+              "non_initial_generations": connection.execute("SELECT COUNT(*) FROM documents WHERE generation <> 1").fetchone()[0],
+          }
+          parallel_sources = connection.execute(
+              "SELECT source_path FROM documents WHERE source_path LIKE '%Демография.md' ORDER BY source_path"
+          ).fetchall()
+          print("Real Vault snapshot:", counts)
+          print("Parallel source documents:", parallel_sources)
+          assert counts["documents"] == 66, counts
+          assert counts["nodes"] == 9080, counts
+          assert counts["node_ids"] == counts["nodes"], counts
+          assert counts["hashes"] == counts["nodes"], counts
+          assert counts["versions"] == counts["nodes"], counts
+          assert counts["events"] == counts["nodes"], counts
+          assert counts["passages"] == 21, counts
+          assert counts["empty_documents"] == 2, counts
+          assert counts["non_initial_generations"] == 0, counts
+          assert len(parallel_sources) == 2, parallel_sources
+          connection.close()
+          PY
+          git -C "$GITHUB_WORKSPACE" diff --exit-code -- "ГП"
+          test -z "$(git -C "$GITHUB_WORKSPACE" status --porcelain -- "ГП")"
