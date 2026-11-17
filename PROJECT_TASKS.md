@@ -600,3 +600,18 @@ PR #28 and PR #29 were closed as superseded after their changes were consolidate
 6. V2.3/V2.4 remain frozen. The V2.2 merge does not authorize production GitHub transport or source-content publication.
 
 **Координаторская точка восстановления:** implementation HEAD 05a067e1348b2871e403159f060d49b61d4fef7d (последний кодовый merge; далее был только registry-only commit). E2 benchmark, E3 contract fixes and V2.2 non-production core accepted and merged. Единственный текущий стопор — E1 fixture-only execution environment.
+
+## 17. Коррекция статуса E1 / Issue #17 — 2026-11-18
+
+Этот раздел supersedes все более ранние утверждения о том, что E1 / Issue #17 остаётся BLOCKED, что CLAIM отсутствует, что PR #22/#23 открыты или что безопасная верификация не выполнена. Эти формулировки сохранены выше только как исторические снимки на момент их публикации.
+
+| Область | Актуальный статус | Проверяемое основание |
+|---|---|---|
+| E1 / Issue #17 | **DONE / CLOSED (completed)** | Issue [#17](https://github.com/yeatu/obsidianGP/issues/17) закрыта координатором 2026-11-17; итоговый disposition [comment 6963685870](https://github.com/yeatu/obsidianGP/issues/17#issuecomment-6963685870). Предыдущие CLAIM/IN_PROGRESS/BLOCKED относятся к истории исполнения и больше не описывают текущее состояние. |
+| PR #23 | **MERGED** | [PR #23](https://github.com/yeatu/obsidianGP/pull/23), merge commit [5be2f70667a6a7143be53896a2d018b1ca1da8e7](https://github.com/yeatu/obsidianGP/commit/5be2f70667a6a7143be53896a2d018b1ca1da8e7). |
+| PR #22 | **CLOSED / SUPERSEDED** | Его test-only additions включены в PR #23; [comment 6963683832](https://github.com/yeatu/obsidianGP/pull/22#issuecomment-6963683832). PR #22 отдельно не merged. |
+| Fixture-only verification | **PASSED** | [Run 44195690306](https://github.com/yeatu/obsidianGP/actions/runs/44195690306): 106 E1 tests, 19 V2.1 tests и CLI check прошли. Проверенные E1 runtime/test blobs совпадают с merged PR tree. |
+
+Проверка выполнена на disposable fixtures: production `sfra-state` и Vault не checkout-ились, индексатор не запускался, production writes не выполнялись. Ранее зафиксированный F-02 остаётся историческим safety incident; его наличие не отменяет последующую корректную fixture-only верификацию и не означает, что прежние небезопасные workflows разрешено запускать повторно.
+
+**Итог:** E1 scope по Issue #17 завершён и принят координатором. Нового CLAIM для #17 не требуется; задача закрыта и не является свободной. Production indexing/persistence остаются вне принятого scope.
