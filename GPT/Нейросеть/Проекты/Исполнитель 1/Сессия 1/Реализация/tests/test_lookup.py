@@ -1403,9 +1403,12 @@ def test_source_scope_rejects_symlinked_parent_directory(tmp_path):
         """SELECT n.node_id, n.content_hash
            FROM structural_nodes n
            JOIN documents d ON d.document_pk=n.document_pk
-           WHERE d.source_path='nested/note.md' AND n.node_type='paragraph'"""
+           WHERE d.source_path='nested/note.md'
+           ORDER BY n.node_pk
+           LIMIT 1"""
     ).fetchone()
     connection.close()
+    assert row is not None, "the nested fixture must produce at least one structural node"
 
     outside = tmp_path / "outside"
     nested.rename(outside)
