@@ -105,7 +105,7 @@ def load_current_nodes(database_path: str | Path) -> tuple[list[dict[str, Any]],
             f"""SELECT d.source_path, {document_hash_select},
                        n.node_id, n.node_type, n.heading_path_json,
                        n.line_start, n.line_end, n.content_hash, n.raw_text,
-                       parent.node_id AS parent_node_id
+                       CASE WHEN parent.status='active' AND parent.stale_generation IS NULL\n                            THEN parent.node_id ELSE NULL END AS parent_node_id
                 FROM structural_nodes AS n
                 JOIN documents AS d ON d.document_pk = n.document_pk
                 LEFT JOIN structural_nodes AS parent ON parent.node_pk = n.parent_node_pk
@@ -164,7 +164,7 @@ def get_source_node(database_path: str | Path, node_id: str, content_hash: str) 
         row = connection.execute(
             f"""SELECT n.node_id, d.source_path, n.node_type, n.content_hash,
                        n.heading_path_json, n.line_start, n.line_end, n.raw_text,
-                       parent.node_id AS parent_node_id, {document_hash_select}
+                       CASE WHEN parent.status='active' AND parent.stale_generation IS NULL\n                            THEN parent.node_id ELSE NULL END AS parent_node_id, {document_hash_select}
                 FROM structural_nodes n
                 JOIN documents d ON d.document_pk=n.document_pk
                 LEFT JOIN structural_nodes parent ON parent.node_pk=n.parent_node_pk
