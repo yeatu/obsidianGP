@@ -258,3 +258,53 @@ def test_source_reader_requires_whole_document_hash_for_non_node_scopes(tmp_path
 
     assert result["status"] == "integrity_error"
     assert result["fragments"] == []
+
+
+class _E1DataclassResult:
+    """Small stand-in for E1's frozen result dataclasses."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def to_dict(self):
+        return self._payload
+
+
+class _DataclassReturningE1API:
+    def __init__(self, delegate):
+        self.delegate = delegate
+
+    def read_source_scope(self, *args, **kwargs):
+        return _E1DataclassResult(
+            self.delegate.read_source_scope(*args, **kwargs)
+        )
+
+    def resolve_current_node(self, *args, **kwargs):
+        return _E1DataclassResult(
+            self.delegate.resolve_current_node(*args, **kwargs)
+        )
+
+
+def test_source_reader_accepts_e1_public_result_dataclasses(tmp_path):
+    ref = snapshot()
+    pinned = _pinned(tmp_path, ref)
+    fake = FixtureE1ScopeAPI(ref)
+    reader = E1SourceReader(
+        _DataclassReturningE1API(fake),
+        pinned,
+        FixtureTokenCounter(),
+    )
+
+    current = reader.resolve_current_node("node_target", pinned.ref)
+    scope = reader.read_scope(
+        "node_target",
+        _target_hash(fake),
+        "document",
+        pinned.ref,
+    )
+
+    assert current["status"] == "ok"
+    assert current["address"]["content_hash"] == _target_hash(fake)
+    assert scope["status"] == "ok"
+    assert scope["fragments"][0]["role"] == "document"
+    assert scope["fragments"][0]["raw_text"] == fake.document_text

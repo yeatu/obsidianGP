@@ -1,4 +1,4 @@
-"""Deterministic fake of the agreed public E1 API. No SQL or Markdown parsing."""
+"""Deterministic fake matching E1's actual public dataclass to_dict() shape."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class FixtureTokenCounter:
 
 
 class FixtureE1ScopeAPI:
-    """Fake public E1 read_source_scope/resolve_current_node implementation."""
+    """Fake E1 API. It returns native SourceScopeResult/CurrentNodeAddress dictionaries."""
 
     def __init__(self, expected_snapshot: SnapshotRef | None = None):
         self.expected_snapshot = expected_snapshot or snapshot()
@@ -55,7 +55,12 @@ class FixtureE1ScopeAPI:
                 "heading_path": ["Test document"],
                 "line_start": 4,
                 "line_end": 4,
+                "char_start": 90,
+                "char_end": 123,
+                "byte_start": 90,
+                "byte_end": 123,
                 "raw_text": "Target original source fragment.\n",
+                "source_sha256": self.document_hash,
                 "document_hash": self.document_hash,
                 "index_generation": 7,
                 "metadata": {},
@@ -69,7 +74,12 @@ class FixtureE1ScopeAPI:
                 "heading_path": ["Test document"],
                 "line_start": 2,
                 "line_end": 2,
+                "char_start": 16,
+                "char_end": 40,
+                "byte_start": 16,
+                "byte_end": 40,
                 "raw_text": "Parent source fragment.\n",
+                "source_sha256": self.document_hash,
                 "document_hash": self.document_hash,
                 "index_generation": 7,
                 "metadata": {},
@@ -83,7 +93,12 @@ class FixtureE1ScopeAPI:
                 "heading_path": ["Test document"],
                 "line_start": 3,
                 "line_end": 3,
+                "char_start": 40,
+                "char_end": 77,
+                "byte_start": 40,
+                "byte_end": 77,
                 "raw_text": "Previous sibling source fragment.\n",
+                "source_sha256": self.document_hash,
                 "document_hash": self.document_hash,
                 "index_generation": 7,
                 "metadata": {},
@@ -97,7 +112,12 @@ class FixtureE1ScopeAPI:
                 "heading_path": ["Test document"],
                 "line_start": 5,
                 "line_end": 5,
+                "char_start": 123,
+                "char_end": 157,
+                "byte_start": 123,
+                "byte_end": 157,
                 "raw_text": "Next sibling source fragment.\n",
+                "source_sha256": self.document_hash,
                 "document_hash": self.document_hash,
                 "index_generation": 7,
                 "metadata": {},
@@ -110,50 +130,66 @@ class FixtureE1ScopeAPI:
         }
         self.status_overrides: dict[str, str] = {}
 
-    @staticmethod
-    def _fragment(node: dict[str, Any], role: str) -> dict[str, Any]:
+    def _error_scope(self, node_id: str, scope: str, snapshot_id: str, status: str):
         return {
-            "role": role,
-            "node_id": node["node_id"],
-            "source_path": node["source_path"],
-            "node_type": node["node_type"],
-            "parent_node_id": node["parent_node_id"],
-            "heading_path": list(node["heading_path"]),
-            "line_start": node["line_start"],
-            "line_end": node["line_end"],
-            "content_hash": node["content_hash"],
-            "raw_text": node["raw_text"],
-            "document_hash": node["document_hash"],
-            "index_generation": node["index_generation"],
+            "snapshot_id": snapshot_id,
+            "scope": scope,
+            "status": status,
+            "fragments": [],
+            "anchor": None,
+            "parent": None,
+            "previous": None,
+            "next": None,
+            "document": None,
+            "error": {"code": status, "message": status},
         }
 
     def resolve_current_node(self, db_path, node_id, *, snapshot_id):
         self.resolve_calls.append((db_path, node_id, snapshot_id))
         if snapshot_id != self.expected_snapshot.snapshot_id:
             return {
-                "status": "integrity_error",
                 "snapshot_id": self.expected_snapshot.snapshot_id,
-                "address": None,
+                "status": "integrity_error",
+                "node_id": None,
+                "content_hash": None,
+                "source_path": None,
+                "document_hash": None,
+                "index_generation": None,
                 "error": {"code": "snapshot_mismatch"},
             }
         status = self.status_overrides.get(node_id)
         if status:
             return {
-                "status": status,
                 "snapshot_id": snapshot_id,
-                "address": None,
+                "status": status,
+                "node_id": None,
+                "content_hash": None,
+                "source_path": None,
+                "document_hash": None,
+                "index_generation": None,
                 "error": {"code": status},
             }
         record = self.records.get(node_id)
         if record is None:
             return {
-                "status": "not_found",
                 "snapshot_id": snapshot_id,
-                "address": None,
+                "status": "not_found",
+                "node_id": None,
+                "content_hash": None,
+                "source_path": None,
+                "document_hash": None,
+                "index_generation": None,
                 "error": {"code": "node_not_found"},
             }
-        address = {key: value for key, value in record.items() if key != "raw_text"}
-        return {"status": "ok", "snapshot_id": snapshot_id, "address": address}
+        return {
+            "snapshot_id": snapshot_id,
+            "status": "ok",
+            "node_id": record["node_id"],
+            "content_hash": record["content_hash"],
+            "source_path": record["source_path"],
+            "document_hash": record["document_hash"],
+            "index_generation": record["index_generation"],
+        }
 
     def read_source_scope(
         self,
@@ -165,104 +201,68 @@ class FixtureE1ScopeAPI:
         scope,
         snapshot_id,
     ):
-        self.scope_calls.append((db_path, vault_root, node_id, expected_hash, scope, snapshot_id))
+        self.scope_calls.append((
+            db_path, vault_root, node_id, expected_hash, scope, snapshot_id
+        ))
         if snapshot_id != self.expected_snapshot.snapshot_id:
-            return {
-                "status": "integrity_error",
-                "snapshot_id": self.expected_snapshot.snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "diagnostics": [{"code": "snapshot_mismatch"}],
-            }
+            return self._error_scope(node_id, scope, self.expected_snapshot.snapshot_id, "integrity_error")
         status = self.status_overrides.get(node_id)
         if status:
-            return {
-                "status": status,
-                "snapshot_id": snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "diagnostics": [{"code": status}],
-            }
+            return self._error_scope(node_id, scope, snapshot_id, status)
         target = self.records.get(node_id)
         if target is None:
-            return {
-                "status": "not_found",
-                "snapshot_id": snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "diagnostics": [{"code": "node_not_found"}],
-            }
+            return self._error_scope(node_id, scope, snapshot_id, "not_found")
         if target["content_hash"] != expected_hash:
-            return {
-                "status": "stale_source",
-                "snapshot_id": snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "diagnostics": [{"code": "expected_hash_mismatch"}],
-            }
+            return self._error_scope(node_id, scope, snapshot_id, "stale_source")
+        if scope != "node" and target["document_hash"] is None:
+            return self._error_scope(node_id, scope, snapshot_id, "integrity_error")
 
-        target_source = {key: value for key, value in target.items() if key != "raw_text"}
-        if scope == "node":
-            fragments = [self._fragment(target, "target")]
-        elif scope == "parent":
-            fragments = [self._fragment(target, "target")]
+        parent = None
+        previous = None
+        following = None
+        document = None
+        if scope == "parent":
             parent_id = target["parent_node_id"]
-            if parent_id is not None and parent_id in self.records:
-                fragments.append(self._fragment(self.records[parent_id], "parent_context"))
-            elif parent_id is None:
-                pass
+            parent = self.records.get(parent_id) if parent_id is not None else None
         elif scope == "neighbors":
-            fragments = [self._fragment(target, "target")]
             previous_id, next_id = self.sibling_ids.get(node_id, (None, None))
-            if previous_id is not None:
-                fragments.append(self._fragment(self.records[previous_id], "previous_neighbor"))
-            if next_id is not None:
-                fragments.append(self._fragment(self.records[next_id], "next_neighbor"))
+            previous = self.records.get(previous_id) if previous_id else None
+            following = self.records.get(next_id) if next_id else None
         elif scope == "document":
-            fragments = [{
-                "role": "document",
-                "node_id": None,
+            document = {
                 "source_path": target["source_path"],
-                "node_type": "document",
-                "parent_node_id": None,
-                "heading_path": [],
-                "line_start": 1,
-                "line_end": self.document_text.count("\n"),
-                "content_hash": self.document_hash,
+                "source_sha256": self.document_hash,
+                "size_bytes": len(self.document_text.encode("utf-8")),
                 "raw_text": self.document_text,
                 "document_hash": self.document_hash,
                 "index_generation": target["index_generation"],
-            }]
-        else:
-            return {
-                "status": "invalid_request",
-                "snapshot_id": snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "diagnostics": [{"code": "unsupported_scope"}],
+                "anchor_node_id": target["node_id"],
+                "anchor_content_hash": target["content_hash"],
             }
+        elif scope != "node":
+            return self._error_scope(node_id, scope, snapshot_id, "invalid_request")
 
-        if scope != "node" and target["document_hash"] is None:
-            return {
-                "status": "integrity_error",
-                "snapshot_id": snapshot_id,
-                "target_source": None,
-                "fragments": [],
-                "diagnostics": [{"code": "document_hash_unavailable"}],
-            }
-        diagnostics = []
-        if scope == "parent" and target["parent_node_id"] is None:
-            diagnostics.append({"code": "parent_not_present"})
+        if scope == "node":
+            fragments = [dict(target)]
+        elif scope == "parent":
+            fragments = [dict(target)] + ([dict(parent)] if parent is not None else [])
+        elif scope == "neighbors":
+            fragments = (
+                [dict(target)]
+                + ([dict(previous)] if previous is not None else [])
+                + ([dict(following)] if following is not None else [])
+            )
+        else:
+            fragments = []
 
         return {
-            "status": "ok",
             "snapshot_id": snapshot_id,
-            "requested": {
-                "node_id": node_id,
-                "expected_hash": expected_hash,
-                "scope": scope,
-            },
-            "target_source": target_source,
+            "scope": scope,
+            "status": "ok",
             "fragments": fragments,
-            "diagnostics": diagnostics,
+            "anchor": dict(target),
+            "parent": dict(parent) if parent is not None else None,
+            "previous": dict(previous) if previous is not None else None,
+            "next": dict(following) if following is not None else None,
+            "document": document,
         }

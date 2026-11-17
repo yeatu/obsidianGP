@@ -365,14 +365,29 @@ class E2SearchAdapter:
                     f"E1 source parent_context_required for {node_id} must be boolean",
                     code="invalid_source_metadata",
                 )
-            if not any(key in metadata for key in (
-                "preservation", "required_with", "parent_context_required"
-            )):
+            dependency_defaults = {
+                key: default
+                for key, default in (
+                    ("preservation", "normal"),
+                    ("required_with", []),
+                    ("parent_context_required", False),
+                )
+                if key not in metadata
+            }
+            if dependency_defaults:
                 diagnostics.append(_diagnostic(
-                    "dependency_metadata_unavailable",
-                    "warning",
-                    f"E1 did not supply explicit preservation/dependency metadata for {node_id}.",
+                    "dependency_policy_defaults_applied",
+                    "info",
+                    f"E3 applied B1 policy defaults for {node_id}; these defaults are not E1 source annotations.",
                     [node_id],
+                    {
+                        "defaults_applied": dependency_defaults,
+                        "metadata_fields_supplied_by_e1": [
+                            key for key in (
+                                "preservation", "required_with", "parent_context_required"
+                            ) if key in metadata
+                        ],
+                    },
                 ))
 
             reasons = _string_tuple(hit.get("match_reasons", []), f"results[{order}].match_reasons")

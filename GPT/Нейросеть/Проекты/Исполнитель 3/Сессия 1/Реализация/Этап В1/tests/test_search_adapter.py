@@ -231,7 +231,7 @@ def test_adapter_does_not_infer_facet_match_and_reports_missing_dependency_metad
     assert result.batch.candidates[0].matched_facets == ()
     assert result.batch.candidates[0].preservation == "normal"
     assert result.diagnostics[0]["code"] == "facet_match_signal_unavailable"
-    assert any(d["code"] == "dependency_metadata_unavailable" for d in result.diagnostics)
+    assert any(d["code"] == "dependency_policy_defaults_applied" for d in result.diagnostics)
 
 
 def test_zone_post_filter_is_exact_and_marks_result_incomplete():

@@ -82,6 +82,26 @@ class E1DependencyResolver:
             preservation = metadata.get("preservation", "normal")
             required_with = metadata.get("required_with", ())
             parent_required = metadata.get("parent_context_required", False)
+            defaults_applied = {
+                key: default
+                for key, default in (
+                    ("preservation", "normal"),
+                    ("required_with", ()),
+                    ("parent_context_required", False),
+                )
+                if key not in metadata
+            }
+            if defaults_applied:
+                self.diagnostics.append({
+                    "code": "dependency_policy_defaults_applied",
+                    "severity": "info",
+                    "message": (
+                        f"E3 applied B1 policy defaults for dependency {node_id}; "
+                        "these values are not E1 source annotations."
+                    ),
+                    "node_ids": [node_id],
+                    "details": {"defaults_applied": defaults_applied},
+                })
             if preservation not in {"normal", "required"}:
                 raise SourceReaderContractError(
                     "E1 dependency metadata preservation is invalid",

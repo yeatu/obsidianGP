@@ -1,4 +1,4 @@
-"""E3 adapter over E1's public snapshot-aware Source Scope API."""
+"""E3 adapter over the actual public E1 Source Scope API result types."""
 
 from __future__ import annotations
 
@@ -47,11 +47,13 @@ def _required_text(value: Any, name: str) -> str:
 
 
 class E1SourceReader:
-    """Validate E1 responses and enforce E3-only scope budgeting.
+    """Validate native E1 dataclass results, then enforce E3-only token budgeting.
 
-    E1 always returns the complete source scope and never receives a token budget.
-    E3 counts the complete fragments with the B1 TokenCounterProtocol. If they do
-    not fit, E3 returns budget_exceeded with no fragments; raw_text is never cut.
+    E1's read_source_scope returns SourceScopeResult.to_dict() with anchor,
+    parent/previous/next and document records. It does not return the synthetic
+    target_source/role fields used by older E3-only fixtures. This adapter maps
+    those native records into the E3 SourceReader envelope after verifying their
+    source provenance. E1 is never passed a token budget.
     """
 
     def __init__(
@@ -85,16 +87,27 @@ class E1SourceReader:
                 code="snapshot_mismatch",
             )
 
+    @staticmethod
+    def _mapping(value: Any, name: str) -> Mapping[str, Any]:
+        if isinstance(value, Mapping):
+            return value
+        serializer = getattr(value, "to_dict", None)
+        if callable(serializer):
+            result = serializer()
+            if isinstance(result, Mapping):
+                return result
+        raise SourceReaderContractError(f"{name} must be a mapping or expose to_dict()")
+
     def resolve_current_node(
         self,
         node_id: str,
         snapshot: SnapshotRef,
     ) -> Mapping[str, Any]:
-        """Resolve an exact current node address, using the pinned E1 API only."""
+        """Resolve a current address using E1's CurrentNodeAddress result."""
         _required_text(node_id, "node_id")
         self._check_snapshot(snapshot)
         try:
-            response = self._source_api.resolve_current_node(
+            native = self._source_api.resolve_current_node(
                 str(self._pinned.database_path),
                 node_id,
                 snapshot_id=snapshot.snapshot_id,
@@ -105,25 +118,42 @@ class E1SourceReader:
                 code="e1_resolve_current_node_failed",
             ) from exc
 
-        response = self._mapping(response, "E1 resolve_current_node response")
+        response = self._mapping(native, "E1 resolve_current_node response")
         self._check_echoed_snapshot(response, snapshot)
         status = response.get("status")
         if status != "ok":
             self._check_error_response(response, status, "resolve_current_node")
-            return dict(response)
+            return {
+                "status": status,
+                "snapshot_id": snapshot.snapshot_id,
+                "address": None,
+                "error": response.get("error"),
+            }
 
-        address = response.get("address")
-        if not isinstance(address, Mapping):
+        # E1 CurrentNodeAddress.to_dict() is intentionally flat and contains
+        # only current address/provenance, never source text.
+        address = {
+            key: response.get(key)
+            for key in (
+                "node_id", "content_hash", "source_path",
+                "document_hash", "index_generation",
+            )
+        }
+        if any(value is None for value in address.values()):
             raise SourceReaderContractError(
-                "E1 current-node success response must contain address"
+                "E1 current-node success result lacks required address fields"
             )
         self._validate_address(address, requested_node_id=node_id)
-        if "raw_text" in address:
+        if "raw_text" in response:
             raise SourceReaderContractError(
                 "resolve_current_node must return address metadata only, not raw_text",
                 code="current_node_returned_source_text",
             )
-        return dict(response)
+        return {
+            "status": "ok",
+            "snapshot_id": snapshot.snapshot_id,
+            "address": address,
+        }
 
     def read_scope(
         self,
@@ -138,7 +168,7 @@ class E1SourceReader:
         if not isinstance(expected_hash, str) or not _HASH_RE.fullmatch(expected_hash):
             raise ValueError("expected_hash must be sha256:<64 lowercase hex>")
         if scope not in SCOPES:
-            raise ValueError(f"unsupported source scope: {scope!r}")
+            raise ValueError(f"unsupported scope: {scope!r}")
         self._check_snapshot(snapshot)
         if budget_tokens is not None and (
             isinstance(budget_tokens, bool)
@@ -148,7 +178,7 @@ class E1SourceReader:
             raise ValueError("budget_tokens must be an integer >= 1 or None")
 
         try:
-            response = self._source_api.read_source_scope(
+            native = self._source_api.read_source_scope(
                 str(self._pinned.database_path),
                 str(self._pinned.vault_root),
                 node_id,
@@ -162,36 +192,56 @@ class E1SourceReader:
                 code="e1_read_source_scope_failed",
             ) from exc
 
-        response = self._mapping(response, "E1 read_source_scope response")
+        response = self._mapping(native, "E1 read_source_scope response")
         self._check_echoed_snapshot(response, snapshot)
         status = response.get("status")
         if status != "ok":
             self._check_error_response(response, status, "read_source_scope")
-            return dict(response)
+            return {
+                "status": status,
+                "snapshot_id": snapshot.snapshot_id,
+                "target_source": None,
+                "fragments": [],
+                "diagnostics": [],
+                "error": response.get("error"),
+            }
 
-        self._validate_scope_response(
+        normalized = self._normalize_native_scope(
             response,
+            node_id=node_id,
+            expected_hash=expected_hash,
+            scope=scope,
+            snapshot=snapshot,
+        )
+        self._validate_scope_response(
+            normalized,
             node_id=node_id,
             expected_hash=expected_hash,
             scope=scope,
         )
 
-        fragments = response["fragments"]
-        token_count = sum(self._token_counter.count(fragment["raw_text"]) for fragment in fragments)
+        fragments = normalized["fragments"]
+        token_count = sum(
+            self._token_counter.count(fragment["raw_text"])
+            for fragment in fragments
+        )
         accounting = {
             "budget_owner": "E3",
             "tokens_used": token_count,
             "budget_tokens": budget_tokens,
             "tokenizer": dict(self._token_counter.metadata()),
         }
-        result = dict(response)
+        result = dict(normalized)
         result["token_accounting"] = accounting
         if budget_tokens is not None and token_count > budget_tokens:
             diagnostics = list(result.get("diagnostics", []))
             diagnostics.append({
                 "code": "scope_budget_exceeded",
                 "severity": "warning",
-                "message": "The complete source scope exceeds the E3 token budget; no source text was truncated or returned.",
+                "message": (
+                    "The complete source scope exceeds the E3 token budget; "
+                    "no source text was truncated or returned."
+                ),
                 "node_ids": [node_id],
                 "details": accounting,
             })
@@ -202,16 +252,161 @@ class E1SourceReader:
             })
         return result
 
+    def _normalize_native_scope(
+        self,
+        response: Mapping[str, Any],
+        *,
+        node_id: str,
+        expected_hash: str,
+        scope: str,
+        snapshot: SnapshotRef,
+    ) -> dict[str, Any]:
+        """Map E1 SourceScopeResult.to_dict() into E3's role-labelled envelope."""
+        anchor = self._mapping(response.get("anchor"), "E1 scope anchor")
+        self._validate_address(
+            anchor,
+            requested_node_id=node_id,
+            requested_hash=expected_hash,
+        )
+        raw_fragments = response.get("fragments")
+        if not isinstance(raw_fragments, list):
+            raise SourceReaderContractError("E1 scope fragments must be an array")
+        diagnostics: list[Mapping[str, Any]] = []
+        normalized_fragments: list[dict[str, Any]] = []
+
+        if scope == "document":
+            document = self._mapping(response.get("document"), "E1 document scope result")
+            document_hash = document.get("document_hash", document.get("source_sha256"))
+            raw_text = document.get("raw_text")
+            if not isinstance(raw_text, str):
+                raise SourceReaderContractError("E1 document result must contain full raw_text")
+            normalized_fragments.append({
+                "role": "document",
+                "node_id": document.get("anchor_node_id", node_id),
+                "source_path": document.get("source_path"),
+                "content_hash": document_hash,
+                "raw_text": raw_text,
+                "document_hash": document_hash,
+                "index_generation": document.get(
+                    "index_generation", anchor.get("index_generation")
+                ),
+                "size_bytes": document.get("size_bytes"),
+            })
+            if raw_fragments:
+                raise SourceReaderContractError(
+                    "E1 document scope must return the document object, not node fragments"
+                )
+        else:
+            if response.get("document") is not None:
+                raise SourceReaderContractError(
+                    f"E1 scope={scope} unexpectedly returned a document payload"
+                )
+            expected_records: list[tuple[str, Mapping[str, Any]]] = [
+                ("target", anchor),
+            ]
+            for native_key, role in (
+                ("parent", "parent_context"),
+                ("previous", "previous_neighbor"),
+                ("next", "next_neighbor"),
+            ):
+                record = response.get(native_key)
+                if record is not None:
+                    expected_records.append((
+                        role,
+                        self._mapping(record, f"E1 scope {native_key} record"),
+                    ))
+
+            if scope == "node":
+                expected_roles = {"target"}
+            elif scope == "parent":
+                expected_roles = {"target", "parent_context"}
+                if anchor.get("parent_node_id") is None:
+                    expected_roles = {"target"}
+                    diagnostics.append({
+                        "code": "parent_not_present",
+                        "severity": "info",
+                        "message": "The exact E1 anchor has no parent node.",
+                        "node_ids": [node_id],
+                        "details": {},
+                    })
+            elif scope == "neighbors":
+                expected_roles = {"target", "previous_neighbor", "next_neighbor"}
+            else:
+                raise SourceReaderContractError(f"Unsupported normalized scope: {scope}")
+
+            # E1's authoritative named relation fields determine roles. Its
+            # fragments tuple must contain exactly the same node IDs/hashes.
+            expected_records = [
+                item for item in expected_records if item[0] in expected_roles
+            ]
+            expected_identity = {
+                record.get("node_id"): record.get("content_hash")
+                for _, record in expected_records
+            }
+            actual_identity: dict[str, str] = {}
+            for raw in raw_fragments:
+                item = self._mapping(raw, "E1 scope fragment")
+                fragment_id = item.get("node_id")
+                if not isinstance(fragment_id, str) or not fragment_id:
+                    raise SourceReaderContractError(
+                        "E1 node fragment must contain its producer-issued node_id"
+                    )
+                if fragment_id in actual_identity:
+                    raise SourceReaderContractError(
+                        "E1 returned a duplicate node fragment"
+                    )
+                actual_identity[fragment_id] = item.get("content_hash")
+            if actual_identity != expected_identity:
+                raise SourceReaderContractError(
+                    "E1 scope fragments differ from named anchor/relationship records",
+                    code="e1_scope_fragment_set_mismatch",
+                )
+
+            for role, record in expected_records:
+                fragment = dict(record)
+                fragment["role"] = role
+                normalized_fragments.append(fragment)
+
+            if scope == "parent" and anchor.get("parent_node_id") is not None:
+                if "parent_context" not in {item["role"] for item in normalized_fragments}:
+                    raise SourceReaderContractError(
+                        "E1 parent scope omitted an available parent"
+                    )
+            if scope == "neighbors":
+                for role, record in (
+                    ("previous_neighbor", response.get("previous")),
+                    ("next_neighbor", response.get("next")),
+                ):
+                    if record is None:
+                        continue
+                    if role not in {item["role"] for item in normalized_fragments}:
+                        raise SourceReaderContractError(
+                            f"E1 neighbors scope omitted {role}"
+                        )
+
+        return {
+            "status": "ok",
+            "snapshot_id": snapshot.snapshot_id,
+            "scope": scope,
+            "target_source": dict(anchor),
+            "fragments": normalized_fragments,
+            "diagnostics": diagnostics,
+        }
+
     def read_node(
         self,
         node_id: str,
         expected_hash: str,
         snapshot: SnapshotRef,
     ) -> Mapping[str, Any]:
-        """Adapt exact scope=node into the compact SearchAdapter E1 node envelope."""
+        """Adapt exact scope=node into SearchAdapter's source node envelope."""
         response = self.read_scope(node_id, expected_hash, "node", snapshot)
         if response.get("status") != "ok":
-            return {"status": response.get("status"), "node": None}
+            return {
+                "status": response.get("status"),
+                "node": None,
+                "snapshot_id": response.get("snapshot_id"),
+            }
         target = response["target_source"]
         fragment = response["fragments"][0]
         node = dict(target)
@@ -220,13 +415,11 @@ class E1SourceReader:
             for key, value in fragment.items()
             if key not in {"role", "token_count"}
         })
-        return {"status": "ok", "node": node, "snapshot_id": response["snapshot_id"]}
-
-    @staticmethod
-    def _mapping(value: Any, name: str) -> Mapping[str, Any]:
-        if not isinstance(value, Mapping):
-            raise SourceReaderContractError(f"{name} must be an object")
-        return value
+        return {
+            "status": "ok",
+            "node": node,
+            "snapshot_id": response["snapshot_id"],
+        }
 
     @staticmethod
     def _check_echoed_snapshot(response: Mapping[str, Any], snapshot: SnapshotRef) -> None:
@@ -246,18 +439,15 @@ class E1SourceReader:
             raise SourceReaderContractError(
                 f"E1 {operation} returned unsupported status {status!r}"
             )
-        if response.get("fragments", []) != [] or (
-            operation == "read_source_scope" and response.get("target_source") is not None
-        ):
-            raise SourceReaderContractError(
-                "E1 error response must contain no partial source fragments or target metadata",
-                code="partial_error_payload",
-            )
-        if operation == "resolve_current_node" and response.get("address") is not None:
-            raise SourceReaderContractError(
-                "E1 current-node error response must not contain an address",
-                code="partial_error_payload",
-            )
+        if operation == "read_source_scope":
+            if response.get("fragments", []) != [] or any(
+                response.get(key) is not None
+                for key in ("anchor", "parent", "previous", "next", "document")
+            ):
+                raise SourceReaderContractError(
+                    "E1 scope error must not contain partial source data",
+                    code="partial_error_payload",
+                )
 
     @staticmethod
     def _validate_address(
@@ -267,8 +457,7 @@ class E1SourceReader:
         requested_hash: str | None = None,
     ) -> None:
         required = {
-            "node_id", "content_hash", "source_path", "node_type",
-            "parent_node_id", "heading_path", "line_start", "line_end",
+            "node_id", "content_hash", "source_path",
             "document_hash", "index_generation",
         }
         missing = required - set(address)
@@ -290,27 +479,12 @@ class E1SourceReader:
                 code="source_address_mismatch",
             )
         _required_text(address["source_path"], "E1 address source_path")
-        _required_text(address["node_type"], "E1 address node_type")
-        heading_path = address["heading_path"]
-        if not isinstance(heading_path, (list, tuple)) or any(
-            not isinstance(item, str) for item in heading_path
-        ):
-            raise SourceReaderContractError("E1 address heading_path must be an array of strings")
-        if (
-            isinstance(address["line_start"], bool)
-            or not isinstance(address["line_start"], int)
-            or address["line_start"] < 1
-            or isinstance(address["line_end"], bool)
-            or not isinstance(address["line_end"], int)
-            or address["line_end"] < address["line_start"] - 1
-        ):
-            raise SourceReaderContractError("E1 address line coordinates are invalid")
         generation = address["index_generation"]
         if not _non_negative_int(generation):
             raise SourceReaderContractError("E1 index_generation must be a non-negative integer")
-        doc_hash = address["document_hash"]
-        if doc_hash is not None and (
-            not isinstance(doc_hash, str) or not _HASH_RE.fullmatch(doc_hash)
+        document_hash = address["document_hash"]
+        if document_hash is not None and (
+            not isinstance(document_hash, str) or not _HASH_RE.fullmatch(document_hash)
         ):
             raise SourceReaderContractError("E1 document_hash is malformed")
 
@@ -333,17 +507,16 @@ class E1SourceReader:
                 f"scope={scope} requires a whole-document hash",
                 code="document_hash_unavailable",
             )
-
         diagnostics = response.get("diagnostics", [])
         if not isinstance(diagnostics, list):
             raise SourceReaderContractError("E1 diagnostics must be an array")
         fragments = response.get("fragments")
-        if not isinstance(fragments, list) or not fragments:
-            raise SourceReaderContractError("E1 success response must contain source fragments")
+        if not isinstance(fragments, list):
+            raise SourceReaderContractError("E3 normalized source fragments must be an array")
 
         roles: set[str] = set()
         for index, raw in enumerate(fragments):
-            fragment = self._mapping(raw, f"E1 fragments[{index}]")
+            fragment = self._mapping(raw, f"E3 source fragments[{index}]")
             required = {
                 "role", "source_path", "content_hash", "raw_text",
                 "document_hash", "index_generation",
@@ -351,58 +524,39 @@ class E1SourceReader:
             missing = required - set(fragment)
             if missing:
                 raise SourceReaderContractError(
-                    f"E1 fragments[{index}] is missing: " + ", ".join(sorted(missing))
+                    f"source fragments[{index}] is missing: " + ", ".join(sorted(missing))
                 )
             role = fragment["role"]
             if role not in _ROLE_SET or role in roles:
                 raise SourceReaderContractError(
-                    f"E1 fragments[{index}] has an unsupported or duplicate role"
+                    f"source fragments[{index}] has an unsupported or duplicate role"
                 )
             roles.add(role)
             if fragment["source_path"] != address["source_path"]:
                 raise SourceReaderContractError(
-                    "E1 fragments do not belong to the target source_path",
+                    "Source fragments do not belong to the target source_path",
                     code="source_path_mismatch",
                 )
             if fragment["document_hash"] != address["document_hash"]:
                 raise SourceReaderContractError(
-                    "E1 fragments do not share the target document_hash",
+                    "Source fragments do not share the target document_hash",
                     code="document_hash_mismatch",
                 )
             if fragment["index_generation"] != address["index_generation"]:
                 raise SourceReaderContractError(
-                    "E1 fragments do not share the target document generation",
+                    "Source fragments do not share the target document generation",
                     code="snapshot_generation_mismatch",
                 )
             raw_text = fragment["raw_text"]
             if not isinstance(raw_text, str):
                 raise SourceReaderContractError(
-                    f"E1 fragments[{index}].raw_text must be a string"
+                    f"source fragments[{index}].raw_text must be a string"
                 )
             content_hash = fragment["content_hash"]
             if not isinstance(content_hash, str) or not _HASH_RE.fullmatch(content_hash):
                 raise SourceReaderContractError(
-                    f"E1 fragments[{index}].content_hash is malformed"
+                    f"source fragments[{index}].content_hash is malformed"
                 )
-            if role != "document":
-                if (
-                    not isinstance(fragment.get("node_id"), str)
-                    or not fragment["node_id"].strip()
-                    or not isinstance(fragment.get("node_type"), str)
-                    or not fragment["node_type"].strip()
-                    or not isinstance(fragment.get("heading_path"), (list, tuple))
-                    or any(not isinstance(item, str) for item in fragment["heading_path"])
-                    or isinstance(fragment.get("line_start"), bool)
-                    or not isinstance(fragment.get("line_start"), int)
-                    or fragment["line_start"] < 1
-                    or isinstance(fragment.get("line_end"), bool)
-                    or not isinstance(fragment.get("line_end"), int)
-                    or fragment["line_end"] < fragment["line_start"] - 1
-                ):
-                    raise SourceReaderContractError(
-                        f"E1 fragment {role} has invalid structural locator metadata",
-                        code="fragment_locator_invalid",
-                    )
             if role == "document":
                 if (
                     content_hash != address["document_hash"]
@@ -412,35 +566,43 @@ class E1SourceReader:
                         "Complete document text does not match document_hash",
                         code="document_hash_mismatch",
                     )
-            elif _sha256(raw_text) != content_hash:
-                raise SourceReaderContractError(
-                    f"E1 fragment {role} failed exact UTF-8 SHA-256 validation",
-                    code="content_hash_mismatch",
-                )
-            if role == "target":
+            else:
                 if (
-                    fragment.get("node_id") != node_id
-                    or fragment.get("content_hash") != expected_hash
+                    _sha256(raw_text) != content_hash
+                    or fragment.get("node_id") is None
+                    or not isinstance(fragment.get("heading_path"), (list, tuple))
+                    or any(not isinstance(item, str) for item in fragment["heading_path"])
+                    or not isinstance(fragment.get("node_type"), str)
+                    or not fragment["node_type"]
+                    or isinstance(fragment.get("line_start"), bool)
+                    or not isinstance(fragment.get("line_start"), int)
+                    or fragment["line_start"] < 1
+                    or isinstance(fragment.get("line_end"), bool)
+                    or not isinstance(fragment.get("line_end"), int)
+                    or fragment["line_end"] < fragment["line_start"] - 1
                 ):
                     raise SourceReaderContractError(
-                        "Target fragment does not match the requested node address",
-                        code="source_address_mismatch",
+                        f"Source fragment {role} failed text/hash/locator validation",
+                        code="content_hash_mismatch",
                     )
+            if role == "target" and (
+                fragment.get("node_id") != node_id
+                or fragment.get("content_hash") != expected_hash
+            ):
+                raise SourceReaderContractError(
+                    "Target fragment does not match the requested node address",
+                    code="source_address_mismatch",
+                )
 
         if scope == "node" and roles != {"target"}:
             raise SourceReaderContractError("node scope must return exactly the target fragment")
         if scope == "parent":
             if roles - {"target", "parent_context"} or "target" not in roles:
                 raise SourceReaderContractError("parent scope returned invalid fragment roles")
-            if address["parent_node_id"] is None:
-                if "parent_context" in roles or not any(
-                    item.get("code") == "parent_not_present" for item in diagnostics
-                ):
-                    raise SourceReaderContractError(
-                        "root node parent scope must return a parent_not_present diagnostic"
-                    )
-            elif "parent_context" not in roles:
+            if address.get("parent_node_id") is not None and "parent_context" not in roles:
                 raise SourceReaderContractError("parent scope omitted an available parent")
+            if address.get("parent_node_id") is None and "parent_context" in roles:
+                raise SourceReaderContractError("root node parent scope returned a parent")
         if scope == "neighbors":
             if roles - {"target", "previous_neighbor", "next_neighbor"} or "target" not in roles:
                 raise SourceReaderContractError("neighbors scope returned invalid fragment roles")
