@@ -115,14 +115,30 @@ def _expect_contract_rejection(
     raise RuntimeError(f"Fault injection {mutation!r} was not rejected by E3")
 
 
-def _search_fixture_node(search_structural_database, database_path, query, marker):
+def _search_fixture_node(search_structural_database, database_path, query, expected_content_hash):
     result = search_structural_database(database_path, query, limit=20)
-    if result.get("search", {}).get("status") != "ok":
+    search = result.get("search", {})
+    if search.get("status") != "ok":
         raise RuntimeError(f"Disposable E1 fixture could not be found by E2: {result}")
-    for hit in result["search"].get("results", []):
-        if hit.get("node_type") == "paragraph" and marker.casefold() in str(hit.get("excerpt", "")).casefold():
+    for hit in search.get("results", []):
+        if (
+            hit.get("node_type") == "paragraph"
+            and hit.get("content_hash") == expected_content_hash
+        ):
             return hit
-    raise RuntimeError(f"E2 did not return the expected disposable fixture node: {marker!r}")
+    observed = [
+        {
+            "node_id": hit.get("node_id"),
+            "node_type": hit.get("node_type"),
+            "content_hash": hit.get("content_hash"),
+            "excerpt": hit.get("excerpt"),
+        }
+        for hit in search.get("results", [])
+    ]
+    raise RuntimeError(
+        "E2 did not return the exact disposable fixture Content Hash "
+        f"{expected_content_hash!r}; observed hits: {observed!r}"
+    )
 
 
 def _run_disposable_e1_lifecycle_cases(source_api, pinned, token_counter, index_vault, search_structural_database):
@@ -135,20 +151,41 @@ def _run_disposable_e1_lifecycle_cases(source_api, pinned, token_counter, index_
         state = root / "state"
         vault.mkdir()
         note = vault / "lifecycle.md"
-        note.write_text(
-            "# Header\\n\\nFirst paragraph marker.\\n\\nMiddle paragraph marker.\\n\\nLast paragraph marker.\\n",
-            encoding="utf-8",
+        initial_source = "\n".join([
+            "# Header",
+            "",
+            "First paragraph marker.",
+            "",
+            "Middle paragraph marker.",
+            "",
+            "Last paragraph marker.",
+            "",
+        ])
+        note.write_text(initial_source, encoding="utf-8")
+        parsed = parse_markdown(initial_source, "lifecycle.md")
+        middle_node = next(
+            node for node in parsed.iter_nodes()
+            if node.node_type == "paragraph" and "Middle paragraph marker" in node.raw_text
         )
+        middle_hash = content_hash(middle_node.raw_text)
         index_vault(vault, state)
         database = state / "structure.sqlite3"
         anchor = _search_fixture_node(
-            search_structural_database, database, "Middle paragraph marker", "Middle paragraph marker"
+            search_structural_database, database, "Middle paragraph marker", middle_hash
         )
-        note.write_text(
-            "# Header\\n\\nFirst paragraph revision A.\\n\\nFirst paragraph revision B.\\n"
-            "\\nMiddle paragraph marker.\\n\\nLast paragraph marker.\\n",
-            encoding="utf-8",
-        )
+        revised_source = "\n".join([
+            "# Header",
+            "",
+            "First paragraph revision A.",
+            "",
+            "First paragraph revision B.",
+            "",
+            "Middle paragraph marker.",
+            "",
+            "Last paragraph marker.",
+            "",
+        ])
+        note.write_text(revised_source, encoding="utf-8")
         index_vault(vault, state)
 
         fixture_pinned = replace(pinned, database_path=database, vault_root=vault)
@@ -174,15 +211,25 @@ def _run_disposable_e1_lifecycle_cases(source_api, pinned, token_counter, index_
         state = root / "state"
         vault.mkdir()
         note = vault / "deleted.md"
-        note.write_text(
-            "# Deleted document\\n\\nUnique deletion lifecycle marker.\\n",
-            encoding="utf-8",
+        deleted_source = "\n".join([
+            "# Deleted document",
+            "",
+            "Unique deletion lifecycle marker.",
+            "",
+        ])
+        note.write_text(deleted_source, encoding="utf-8")
+        parsed = parse_markdown(deleted_source, "deleted.md")
+        source_node = next(
+            node for node in parsed.iter_nodes()
+            if node.node_type == "paragraph"
+            and "Unique deletion lifecycle marker" in node.raw_text
         )
+        source_hash = content_hash(source_node.raw_text)
         index_vault(vault, state)
         database = state / "structure.sqlite3"
         address = _search_fixture_node(
             search_structural_database, database,
-            "Unique deletion lifecycle marker", "Unique deletion lifecycle marker"
+            "Unique deletion lifecycle marker", source_hash
         )
         note.unlink()
         index_vault(vault, state)
@@ -222,8 +269,14 @@ def main() -> int:
     if str(e1_root) not in sys.path:
         sys.path.insert(0, str(e1_root))
 
-    from sfra_indexer import index_vault, verify_state_directory
-    from sfra_indexer import read_source_scope, resolve_current_node
+    from sfra_indexer import (
+        content_hash,
+        index_vault,
+        parse_markdown,
+        read_source_scope,
+        resolve_current_node,
+        verify_state_directory,
+    )
 
     source_api = SimpleNamespace(
         read_source_scope=read_source_scope,
