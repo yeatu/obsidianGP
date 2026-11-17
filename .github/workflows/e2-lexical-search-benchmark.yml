@@ -1,0 +1,57 @@
+name: E2 lexical search benchmark
+
+on:
+  pull_request:
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 2/Реализация/lexical_benchmark/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 2/Реализация/README.md"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/src/sfra_search/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lexical-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install the published E2 package and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install -e "$source_dir[dev]"
+
+      - name: Test benchmark metrics and deterministic evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          benchmark_dir="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 2/Реализация/lexical_benchmark"
+          python -m pytest -q "$benchmark_dir/test_runner.py"
+
+      - name: Run synthetic-only lexical search baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          benchmark_dir="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 2/Реализация/lexical_benchmark"
+          mkdir -p "$RUNNER_TEMP/e2-lexical-benchmark"
+          python "$benchmark_dir/runner.py" --repeats 5 --expected-engine pymorphy3 --output-json "$RUNNER_TEMP/e2-lexical-benchmark/baseline.json" --output-md "$RUNNER_TEMP/e2-lexical-benchmark/baseline.md"
+          cat "$RUNNER_TEMP/e2-lexical-benchmark/baseline.md"
+
+      - name: Upload benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2-lexical-search-benchmark-${{ github.run_id }}
+          path: ${{ runner.temp }}/e2-lexical-benchmark/
+          if-no-files-found: error

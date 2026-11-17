@@ -1,0 +1,221 @@
+{
+  "benchmark_version": "1.0",
+  "description": "Synthetic-only Russian lexical search corpus. No Vault excerpts, private document names or real source paths.",
+  "documents": [
+    {
+      "node_id": "bench_morph_target",
+      "source_path": "synthetic/morphology/target.md",
+      "node_type": "section",
+      "heading_path": [
+        "Синтетические тесты"
+      ],
+      "raw_text": "Северный маяк помогал капитану находить берег в тумане. Смотритель проверял сигналы каждое утро."
+    },
+    {
+      "node_id": "bench_morph_decoy",
+      "source_path": "synthetic/morphology/decoy.md",
+      "node_type": "section",
+      "heading_path": [
+        "Синтетические тесты"
+      ],
+      "raw_text": "Северный ветер усиливался к вечеру. Рыбаки укрывали лодки в бухте."
+    },
+    {
+      "node_id": "bench_phrase_target",
+      "source_path": "synthetic/phrases/target.md",
+      "node_type": "section",
+      "heading_path": [
+        "Фразы"
+      ],
+      "raw_text": "Точный сигнал прозвучал ровно в полночь и разбудил дежурного."
+    },
+    {
+      "node_id": "bench_phrase_decoy",
+      "source_path": "synthetic/phrases/near-miss.md",
+      "node_type": "section",
+      "heading_path": [
+        "Фразы"
+      ],
+      "raw_text": "Сигнал приняли без помех. Позже прибор показал точный результат измерения."
+    },
+    {
+      "node_id": "bench_rare_target",
+      "source_path": "synthetic/rare/target.md",
+      "node_type": "section",
+      "heading_path": [
+        "Редкие слова"
+      ],
+      "raw_text": "Кварцолёт прошёл испытание и вернулся на стартовую площадку."
+    },
+    {
+      "node_id": "bench_mixed_target",
+      "source_path": "synthetic/mixed/target.md",
+      "node_type": "section",
+      "heading_path": [
+        "Комбинированный запрос"
+      ],
+      "raw_text": "Экспедиция отправилась к полярной станции; регистрационный код составил 18 518."
+    },
+    {
+      "node_id": "bench_mixed_lexical_only",
+      "source_path": "synthetic/mixed/lexical-only.md",
+      "node_type": "section",
+      "heading_path": [
+        "Комбинированный запрос"
+      ],
+      "raw_text": "Экспедиция отправилась к полярной станции без регистрационного номера."
+    },
+    {
+      "node_id": "bench_mixed_number_only",
+      "source_path": "synthetic/mixed/number-only.md",
+      "node_type": "section",
+      "heading_path": [
+        "Комбинированный запрос"
+      ],
+      "raw_text": "Регистрационный код 18 518 относится к отдельной учебной записи."
+    },
+    {
+      "node_id": "bench_partial_target",
+      "source_path": "synthetic/partial/target.md",
+      "node_type": "section",
+      "heading_path": [
+        "Частичное совпадение"
+      ],
+      "raw_text": "Маяк был виден издалека, даже во время сильного снегопада."
+    },
+    {
+      "node_id": "bench_tie_a",
+      "source_path": "synthetic/ties/a.md",
+      "node_type": "section",
+      "heading_path": [
+        "Стабильная сортировка"
+      ],
+      "raw_text": "Дежурство началось ровно в восемь часов."
+    },
+    {
+      "node_id": "bench_tie_b",
+      "source_path": "synthetic/ties/b.md",
+      "node_type": "section",
+      "heading_path": [
+        "Стабильная сортировка"
+      ],
+      "raw_text": "Дежурство началось ровно в восемь часов."
+    },
+    {
+      "node_id": "bench_noise",
+      "source_path": "synthetic/noise/noise.md",
+      "node_type": "section",
+      "heading_path": [
+        "Шум"
+      ],
+      "raw_text": "Символы !!! --- ??? не образуют содержательного поискового термина."
+    }
+  ],
+  "cases": [
+    {
+      "id": "morphology-inflected-adjective-and-noun",
+      "category": "morphology",
+      "query": "северного маяка",
+      "expected_node_ids": [
+        "bench_morph_target"
+      ],
+      "k": 3,
+      "gate": true,
+      "notes": "Inflected adjective + noun; expected via morphology channel."
+    },
+    {
+      "id": "exact-phrase-vs-separated-near-miss",
+      "category": "phrase",
+      "query": "точный сигнал",
+      "expected_node_ids": [
+        "bench_phrase_target"
+      ],
+      "expected_order": [
+        "bench_phrase_target"
+      ],
+      "k": 3,
+      "gate": true,
+      "notes": "Phrase target competes with the same words in a different order."
+    },
+    {
+      "id": "rare-exact-term",
+      "category": "rare-term",
+      "query": "кварцолёт",
+      "expected_node_ids": [
+        "bench_rare_target"
+      ],
+      "k": 3,
+      "gate": true,
+      "notes": "Synthetic rare term with one relevant document."
+    },
+    {
+      "id": "single-character-typo-diagnostic",
+      "category": "typo-diagnostic",
+      "query": "кварцолётт",
+      "expected_node_ids": [
+        "bench_rare_target"
+      ],
+      "k": 3,
+      "gate": false,
+      "notes": "Diagnostic only; fuzzy matching is not part of current contract."
+    },
+    {
+      "id": "mixed-lexical-and-exact-number",
+      "category": "mixed-query",
+      "query": "экспедиция 18518",
+      "expected_node_ids": [
+        "bench_mixed_target"
+      ],
+      "k": 3,
+      "gate": true,
+      "notes": "Must require both lexical token and exact normalized numeric value."
+    },
+    {
+      "id": "partial-or-fallback",
+      "category": "partial-match",
+      "query": "заснеженный маяк",
+      "expected_node_ids": [
+        "bench_partial_target"
+      ],
+      "k": 3,
+      "gate": true,
+      "notes": "Exercises documented low-priority OR fallback."
+    },
+    {
+      "id": "deterministic-tie-break",
+      "category": "ordering",
+      "query": "дежурство",
+      "expected_node_ids": [
+        "bench_tie_a",
+        "bench_tie_b"
+      ],
+      "expected_order": [
+        "bench_tie_a",
+        "bench_tie_b"
+      ],
+      "k": 2,
+      "gate": true,
+      "notes": "Equal content/rank ordered by source_path then identity."
+    },
+    {
+      "id": "noise-only-query",
+      "category": "empty-results",
+      "query": "!!! --- ???",
+      "expected_node_ids": [],
+      "expected_status": "not_found_in_retrieval",
+      "k": 3,
+      "gate": true,
+      "notes": "Non-empty punctuation query returns no results."
+    },
+    {
+      "id": "empty-query-validation",
+      "category": "empty-results",
+      "query": "",
+      "expected_node_ids": [],
+      "expected_exception": "ValueError",
+      "k": 3,
+      "gate": true,
+      "notes": "Empty query without entity filters is rejected explicitly."
+    }
+  ]
+}
