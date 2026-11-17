@@ -74,3 +74,45 @@ python -m pytest -q "GPT/Нейросеть/Проекты/Исполнител�
 - `09_Аудит_Source_Scope_API_Issue_17.md` — этот отчёт.
 
 **Текущее решение:** runtime contract patch подготовлен в отдельной ветке и Draft PR. Остановка до координаторской проверки и организации безопасного прогона тестов. PR не объединён.
+
+
+
+## 16. Дополнительная координаторская верификация в изолированном контуре — 2026-11-18
+
+После подготовки исходного аудиторского PR координатор объединил в одной ветке runtime-исправление PR #23 и contract tests PR #22. Это устранило разрыв между двумя независимыми Draft PR: теперь один набор проверок покрывает runtime provenance guard, Source Scope API negative cases и V2.1 consumer contract.
+
+### Изолированный CI
+
+- Workflow: [SFRA E1 fixture-only validation](https://github.com/yeatu/obsidianGP/actions/runs/44195690306).
+- Проверочная ветка: `coordinator/e1-fixture-validation-3`.
+- Tested workflow commit: `e788516d310af13d276517b5361c5feac34ebe29`.
+- Основа ветки: точный E1 PR code/test HEAD `f867f107a9a6dcbb9b9d1197e845023dd3d255e0`; после него в проверочной ветке добавлен только отдельный fixture-only workflow.
+- E1 полный unit/contract suite: **106 passed**, включая все тесты E1 PR #22 и #23.
+- V2.1 application service suite: **19 passed**.
+- `sfra-index --help`: success.
+- Оба job завершились success.
+
+### Проверка идентичности кода
+
+После синхронизации PR #23 с main blob SHA следующих файлов сверены между проверочной веткой и итоговой веткой PR:
+
+- `sfra_indexer/lookup.py`: `a9c224871938fdf20cf8eb6f5c4ac7950a9eeff9`.
+- `tests/test_lookup.py`: `ebea9ecbc349ce746065127fc53e97aeb1b15f88`.
+- `Этап В2.1/tests/test_application.py`: `dd562555c7394e727f2b4083d7d4a25ac582b4eb`.
+
+Все три blob SHA совпадают. Следовательно, fixture-only CI проверил те же runtime- и test-файлы, которые передаются на координаторскую приёмку. Проверочный workflow-файл в PR #23 не добавлялся.
+
+### Граница окружения
+
+- Checkout `sfra-state` не выполнялся.
+- Checkout исходников Vault не выполнялся.
+- Индексатор не запускался.
+- SQLite production state и Vault не читались и не изменялись.
+- Права fixture workflow: только `contents: read`; checkout с `persist-credentials: false`.
+- Существующие production workflows не запускались.
+
+### Координаторское заключение
+
+**ISOLATED_FIXTURE_CI_ACCEPTED** для точного runtime/test tree, описанного выше. Найденный при первом прогоне дефект находился только в новой symlink-parent test fixture: SQL выборка ограничивалась не тем типом узла и возвращала пустую строку. Фикстура исправлена на выбор любого узла внутри единственного временного документа с явной проверкой наличия записи. После исправления полный E1 и V2.1 suite прошли.
+
+Результат не подтверждает корректность production индексации на реальном Vault и не разрешает запуск production persistence workflow. Он подтверждает контрактную реализацию и регрессии на изолированных временных фикстурах.
