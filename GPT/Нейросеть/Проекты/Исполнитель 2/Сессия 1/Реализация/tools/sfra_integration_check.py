@@ -86,7 +86,6 @@ def main() -> int:
     parser.add_argument("--temp-root", required=True, type=Path)
     parser.add_argument("--state-branch-sha", required=True)
     parser.add_argument("--package-dir", type=Path, default=None)
-    parser.add_argument("--package-dir", required=True, type=Path)
     parser.add_argument("--max-sources", type=int, default=5)
     args = parser.parse_args()
 
