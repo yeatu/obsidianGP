@@ -79,70 +79,80 @@ def build_dependency_groups(
 ) -> tuple[list[DependencyGroup], list[RetrievalCandidate], int]:
     """Resolve missing IDs in the same pinned snapshot and build undirected atomic groups."""
     by_id = {candidate.node_id: candidate for candidate in candidates}
-    original_ids = set(by_id)
     references: dict[str, set[str]] = {}
     parent_refs: set[str] = set()
     unresolved_by_owner: dict[str, set[str]] = defaultdict(set)
     rejected_resolved = 0
+    attempted: set[str] = set()
+    processed: set[str] = set()
 
-    for candidate in tuple(by_id.values()):
-        deps = set(candidate.required_with)
-        if candidate.parent_context_required:
-            if candidate.parent_node_id:
-                deps.add(candidate.parent_node_id)
-                parent_refs.add(candidate.parent_node_id)
-            else:
-                unresolved_by_owner[candidate.node_id].add("missing_parent_node_id")
-        references[candidate.node_id] = deps
+    # Resolve transitively. A newly resolved dependency may itself declare
+    # required_with or parent_context_required, so it enters the same queue.
+    while True:
+        pending = [
+            (node_id, candidate)
+            for node_id, candidate in by_id.items()
+            if node_id not in processed
+        ]
+        if not pending:
+            break
 
-    missing_ids = sorted({
-        target
-        for deps in references.values()
-        for target in deps
-        if target not in by_id
-    })
-    if missing_ids and resolver is not None and snapshot is not None:
-        for missing_id in missing_ids:
-            try:
-                raw = resolver.resolve_node(missing_id, snapshot)
-            except Exception as exc:  # resolver is an adapter boundary
-                raw = None
-                diagnostics.append({
-                    "code": "dependency_resolver_error",
-                    "severity": "warning",
-                    "message": f"Не удалось разрешить обязательный узел {missing_id}.",
-                    "node_ids": [missing_id],
-                    "details": {"error_type": type(exc).__name__},
-                })
-            if raw is None:
-                continue
-            try:
-                resolved = parse_candidate(
-                    raw,
-                    original_order=len(candidates) + len(by_id),
-                    dependency=True,
-                )
-            except ContractValidationError as exc:
-                rejected_resolved += 1
-                diagnostics.append({
-                    "code": "dependency_candidate_invalid",
-                    "severity": "error",
-                    "message": f"Resolver вернул некорректный узел {missing_id}.",
-                    "node_ids": [missing_id],
-                    "details": {"reason": str(exc)},
-                })
-                continue
-            if resolved.node_id != missing_id or not verify_resolved_hash(resolved):
-                rejected_resolved += 1
-                diagnostics.append({
-                    "code": "dependency_candidate_integrity_error",
-                    "severity": "error",
-                    "message": f"Resolver вернул неверный ID или Content Hash для {missing_id}.",
-                    "node_ids": [missing_id],
-                    "details": {"returned_node_id": resolved.node_id},
-                })
-                continue
-            if missing_id not in by_id:
+        for owner_id, candidate in pending:
+            processed.add(owner_id)
+            deps = set(candidate.required_with)
+            if candidate.parent_context_required:
+                if candidate.parent_node_id:
+                    deps.add(candidate.parent_node_id)
+                    parent_refs.add(candidate.parent_node_id)
+                else:
+                    unresolved_by_owner[owner_id].add("missing_parent_node_id")
+            references[owner_id] = deps
+
+            for missing_id in sorted(deps):
+                if missing_id in by_id or missing_id in attempted:
+                    continue
+                attempted.add(missing_id)
+                if resolver is None or snapshot is None:
+                    continue
+                try:
+                    raw = resolver.resolve_node(missing_id, snapshot)
+                except Exception as exc:  # resolver is an adapter boundary
+                    raw = None
+                    diagnostics.append({
+                        "code": "dependency_resolver_error",
+                        "severity": "warning",
+                        "message": f"Не удалось разрешить обязательный узел {missing_id}.",
+                        "node_ids": [missing_id],
+                        "details": {"error_type": type(exc).__name__},
+                    })
+                if raw is None:
+                    continue
+                try:
+                    resolved = parse_candidate(
+                        raw,
+                        original_order=len(candidates) + len(by_id),
+                        dependency=True,
+                    )
+                except ContractValidationError as exc:
+                    rejected_resolved += 1
+                    diagnostics.append({
+                        "code": "dependency_candidate_invalid",
+                        "severity": "error",
+                        "message": f"Resolver вернул некорректный узел {missing_id}.",
+                        "node_ids": [missing_id],
+                        "details": {"reason": str(exc)},
+                    })
+                    continue
+                if resolved.node_id != missing_id or not verify_resolved_hash(resolved):
+                    rejected_resolved += 1
+                    diagnostics.append({
+                        "code": "dependency_candidate_integrity_error",
+                        "severity": "error",
+                        "message": f"Resolver вернул неверный ID или Content Hash для {missing_id}.",
+                        "node_ids": [missing_id],
+                        "details": {"returned_node_id": resolved.node_id},
+                    })
+                    continue
                 by_id[missing_id] = resolved
 
     graph: dict[str, set[str]] = {node_id: set() for node_id in by_id}
