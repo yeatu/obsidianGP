@@ -84,6 +84,29 @@ def create_executor1_database(path: Path) -> tuple[str, str, str]:
             ?, 'old', 'active', NULL)""",
         (calculate_content_hash("old"),),
     )
+    # A valid-looking ambiguous row must never become searchable or retrievable.
+    ambiguous_text = "Уникальный неоднозначный источник для проверки."
+    connection.execute(
+        """INSERT INTO structural_nodes VALUES
+           (5, 1, 'node_ambiguous', 1, 'quote', '[]', 4, 4, 65, 120,
+            ?, ?, 'ambiguous', NULL)""",
+        (calculate_content_hash(ambiguous_text), ambiguous_text),
+    )
+    # Status=active alone is not sufficient when E1 marks the row stale by generation.
+    stale_generation_text = "Устаревшее поколение источника."
+    connection.execute(
+        """INSERT INTO structural_nodes VALUES
+           (6, 1, 'node_active_stale_generation', 1, 'quote', '[]', 4, 4, 121, 160,
+            ?, ?, 'active', 3)""",
+        (calculate_content_hash(stale_generation_text), stale_generation_text),
+    )
+    deleted_text = "Удалённый источник."
+    connection.execute(
+        """INSERT INTO structural_nodes VALUES
+           (7, 1, 'node_deleted', 1, 'quote', '[]', 4, 4, 161, 190,
+            ?, ?, 'deleted', NULL)""",
+        (calculate_content_hash(deleted_text), deleted_text),
+    )
     connection.commit()
     connection.close()
     return node_id, content_hash, document_hash
@@ -262,3 +285,124 @@ def test_empty_source_span_preserves_executor1_zero_end_line(tmp_path):
     assert source["line_end"] == 0
     assert source["raw_text"] == ""
     assert sha256_file(db_path) == before
+
+
+def _node_hash(database_path: Path, node_id: str) -> str:
+    with sqlite3.connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT content_hash FROM structural_nodes WHERE node_id=?",
+            (node_id,),
+        ).fetchone()
+    assert row is not None
+    return row[0]
+
+
+def test_ambiguous_node_is_excluded_from_import_search_and_source_lookup(tmp_path, capsys):
+    db_path = tmp_path / "structure.sqlite3"
+    active_node_id, active_hash, _ = create_executor1_database(db_path)
+    ambiguous_hash = _node_hash(db_path, "node_ambiguous")
+
+    nodes, summary = load_current_nodes(db_path)
+    indexed_ids = {node["node_id"] for node in nodes}
+    assert active_node_id in indexed_ids
+    assert "node_ambiguous" not in indexed_ids
+
+    report = search_structural_database(db_path, "неоднозначный источник")
+    assert report["search"]["results"] == []
+    assert report["search"]["status"] == "not_found_in_retrieval"
+
+    assert get_source_node(db_path, "node_ambiguous", ambiguous_hash) is None
+    exit_code = cli_main([
+        "get-source", "--source-db", str(db_path),
+        "--node-id", "node_ambiguous", "--content-hash", ambiguous_hash,
+    ])
+    assert exit_code == 2
+    assert "not found" in capsys.readouterr().err.lower()
+
+    # The valid active source remains retrievable.
+    active = get_source_node(db_path, active_node_id, active_hash)
+    assert active is not None
+    assert active["node_id"] == active_node_id
+
+
+def test_ambiguous_node_without_identity_does_not_block_active_import(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    create_executor1_database(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE structural_nodes SET node_id=NULL, content_hash=NULL "
+            "WHERE node_id='node_ambiguous'"
+        )
+
+    nodes, summary = load_current_nodes(db_path)
+    assert {node["node_id"] for node in nodes} == {
+        "node_executor1_root", "node_executor1_0001"
+    }
+    assert summary.nodes_current == 2
+    assert summary.nodes_skipped_without_identity == 0
+
+
+def test_stale_and_deleted_nodes_are_neither_indexed_nor_retrievable(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    create_executor1_database(db_path)
+    nodes, _ = load_current_nodes(db_path)
+    indexed_ids = {node["node_id"] for node in nodes}
+    assert indexed_ids == {"node_executor1_root", "node_executor1_0001"}
+
+    for node_id in (
+        "node_stale",
+        "node_active_stale_generation",
+        "node_deleted",
+        "node_deleted_doc",
+    ):
+        assert get_source_node(db_path, node_id, _node_hash(db_path, node_id)) is None
+
+
+def test_no_active_source_is_reported_as_not_found(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    create_executor1_database(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE structural_nodes SET status='ambiguous' WHERE status='active'"
+        )
+
+    nodes, summary = load_current_nodes(db_path)
+    assert nodes == []
+    assert summary.nodes_current == 0
+
+    report = search_structural_database(db_path, "остановка кровообращения")
+    assert report["search"]["status"] == "not_found_in_retrieval"
+    assert report["search"]["results"] == []
+    assert get_source_node(
+        db_path, "node_executor1_0001", _node_hash(db_path, "node_executor1_0001")
+    ) is None
+
+
+def test_null_document_hash_is_not_replaced_with_node_hash(tmp_path):
+    db_path = tmp_path / "structure.sqlite3"
+    node_id, content_hash, _ = create_executor1_database(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("UPDATE documents SET source_sha256=NULL WHERE document_pk=1")
+
+    nodes, _ = load_current_nodes(db_path)
+    node = next(item for item in nodes if item["node_id"] == node_id)
+    assert node["content_hash"] == content_hash
+    assert node["document_hash"] is None
+
+    source = get_source_node(db_path, node_id, content_hash)
+    assert source is not None
+    assert source["content_hash"] == content_hash
+    assert source["document_hash"] is None
+
+
+def test_integration_check_cli_has_no_duplicate_package_dir_argument():
+    import subprocess
+    import sys
+
+    script = Path(__file__).resolve().parents[2] / "tools" / "sfra_integration_check.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        text=True, capture_output=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.count("--package-dir") == 1
