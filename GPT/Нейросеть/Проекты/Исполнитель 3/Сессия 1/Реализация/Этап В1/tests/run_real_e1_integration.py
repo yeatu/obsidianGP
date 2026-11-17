@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from types import SimpleNamespace
 
 from sfra_context_builder import ContextBuilder, TiktokenCounter, parse_search_request
@@ -13,7 +15,10 @@ from sfra_context_integrations.dependency_resolver import E1DependencyResolver
 from sfra_context_integrations.pipeline import ContextIntegrationPipeline, SourceReadRequest
 from sfra_context_integrations.search_adapter import E2SearchAdapter
 from sfra_context_integrations.snapshot import bind_pinned_snapshot
-from sfra_context_integrations.source_reader import E1SourceReader
+from sfra_context_integrations.source_reader import (
+    E1SourceReader,
+    SourceReaderContractError,
+)
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -58,6 +63,155 @@ def _git_status(repo_root: Path) -> str:
     ).stdout
 
 
+
+
+def _expect_contract_rejection(
+    source_api,
+    pinned,
+    token_counter,
+    node_id,
+    content_hash,
+    scope,
+    mutation,
+    expected_code,
+):
+    class FaultInjectedE1:
+        def read_source_scope(self, db_path, vault_root, requested_node_id, expected_hash, *, scope, snapshot_id):
+            native = source_api.read_source_scope(
+                db_path,
+                vault_root,
+                requested_node_id,
+                expected_hash,
+                scope=scope,
+                snapshot_id=snapshot_id,
+            )
+            payload = native.to_dict()
+            if mutation == "snapshot_echo":
+                payload["snapshot_id"] = "tampered-snapshot-id"
+            elif mutation == "document_hash":
+                payload["document"]["document_hash"] = "sha256:" + "0" * 64
+                payload["document"]["source_sha256"] = "sha256:" + "0" * 64
+            elif mutation == "generation":
+                payload["fragments"][0]["index_generation"] += 1
+            else:
+                raise ValueError(f"unknown fault injection: {mutation}")
+            return SimpleNamespace(to_dict=lambda payload=payload: payload)
+
+        def resolve_current_node(self, db_path, requested_node_id, *, snapshot_id):
+            native = source_api.resolve_current_node(
+                db_path, requested_node_id, snapshot_id=snapshot_id
+            )
+            return native
+
+    reader = E1SourceReader(FaultInjectedE1(), pinned, token_counter)
+    try:
+        reader.read_scope(node_id, content_hash, scope, pinned.ref)
+    except SourceReaderContractError as exc:
+        if exc.code != expected_code:
+            raise RuntimeError(
+                f"Fault injection {mutation!r} raised {exc.code!r}, expected {expected_code!r}"
+            ) from exc
+        return exc.code
+    raise RuntimeError(f"Fault injection {mutation!r} was not rejected by E3")
+
+
+def _search_fixture_node(search_structural_database, database_path, query, marker):
+    result = search_structural_database(database_path, query, limit=20)
+    if result.get("search", {}).get("status") != "ok":
+        raise RuntimeError(f"Disposable E1 fixture could not be found by E2: {result}")
+    for hit in result["search"].get("results", []):
+        if hit.get("node_type") == "paragraph" and marker.casefold() in str(hit.get("excerpt", "")).casefold():
+            return hit
+    raise RuntimeError(f"E2 did not return the expected disposable fixture node: {marker!r}")
+
+
+def _run_disposable_e1_lifecycle_cases(source_api, pinned, token_counter, index_vault, search_structural_database):
+    """Use E1's public indexer and reader APIs only; never modify E1 SQLite with SQL."""
+    reports = {}
+
+    with tempfile.TemporaryDirectory(prefix="sfra-e3-ambiguous-") as temporary:
+        root = Path(temporary)
+        vault = root / "vault"
+        state = root / "state"
+        vault.mkdir()
+        note = vault / "lifecycle.md"
+        note.write_text(
+            "# Header\\n\\nFirst paragraph marker.\\n\\nMiddle paragraph marker.\\n\\nLast paragraph marker.\\n",
+            encoding="utf-8",
+        )
+        index_vault(vault, state)
+        database = state / "structure.sqlite3"
+        anchor = _search_fixture_node(
+            search_structural_database, database, "Middle paragraph marker", "Middle paragraph marker"
+        )
+        note.write_text(
+            "# Header\\n\\nFirst paragraph revision A.\\n\\nFirst paragraph revision B.\\n"
+            "\\nMiddle paragraph marker.\\n\\nLast paragraph marker.\\n",
+            encoding="utf-8",
+        )
+        index_vault(vault, state)
+
+        fixture_pinned = replace(pinned, database_path=database, vault_root=vault)
+        fixture_reader = E1SourceReader(source_api, fixture_pinned, token_counter)
+        ambiguous = fixture_reader.read_scope(
+            anchor["node_id"], anchor["content_hash"], "neighbors", pinned.ref
+        )
+        if ambiguous.get("status") != "ambiguous" or ambiguous.get("fragments") != []:
+            raise RuntimeError(
+                "Disposable E1 ambiguous-sibling fixture did not fail closed: "
+                + json.dumps(ambiguous, ensure_ascii=False)
+            )
+        reports["ambiguous_neighbor_scope"] = {
+            "status": ambiguous["status"],
+            "fragments_empty": ambiguous["fragments"] == [],
+            "created_by": "E1 index_vault public API after one-to-many sibling remap",
+            "node_id": anchor["node_id"],
+        }
+
+    with tempfile.TemporaryDirectory(prefix="sfra-e3-deleted-") as temporary:
+        root = Path(temporary)
+        vault = root / "vault"
+        state = root / "state"
+        vault.mkdir()
+        note = vault / "deleted.md"
+        note.write_text(
+            "# Deleted document\\n\\nUnique deletion lifecycle marker.\\n",
+            encoding="utf-8",
+        )
+        index_vault(vault, state)
+        database = state / "structure.sqlite3"
+        address = _search_fixture_node(
+            search_structural_database, database,
+            "Unique deletion lifecycle marker", "Unique deletion lifecycle marker"
+        )
+        note.unlink()
+        index_vault(vault, state)
+
+        fixture_pinned = replace(pinned, database_path=database, vault_root=vault)
+        fixture_reader = E1SourceReader(source_api, fixture_pinned, token_counter)
+        deleted = fixture_reader.read_scope(
+            address["node_id"], address["content_hash"], "node", pinned.ref
+        )
+        if deleted.get("status") != "deleted" or deleted.get("fragments") != []:
+            raise RuntimeError(
+                "Disposable E1 deleted-node fixture did not fail closed: "
+                + json.dumps(deleted, ensure_ascii=False)
+            )
+        reports["deleted_node_scope"] = {
+            "status": deleted["status"],
+            "fragments_empty": deleted["fragments"] == [],
+            "created_by": "E1 index_vault public API after source document deletion",
+            "node_id": address["node_id"],
+        }
+
+    reports["isolation"] = {
+        "production_database_used": False,
+        "production_vault_modified": False,
+        "e1_internal_sql_used_by_e3": False,
+    }
+    return reports
+
+
 def main() -> int:
     e1_root = Path(os.environ["SFRA_E1_ROOT"]).resolve()
     sidecar_root = Path(os.environ["SFRA_SIDECAR_ROOT"]).resolve()
@@ -68,7 +222,7 @@ def main() -> int:
     if str(e1_root) not in sys.path:
         sys.path.insert(0, str(e1_root))
 
-    from sfra_indexer import verify_state_directory
+    from sfra_indexer import index_vault, verify_state_directory
     from sfra_indexer import read_source_scope, resolve_current_node
 
     source_api = SimpleNamespace(
@@ -266,6 +420,58 @@ def main() -> int:
     if stale_result.get("status") != "stale_source" or stale_result.get("fragments") != []:
         raise RuntimeError("Wrong Content Hash did not fail closed as stale_source")
 
+    snapshot_echo_rejection = _expect_contract_rejection(
+        source_api, pinned, token_counter, candidate.node_id, candidate.content_hash,
+        "node", "snapshot_echo", "snapshot_mismatch",
+    )
+    document_hash_rejection = _expect_contract_rejection(
+        source_api, pinned, token_counter, candidate.node_id, candidate.content_hash,
+        "document", "document_hash", "document_hash_mismatch",
+    )
+    generation_rejection = _expect_contract_rejection(
+        source_api, pinned, token_counter, candidate.node_id, candidate.content_hash,
+        "node", "generation", "snapshot_generation_mismatch",
+    )
+
+    mismatched_snapshot = replace(
+        pinned.ref,
+        sidecar_commit_sha="0" * 40,
+    )
+    try:
+        source_reader.read_scope(
+            candidate.node_id, candidate.content_hash, "node", mismatched_snapshot
+        )
+    except SourceReaderContractError as exc:
+        if exc.code != "snapshot_mismatch":
+            raise
+        request_snapshot_rejection = exc.code
+    else:
+        raise RuntimeError("E3 accepted a SourceReader request with a different SnapshotRef")
+
+    with tempfile.TemporaryDirectory(prefix="sfra-e3-corrupt-source-") as temporary:
+        corrupt_root = Path(temporary)
+        original_source_path = pinned.vault_root / candidate.source_path
+        corrupt_source_path = corrupt_root / candidate.source_path
+        corrupt_source_path.parent.mkdir(parents=True, exist_ok=True)
+        corrupt_source_path.write_bytes(
+            original_source_path.read_bytes() + b"\n<!-- isolated source corruption -->\n"
+        )
+        corrupt_pinned = replace(pinned, vault_root=corrupt_root)
+        corrupt_reader = E1SourceReader(source_api, corrupt_pinned, token_counter)
+        corrupt_result = corrupt_reader.read_scope(
+            candidate.node_id, candidate.content_hash, "node", pinned.ref
+        )
+        if corrupt_result.get("status") != "stale_source" or corrupt_result.get("fragments") != []:
+            raise RuntimeError(
+                "E1 did not reject a corrupted source copy without returning fragments: "
+                + json.dumps(corrupt_result, ensure_ascii=False)
+            )
+
+    from sfra_search.runtime import search_structural_database as _search_fixture
+    disposable_lifecycle = _run_disposable_e1_lifecycle_cases(
+        source_api, pinned, token_counter, index_vault, _search_fixture
+    )
+
     not_found_id = "node_00000000-0000-4000-8000-000000000001"
     missing = source_reader.resolve_current_node(not_found_id, pinned.ref)
     if missing.get("status") != "not_found" or missing.get("snapshot_id") != pinned.ref.snapshot_id:
@@ -361,6 +567,16 @@ def main() -> int:
             "unknown_node_has_no_address": missing.get("address") is None,
             "wrong_hash_status": stale_result["status"],
             "unknown_node_status": missing["status"],
+            "corrupt_source_copy": {
+                "status": corrupt_result["status"],
+                "fragments_empty": corrupt_result["fragments"] == [],
+                "production_vault_modified": False,
+            },
+            "snapshot_echo_fault_rejected": snapshot_echo_rejection,
+            "request_snapshot_mismatch_rejected": request_snapshot_rejection,
+            "document_hash_fault_rejected": document_hash_rejection,
+            "generation_fault_rejected": generation_rejection,
+            "disposable_real_e1_lifecycle": disposable_lifecycle,
         },
         "e3": {
             "orchestrator": "ContextIntegrationPipeline.run",
