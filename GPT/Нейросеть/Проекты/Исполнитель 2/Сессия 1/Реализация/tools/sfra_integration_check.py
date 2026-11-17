@@ -85,6 +85,7 @@ def main() -> int:
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--temp-root", required=True, type=Path)
     parser.add_argument("--state-branch-sha", required=True)
+    parser.add_argument("--implementation-commit", required=True)
     parser.add_argument("--package-dir", type=Path, default=None)
     parser.add_argument("--max-sources", type=int, default=5)
     args = parser.parse_args()
@@ -93,6 +94,7 @@ def main() -> int:
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     expected_hash = manifest.get("database_sha256", "")
     actual_hash = "sha256:" + digest(args.source_db)
+    manifest_hash = "sha256:" + digest(args.manifest)
     if expected_hash != actual_hash:
         raise RuntimeError(f"Structural database SHA mismatch: manifest={expected_hash}, actual={actual_hash}")
     if manifest.get("database") != "state/structure.sqlite3":
@@ -105,11 +107,13 @@ def main() -> int:
     import sqlite3
     uri = f"file:{args.source_db.resolve().as_posix()}?mode=ro"
     db = sqlite3.connect(uri, uri=True)
+    db.row_factory = sqlite3.Row
     try:
         db.execute("PRAGMA query_only = ON")
-        integrity = db.execute("PRAGMA quick_check").fetchone()[0]
-        if integrity != "ok":
-            raise RuntimeError(f"SQLite quick_check failed: {integrity}")
+        integrity_rows = [str(row[0]) for row in db.execute("PRAGMA integrity_check").fetchall()]
+        if integrity_rows != ["ok"]:
+            raise RuntimeError(f"SQLite integrity_check failed: {integrity_rows}")
+        integrity = "ok"
         schema_version = db.execute(
             "SELECT schema_version FROM schema_info WHERE singleton=1"
         ).fetchone()[0]
@@ -121,16 +125,61 @@ def main() -> int:
         ).fetchone()[0]
         total_nodes = db.execute("SELECT COUNT(*) FROM structural_nodes").fetchone()[0]
         active_nodes = db.execute(
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='active'
+                 AND n.stale_generation IS NULL"""
+        ).fetchone()[0]
+        ambiguous_nodes = db.execute(
+            "SELECT COUNT(*) FROM structural_nodes WHERE status='ambiguous'"
+        ).fetchone()[0]
+        stale_nodes = db.execute(
             "SELECT COUNT(*) FROM structural_nodes "
-            "WHERE status IN ('active','ambiguous') AND stale_generation IS NULL"
+            "WHERE status='stale' OR stale_generation IS NOT NULL"
+        ).fetchone()[0]
+        deleted_nodes = db.execute(
+            "SELECT COUNT(*) FROM structural_nodes WHERE status='deleted'"
+        ).fetchone()[0]
+        deleted_documents = db.execute(
+            "SELECT COUNT(*) FROM documents WHERE status='deleted'"
         ).fetchone()[0]
         missing_ids = db.execute(
-            "SELECT COUNT(*) FROM structural_nodes "
-            "WHERE status IN ('active','ambiguous') AND stale_generation IS NULL "
-            "AND (node_id IS NULL OR content_hash IS NULL)"
+            """SELECT COUNT(*) FROM structural_nodes n
+               JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='active'
+                 AND n.stale_generation IS NULL
+                 AND (n.node_id IS NULL OR n.content_hash IS NULL)"""
         ).fetchone()[0]
         if missing_ids:
             raise RuntimeError(f"{missing_ids} active structural nodes lack node_id/content_hash")
+
+        eligible_rows = db.execute(
+            """SELECT n.node_id, n.content_hash
+               FROM structural_nodes n JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status='active' AND n.status='active'
+                 AND n.stale_generation IS NULL"""
+        ).fetchall()
+        eligible_pairs = {
+            (str(row["node_id"]), str(row["content_hash"]))
+            for row in eligible_rows
+            if row["node_id"] and row["content_hash"]
+        }
+        excluded_rows = db.execute(
+            """SELECT n.node_id, n.content_hash
+               FROM structural_nodes n JOIN documents d ON d.document_pk=n.document_pk
+               WHERE d.status!='active' OR n.status!='active'
+                  OR n.stale_generation IS NOT NULL"""
+        ).fetchall()
+        excluded_pairs = {
+            (str(row["node_id"]), str(row["content_hash"]))
+            for row in excluded_rows
+            if row["node_id"] and row["content_hash"]
+        }
+        # Retain concrete excluded addresses for direct get-source negative checks.
+        excluded_samples = []
+        for row in excluded_rows:
+            if row["node_id"] and row["content_hash"] and len(excluded_samples) < 25:
+                excluded_samples.append((str(row["node_id"]), str(row["content_hash"])))
     finally:
         db.close()
 
@@ -170,6 +219,29 @@ def main() -> int:
     env["PYTHONUTF8"] = "1"
     env["SFRA_REQUIRE_PYMORPHY3"] = "1"
 
+    # Prove that direct source lookup rejects non-active addresses too.
+    rejected_source_checks = []
+    for excluded_node_id, excluded_content_hash in excluded_samples:
+        rejected = subprocess.run(
+            [
+                cli, "get-source",
+                "--source-db", str(args.source_db),
+                "--node-id", excluded_node_id,
+                "--content-hash", excluded_content_hash,
+            ],
+            text=True, capture_output=True, env=env,
+        )
+        if rejected.returncode == 0 or rejected.stdout.strip():
+            raise RuntimeError(
+                "get-source returned a source for an ineligible address "
+                f"{excluded_node_id} ({excluded_content_hash})"
+            )
+        rejected_source_checks.append({
+            "node_id": excluded_node_id,
+            "content_hash": excluded_content_hash,
+            "rejected": True,
+        })
+
     queries = ["реанимации", "реанимацию"]
     searches: list[dict[str, Any]] = []
     hit_maps: list[dict[tuple[str, str], dict[str, Any]]] = []
@@ -182,6 +254,12 @@ def main() -> int:
         if not hits:
             raise RuntimeError(f"No search hits returned for query: {query}")
         hit_map = {(h["node_id"], h["content_hash"]): h for h in hits}
+        inadmissible = sorted(set(hit_map) - eligible_pairs)
+        if inadmissible:
+            raise RuntimeError(
+                f"Search query {query!r} returned non-active/ambiguous/stale/deleted "
+                f"source addresses: {inadmissible[:10]}"
+            )
         hit_maps.append(hit_map)
         searches.append({
             "query": query,
@@ -231,6 +309,13 @@ def main() -> int:
             ],
             env,
         )
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"get-source response is not a JSON object for {node_id}")
+        if payload.get("node_id") != node_id or payload.get("content_hash") != content_hash:
+            raise RuntimeError(
+                f"get-source returned a different address for {node_id}: "
+                f"{payload.get('node_id')} + {payload.get('content_hash')}"
+            )
         raw_text = find_raw_text(payload)
         if raw_text is None:
             raise RuntimeError(f"get-source response has no raw_text for {node_id}")
@@ -300,16 +385,24 @@ def main() -> int:
             f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
             f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}"
         ),
+        "implementation_commit": args.implementation_commit,
         "state_branch_sha": args.state_branch_sha,
+        "manifest_sha256": manifest_hash,
         "state_manifest": manifest,
         "structural_db": {
             "sha256": actual_hash,
+            "manifest_sha256": manifest_hash,
             "integrity_check": integrity,
             "schema_version": schema_version,
             "documents": documents,
             "active_documents": active_documents,
             "total_nodes": total_nodes,
             "active_nodes": active_nodes,
+            "ambiguous_nodes_excluded": ambiguous_nodes,
+            "stale_nodes_excluded": stale_nodes,
+            "deleted_nodes_excluded": deleted_nodes,
+            "deleted_documents_excluded": deleted_documents,
+            "eligible_active_addresses": len(eligible_pairs),
             "nodes_missing_identity": missing_ids,
         },
         "vault": {
@@ -334,6 +427,8 @@ def main() -> int:
             {"node_id": node_id, "content_hash": ch} for node_id, ch in sorted(common)
         ],
         "source_retrieval_count": len(retrieved),
+        "rejected_non_active_source_checks": rejected_source_checks,
+        "rejected_non_active_source_check_count": len(rejected_source_checks),
         "persistent_search_db_files": db_files,
         "fts5_storage": "runtime process; no additional SQLite file detected under RUNNER_TEMP",
     }
