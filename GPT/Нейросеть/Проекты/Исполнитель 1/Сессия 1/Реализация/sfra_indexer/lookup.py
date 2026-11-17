@@ -673,7 +673,50 @@ def _check_db_snapshot(
         )
 
     node_events = [event for event in events if event["node_id"] == node["node_id"]]
-    latest_event = node_events[-1]["event_type"] if node_events else None
+    if not node_events:
+        _raise(
+            NodeLookupStatus.INTEGRITY_ERROR,
+            "node_match_event_missing",
+            "The current node identifier has no matching index event.",
+        )
+
+    latest_node_event = node_events[-1]
+    latest_event = latest_node_event["event_type"]
+    latest_event_generation = latest_node_event["generation"]
+    if node["status"] in {"active", "ambiguous"}:
+        if latest_event_generation != document["generation"]:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "node_match_event_generation_mismatch",
+                "The current node has no matching event in the active document generation.",
+            )
+        if node["status"] == "ambiguous":
+            if latest_event != "ambiguous":
+                _raise(
+                    NodeLookupStatus.INTEGRITY_ERROR,
+                    "ambiguous_event_missing",
+                    "The ambiguous node has no matching ambiguity event.",
+                )
+        elif latest_event not in _MATCH_EVENT_TYPES:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "node_event_state_mismatch",
+                "The active node status conflicts with its matching history.",
+            )
+    elif node["status"] == "stale":
+        if latest_event_generation != node["stale_generation"]:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "stale_event_generation_mismatch",
+                "The stale node lifecycle does not match its last index event.",
+            )
+        if latest_event not in {"stale", "stale_ambiguous_candidate", "document_deleted"}:
+            _raise(
+                NodeLookupStatus.INTEGRITY_ERROR,
+                "stale_event_missing",
+                "The stale node has no event confirming deletion or ambiguity.",
+            )
+
     candidate_event = any(
         event["event_type"] == "ambiguous"
         and node["node_id"] in event["candidate_node_ids"]
