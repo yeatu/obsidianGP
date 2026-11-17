@@ -266,13 +266,13 @@ def main() -> int:
         return subprocess.check_output(["git", "-C", str(repo_root), *command], text=True).strip()
     status_before = git("status", "--porcelain", "--", "ГП")
     diff_before = subprocess.run(["git", "-C", str(repo_root), "diff", "--exit-code", "--", "ГП"]).returncode
-    tracked = git("ls-files", "-z", "--", "ГП").split("\\0")
+    tracked = git("ls-files", "-z", "--", "ГП").split("\0")
     tracked = [p for p in tracked if p]
     def vault_digest() -> str:
         h = hashlib.sha256()
         for rel in sorted(tracked):
             path = repo_root / rel
-            h.update(rel.encode("utf-8") + b"\\0")
+            h.update(rel.encode("utf-8") + b"\0")
             if not path.is_file():
                 raise RuntimeError(f"Tracked Vault file is missing: {rel}")
             h.update(hashlib.sha256(path.read_bytes()).digest())
