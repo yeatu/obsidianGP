@@ -1,4 +1,4 @@
-"""Integration boundary modules for the SFRA Context Builder."""
+"""Integration and application service boundary for SFRA Context Builder."""
 
 from .search_adapter import E2SearchAdapter, SearchAdapterError, SearchAdapterResult
 from .snapshot import PinnedSnapshot, SnapshotBindingError, bind_pinned_snapshot
@@ -9,6 +9,21 @@ from .pipeline import (
     ContextIntegrationPipeline,
     ContextIntegrationResult,
     SourceReadRequest,
+)
+from .application import (
+    ApplicationServiceError,
+    ApplicationServiceContractError,
+    ContextIntegrationPipelinePort,
+    SearchVaultApplication,
+    SearchVaultService,
+    ReadSourceRequest,
+    SourceFragment,
+    ServiceDiagnostic,
+    TokenAccounting,
+    ServiceError,
+    ReadSourceResult,
+    ReadSourceApplication,
+    ReadSourceService,
 )
 
 __all__ = [
@@ -27,4 +42,17 @@ __all__ = [
     "ContextIntegrationPipeline",
     "ContextIntegrationResult",
     "SourceReadRequest",
+    "ApplicationServiceError",
+    "ApplicationServiceContractError",
+    "ContextIntegrationPipelinePort",
+    "SearchVaultApplication",
+    "SearchVaultService",
+    "ReadSourceRequest",
+    "SourceFragment",
+    "ServiceDiagnostic",
+    "TokenAccounting",
+    "ServiceError",
+    "ReadSourceResult",
+    "ReadSourceApplication",
+    "ReadSourceService",
 ]

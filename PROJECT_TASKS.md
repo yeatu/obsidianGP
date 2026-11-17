@@ -4,7 +4,7 @@
 >
 > **Координатора вызывают только по сигналу аналитика:** весь его спектр задач завершён либо возникло ограничение, требующее архитектурного решения или нового указания. Координатор не обновляет файл после каждого промежуточного отчёта.
 >
-> Последняя координаторская актуализация: **2026-11-17**. Основной контур E1/E2/E3 объединён в main на `d3e41965f916746225cb8f76fd4c96fc9e95486c`; PR #10 → `5e274fc`, PR #11 → `d654bdc`, PR #7 → `d3e4196`.
+> Последняя координаторская актуализация: **2026-11-17**. Основной контур E1/E2/E3 и SFRA-E3-V2.1 объединены в main; PR #10 → `5e274fc`, PR #11 → `d654bdc`, PR #7 → `d3e4196`, PR #14 → `9a0bfa0`.
 
 ## 1. Роли и статусы
 
@@ -69,7 +69,7 @@
 | SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency resolver, E1 adapter и Snapshot binding | **DONE** | PR [#10](https://github.com/yeatu/obsidianGP/pull/10) merged: `5e274fc85d2d5f9f9fc3a4faaa48657cd7a2b7ec`; проверенный HEAD `4b446c3`. Финальный C1 CI [44038459416](https://github.com/yeatu/obsidianGP/actions/runs/44038459416): 45 B1 + 56 C1 passed. Runtime code принят и находится в main. |
 | SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack и negative matrix | **DONE** | PR #10 merged. Финальная real integration [44038459427](https://github.com/yeatu/obsidianGP/actions/runs/44038459427): success; artifact `14308411701`, SHA-256 `6b096d78395e23a6aadd904a449da0cb48a94131c0c3b03fb17c53108057524a`. Все четыре scope, parent dependency, negative matrix и read-only guards подтверждены. Context Pack остаётся `budget_limited` (1 included / 2 deferred), не `complete`. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **DONE** | PR [#7](https://github.com/yeatu/obsidianGP/pull/7) merged: `d3e41965f916746225cb8f76fd4c96fc9e95486c`. Post-merge workflow [44041253438](https://github.com/yeatu/obsidianGP/actions/runs/44041253438): success, 64 passed / 0 failures / 0 errors / 0 skipped; artifact `14309710985`. |
-| SFRA-E3-V2.1 | E3 | Transport-independent SearchVaultService / ReadSourceService application services | **WAITING_FOR_IMPLEMENTATION** | Implementation issue [#13](https://github.com/yeatu/obsidianGP/issues/13). Отдельный application/services слой поверх принятых E2/E3/E1 API; без GitHub SDK, Issue comments, recovery, доступа к внутренней SQLite или публикации source text. Обязательны typed contracts и unit/contract tests. Архитектурная основа — синхронизированный PR #12. |
+| SFRA-E3-V2.1 | E3 | Transport-independent SearchVaultService / ReadSourceService application services | **DONE** | PR [#14](https://github.com/yeatu/obsidianGP/pull/14) merged 2026-11-17 09:33:20 UTC: `9a0bfa012269590466a3b314770425a2a97dfe7f`. Implementation HEAD `b093c51833f47b9a4e83e83235ea7fbf591f81a7`; Analyst 3 review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022); Coordinator acceptance reviews [5935913900](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935913900). Final pre-merge checks on `516d1590744e88574bc9e67724aaaae0c5e4e13d`: C1 [44054181018](https://github.com/yeatu/obsidianGP/actions/runs/44054181018) (45 B1 + 56 C1), V2.1 [44054181091](https://github.com/yeatu/obsidianGP/actions/runs/44054181091) (45 B1 + 56 C1 + 18 V2.1; transport guard), real integration [44054181144](https://github.com/yeatu/obsidianGP/actions/runs/44054181144), artifact `14314428318`. Issue #13 closed as completed. Production Issue worker/recovery/MCP and source-content publication remain out of scope and not authorized. |
 
 ---
 
@@ -264,3 +264,33 @@ PR [#12](https://github.com/yeatu/obsidianGP/pull/12) остаётся Draft pro
 7. **Операционное владение:** первоначальный владелец — владелец/администратор репозитория `yeatu`; отключение worker workflow и удаление ошибочно опубликованных комментариев — maintainer action.
 
 Production Issue worker, recovery и публикация source content не разрешены до отдельной security/readiness проверки V2.2–V2.4. MCP остаётся optional и не является зависимостью V2 MVP.
+
+## 8. Промежуточная координаторская приёмка SFRA-E3-V2.1 — 2026-11-17 (до merge; historical)
+
+Этот раздел фиксирует состояние до объединения PR #14. Его пункты о Draft / not merged superseded финальным разделом 9 ниже.
+
+- [x] Аналитик завершил V2.1: review #5935543022, `ANALYST_COMPLETE_UNREVIEWED`, блокирующих дефектов в согласованном scope не выявлено.
+- [x] README и analyst handoff синхронизированы; прежние evidence на `9b57c68` помечены как исторические.
+- [x] Проверены PR head `974d56be8fb57ae8a02eeaf97ae15ff09cc4b47c` и compare: ahead 16 / behind 0 относительно main `5090047cb6a47be4783f4625c1d175fd23083bae`.
+- [x] Повторный C1 CI #44053145639: 45 B1 + 56 C1 passed.
+- [x] Повторный V2.1 CI #44053145836: 45 B1 + 56 C1 + 18 V2.1 passed; transport dependency guard passed.
+- [x] Повторная real integration #44053145679: success; artifact `14315355448`, SHA-256 `d510864636b373169d5285613bb1786cfdad41c9957f8dc815da13c19f95931b`.
+- [x] Проверены один pinned SnapshotRef, четыре source scopes, сохранение `budget_limited`, E3-owned `budget_exceeded` без partial fragments и неизменность production state / Vault / sidecar.
+- [x] Координаторская приёмка: `COORDINATOR_ACCEPTED_NOT_MERGED`.
+- [ ] PR #14 переведён из Draft в Ready.
+- [ ] PR #14 merged.
+
+**Решение:** V2.1 принят только как transport-independent application services. PR #14 остаётся Open / Draft / not merged. Никакого разрешения на production Issue worker/recovery, MCP, HTTP/webhooks или публикацию Vault source content не выдано. Public source-content policy остаётся deny-by-default.
+
+
+## 9. Завершение SFRA-E3-V2.1 — merge 2026-11-17
+
+- [x] PR #14 переведён в Ready for review.
+- [x] PR #14 merged в `main` в 09:33:20 UTC: `9a0bfa012269590466a3b314770425a2a97dfe7f`.
+- [x] Runtime implementation принята в согласованном transport-independent scope.
+- [x] Issue #13 закрыт как completed.
+- [x] README, analyst handoff, PROJECT_TASKS и Coordinator Session 3 registry обновлены после merge.
+- [x] Pre-merge C1 / V2.1 / real integration gates прошли на `516d1590744e88574bc9e67724aaaae0c5e4e13d`; implementation code не менялся после проверки.
+- [x] Проверена конфигурация post-merge workflow triggers: целевые workflow не настроены на push в `main`, поэтому отдельный post-merge run не создан. Pre-merge зелёные проверки остаются валидным evidence для неизменённого runtime code.
+
+**Итог:** SFRA-E3-V2.1 = `DONE`. Это не включает GitHub Issue worker/recovery, MCP, HTTP/webhooks или публикацию Vault source content. Public source-content publication remains deny-by-default.

@@ -19,6 +19,11 @@ from sfra_context_integrations.source_reader import (
     E1SourceReader,
     SourceReaderContractError,
 )
+from sfra_context_integrations.application import (
+    ReadSourceRequest,
+    ReadSourceService,
+    SearchVaultService,
+)
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -347,7 +352,8 @@ def main() -> int:
         source_reader=source_reader,
         dependency_resolver=dependency_resolver,
     )
-    pipeline_result = pipeline.run(
+    search_service = SearchVaultService(pipeline)
+    pipeline_result = search_service.search(
         request,
         source_reads=tuple(
             SourceReadRequest(
@@ -358,6 +364,45 @@ def main() -> int:
             for scope in ("node", "parent", "neighbors", "document")
         ),
     )
+
+    read_service = ReadSourceService(source_reader)
+    application_scope_results = {
+        scope: read_service.read(ReadSourceRequest(
+            node_id=candidate.node_id,
+            expected_hash=candidate.content_hash,
+            scope=scope,
+            snapshot=pinned.ref,
+        ))
+        for scope in ("node", "parent", "neighbors", "document")
+    }
+    for scope, application_result in application_scope_results.items():
+        if application_result.status != "ok":
+            raise RuntimeError(
+                f"ReadSourceService scope {scope} returned {application_result.status!r}"
+            )
+        if application_result.snapshot_id != pinned.ref.snapshot_id:
+            raise RuntimeError(
+                f"ReadSourceService scope {scope} changed the pinned SnapshotRef"
+            )
+        if not application_result.fragments:
+            raise RuntimeError(
+                f"ReadSourceService scope {scope} returned no typed source fragments"
+            )
+
+    application_budget_result = read_service.read(ReadSourceRequest(
+        node_id=candidate.node_id,
+        expected_hash=candidate.content_hash,
+        scope="document",
+        snapshot=pinned.ref,
+        budget_tokens=1,
+    ))
+    if (
+        application_budget_result.status != "budget_exceeded"
+        or application_budget_result.fragments
+    ):
+        raise RuntimeError(
+            "ReadSourceService did not preserve E3 budget_exceeded without partial fragments"
+        )
     pipeline_candidate = pipeline_result.search.batch.candidates[0]
     if (
         pipeline_candidate.node_id != candidate.node_id
@@ -641,7 +686,7 @@ def main() -> int:
             "disposable_real_e1_lifecycle": disposable_lifecycle,
         },
         "e3": {
-            "orchestrator": "ContextIntegrationPipeline.run",
+            "orchestrator": "SearchVaultService -> ContextIntegrationPipeline.run",
             "pipeline_snapshot_matches": pipeline_result.snapshot == pinned.ref,
             "context_pack_status": pack["status"],
             "included_count": len(pack["Included"]),
@@ -654,6 +699,27 @@ def main() -> int:
             "included_target_raw_text_utf8_bytes": len(included["raw_text"].encode("utf-8")),
             "scope_budget_status": budget_result["status"],
             "budget_owner": budget_result["token_accounting"]["budget_owner"],
+        },
+        "application_services": {
+            "search_service_result": "ContextIntegrationResult",
+            "context_pack_status_preserved": pipeline_result.context_pack["status"],
+            "source_reads": {
+                scope: {
+                    "status": result.status,
+                    "snapshot_id": result.snapshot_id,
+                    "fragment_count": len(result.fragments),
+                    "roles": [item.role for item in result.fragments],
+                    "typed_result": "ReadSourceResult",
+                }
+                for scope, result in application_scope_results.items()
+            },
+            "budget_status": application_budget_result.status,
+            "budget_fragments_empty": application_budget_result.fragments == (),
+            "budget_owner": (
+                application_budget_result.token_accounting.budget_owner
+                if application_budget_result.token_accounting is not None
+                else None
+            ),
         },
         "read_only": {
             "sqlite_unchanged": database_before == database_after,
