@@ -6,7 +6,11 @@ import re
 from types import MappingProxyType
 
 from sfra_context_builder.models import FocusAspect, KnownVersion, SearchRequest, SnapshotRef
-from sfra_context_integrations import ReadSourceRequest
+from sfra_context_integrations import (
+    ReadSourceApplication,
+    ReadSourceRequest,
+    SearchVaultApplication,
+)
 
 from .models import (
     IssueReaderPort,
@@ -31,8 +35,8 @@ class IssueWorkerCore:
         *,
         issue_reader: IssueReaderPort,
         status_store: TransportStatusStorePort,
-        search_application: object,
-        read_source_application: object,
+        search_application: SearchVaultApplication,
+        read_source_application: ReadSourceApplication,
         parser: IssueRequestParser | None = None,
         projector: SafeResultProjector | None = None,
     ) -> None:
