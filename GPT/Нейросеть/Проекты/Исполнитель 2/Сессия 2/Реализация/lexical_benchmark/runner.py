@@ -137,11 +137,12 @@ def render_markdown(report):
     for item in report["cases"]:
         value = item["recall_at_k"]
         recall = "n/a" if value is None else f"{value:.3f}"
+        precision = item["precision_at_k"]
+        precision_text = "n/a" if precision is None else f"{precision:.3f}"
         lines.append(
             f"| {item['id']} | {item['category']} | {item['query']} | "
             f"{', '.join(item['expected_node_ids']) or 'empty'} | "
-            f"{', '.join(item['result_node_ids']) or 'empty'} | {recall} | "
-            f"{'n/a' if item['precision_at_k'] is None else f'{item["precision_at_k"]:.3f}'} | "
+            f"{', '.join(item['result_node_ids']) or 'empty'} | {recall} | {precision_text} | "
             f"{'yes' if item['stable_order'] else 'no'} | {item['status']} |"
         )
     lines.extend([
