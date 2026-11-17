@@ -268,19 +268,10 @@ def bind_pinned_snapshot(
         if not isinstance(current_manifest, dict) or current_manifest != manifest:
             raise SnapshotBindingError("Pinned E1 manifest content changed after binding")
 
-        try:
-            current_verified_manifest = state_verifier(sidecar)
-        except Exception as exc:
-            raise SnapshotBindingError(
-                f"E1 state verification failed after binding ({type(exc).__name__})"
-            ) from exc
-        if not isinstance(current_verified_manifest, Mapping):
-            raise SnapshotBindingError("E1 state verifier returned an invalid manifest")
-        if dict(current_verified_manifest) != current_manifest:
-            raise SnapshotBindingError(
-                "E1 state verifier result changed after snapshot binding"
-            )
-
+        # Initial binding already ran E1's full state verifier. Rechecking
+        # the exact manifest digest and full SQLite SHA-256 here proves that the
+        # same E1-verified database bytes remain in place without repeating the
+        # comparatively expensive SQLite integrity scan for every candidate.
         expected_current_db_hash = current_manifest.get("database_sha256")
         if (
             not isinstance(expected_current_db_hash, str)
