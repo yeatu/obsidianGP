@@ -1,7 +1,7 @@
 # SFRA-E3-V2.1 — Application Services
 
 **Владелец:** Исполнитель 3  
-**Статус:** `COORDINATOR_ACCEPTED_NOT_MERGED`; PR #14 остаётся Open / Draft / not merged  
+**Статус:** `DONE`; PR [#14](https://github.com/yeatu/obsidianGP/pull/14) merged `9a0bfa012269590466a3b314770425a2a97dfe7f`  
 **Issue:** [#13 — transport-independent application services](https://github.com/yeatu/obsidianGP/issues/13)
 
 
@@ -9,8 +9,8 @@
 >
 > **Implementation HEAD:** `b093c51833f47b9a4e83e83235ea7fbf591f81a7`. Это HEAD кода V2.1; документационный sync может добавить отдельный commit без изменения реализации.
 >
-> **PR:** [#14](https://github.com/yeatu/obsidianGP/pull/14), Open / Draft / not merged.  
-> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), статус `ANALYST_COMPLETE_UNREVIEWED`; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координатор принял V2.1 в согласованных границах как `COORDINATOR_ACCEPTED_NOT_MERGED`; PR не объединён.
+> **PR:** [#14](https://github.com/yeatu/obsidianGP/pull/14), merged 2026-11-17 09:33:20 UTC; merge commit `9a0bfa012269590466a3b314770425a2a97dfe7f`.  
+> **Аналитическая проверка:** review [5935543022](https://github.com/yeatu/obsidianGP/pull/14#pullrequestreview-5935543022), статус `ANALYST_COMPLETE_UNREVIEWED`; блокирующих дефектов в согласованном V2.1 scope не выявлено. Координатор принял V2.1 в согласованных границах; PR объединён merge-коммитом `9a0bfa012269590466a3b314770425a2a97dfe7f`.
 >
 > **Актуальные проверки на Implementation HEAD:**
 > - [V2.1 application CI 44047919277](https://github.com/yeatu/obsidianGP/actions/runs/44047919277): success — **45 B1 + 56 C1 + 18 V2.1 passed**, transport dependency guard passed.
@@ -157,3 +157,16 @@ All four ReadSourceResult values echo the same SnapshotRef. SearchVaultService r
 The original E3 real negative matrix also remained green: stale hash, not_found, corrupt source, ambiguous/deleted disposable lifecycle, snapshot echo/request mismatch, document hash mismatch and generation mismatch all fail closed. Production SQLite, manifest, sidecar tree and Vault tree remained unchanged; HEADs and clean checkout guards passed.
 
 **Interpretation:** technical and CI gates for V2.1 are demonstrated on the above HEAD. This is an implementation handoff, not Analyst 3 acceptance. PR #14 remains Draft and unmerged.
+
+
+## Финальный статус после merge — 2026-11-17
+
+- PR #14 merged в `main` в 09:33:20 UTC.
+- Merge commit: `9a0bfa012269590466a3b314770425a2a97dfe7f`.
+- Проверенная реализация: `b093c51833f47b9a4e83e83235ea7fbf591f81a7`.
+- Последний полный комплект проверок перед merge выполнялся на `516d1590744e88574bc9e67724aaaae0c5e4e13d`: C1 45 B1 + 56 C1 passed; V2.1 45 B1 + 56 C1 + 18 V2.1 passed; transport dependency guard passed; real E1/E2/E3 integration success.
+- Реальный integration artifact: [14314428318](https://github.com/yeatu/obsidianGP/actions/runs/44054181144), SHA-256 `sha256:8fcf72fbd2ea9bb373ab3f8afba70794957dfdb3fac194ad37806118421acef7`.
+- Эти три workflow не запускались повторно на merge-коммите: в текущих workflow нет push trigger на `main`; runtime code и tests на merge не менялись.
+- V2.1 завершена. Issue worker/recovery/MCP/HTTP и публикация Vault source content не входят в принятый scope и остаются запрещёнными до отдельной приёмки. Public source-content policy — deny-by-default.
+
+Предыдущие упоминания Draft / not merged ниже описывают состояние до 09:33:20 UTC и не являются текущим статусом.
