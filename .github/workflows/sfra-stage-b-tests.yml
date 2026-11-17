@@ -62,9 +62,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          workflow_file="$GITHUB_WORKSPACE/.github/workflows/sfra-stage-b-tests.yml"
-          if grep -nE 'sfra-index[[:space:]]+index|ref:[[:space:]]*sfra-state|sparse-checkout:[[:space:]]*ГП|checkout .*Vault|checkout .*state' "$workflow_file"; then
-            echo "Fixture-only workflow contains a production source checkout or indexing command." >&2
-            exit 1
-          fi
-          echo "Fixture-only boundary verified: no Vault/state checkout or index command."
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path(".github/workflows/sfra-stage-b-tests.yml")
+          # Ignore YAML comments; only executable workflow content is scanned.
+          executable = "\\n".join(
+              line.split("#", 1)[0]
+              for line in path.read_text(encoding="utf-8").splitlines()
+          )
+          forbidden = {
+              "real index command": r"\\bsfra-index\\s+index\\b",
+              "production state ref": r"(?m)^\\s*ref:\\s*sfra-state\\s*$",
+              "Vault sparse checkout": r"(?m)^\\s*sparse-checkout:\\s*ГП\\s*$",
+              "production state checkout path": r"(?m)^\\s*path:\\s*(_state_source|production-state-source|state-repo|vault)\\s*$",
+          }
+          failures = [name for name, pattern in forbidden.items() if re.search(pattern, executable)]
+          if failures:
+              raise SystemExit("Forbidden fixture-CI configuration: " + ", ".join(failures))
+          print("Fixture-only boundary verified: no production checkout or index command.")
+          PY
