@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 
 from .budget import (
     compact_json,
-    context_tokens,
+    included_tokens,
     make_deferred_entry,
     make_included_entry,
 )
@@ -151,6 +151,7 @@ class ContextBuilder:
         included_entries: list[dict[str, Any]] = []
         included_ids: set[str] = set()
         processed_groups: set[str] = set()
+        unresolved_required_groups = False
         def coverage_for(
             proposed_included: set[str],
             proposed_deferred: set[str],
@@ -165,13 +166,14 @@ class ContextBuilder:
             )
 
         def try_group(group: DependencyGroup) -> None:
-            nonlocal included_entries, included_ids
+            nonlocal included_entries, included_ids, unresolved_required_groups
             processed_groups.add(group.group_id)
             new_members = [
                 member for member in group.members
                 if member.node_id not in known_ids
             ]
             if group.has_unresolved:
+                unresolved_required_groups = True
                 for member in new_members:
                     deferred_reason[member.node_id] = "unresolved_required_dependency"
                     deferred_unresolved[member.node_id] = group.unresolved_dependency_ids
@@ -201,7 +203,7 @@ class ContextBuilder:
             proposed_ids = included_ids | {member.node_id for member in new_members}
             proposed_deferred = set(deferred_reason) - proposed_ids
             proposed_coverage = coverage_for(proposed_ids, proposed_deferred)
-            cost = context_tokens(proposed_entries, proposed_coverage, self._token_counter)
+            cost = included_tokens(proposed_entries, self._token_counter)
             if cost <= normalized_request.budget_tokens:
                 included_entries = proposed_entries
                 included_ids = proposed_ids
@@ -325,23 +327,14 @@ class ContextBuilder:
         available_ratio = None if focus_count == 0 else available_count / focus_count
         included_ratio = None if focus_count == 0 else included_aspect_count / focus_count
 
-        tokens_used = context_tokens(included_entries, coverage, self._token_counter)
-        if tokens_used > normalized_request.budget_tokens:
-            diagnostics.append({
-                "code": "coverage_metadata_exceeds_budget",
-                "severity": "warning",
-                "message": "Обязательная структура Included/Coverage сама превышает бюджет; исходные узлы не усекались.",
-                "node_ids": [],
-                "details": {
-                    "tokens_used": tokens_used,
-                    "budget_tokens": normalized_request.budget_tokens,
-                },
-            })
+        tokens_used = included_tokens(included_entries, self._token_counter)
 
         if any(item["severity"] == "error" for item in diagnostics):
             status = "integrity_warning"
         elif not candidates and search_complete:
             status = "empty"
+        elif unresolved_required_groups:
+            status = "partial"
         elif any(item["reason"] in {
             "budget_limit", "required_group_budget_limit", "lower_priority_budget_limit"
         } for item in deferred_entries):
