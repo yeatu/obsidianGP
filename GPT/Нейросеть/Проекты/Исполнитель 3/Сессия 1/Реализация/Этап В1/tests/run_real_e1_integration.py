@@ -390,29 +390,32 @@ def main() -> int:
     }
     report_text = json.dumps(report, ensure_ascii=False, indent=2)
     print(report_text)
-    Path("integration-report.json").write_text(report_text + "\\n", encoding="utf-8")
+    report_path = Path("integration-report.json")
+    report_path.write_text(report_text + "\n", encoding="utf-8")
+    # Read it back so the uploaded artifact is strict standalone JSON.
+    json.loads(report_path.read_text(encoding="utf-8"))
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
-        scope_rows = "\\n".join(
+        scope_rows = "\n".join(
             f"| {scope} | {value['status']} | {len(value['fragments'])} | "
             f"{', '.join(item['role'] for item in value['fragments'])} |"
             for scope, value in scope_results.items()
         )
         summary = (
-            "# Real E2 → E3 → E1 integration\\n\\n"
-            f"- Snapshot ID: `{pinned.ref.snapshot_id}`\\n"
-            f"- Vault commit: `{pinned.ref.vault_commit_sha}`\\n"
-            f"- Sidecar commit: `{pinned.ref.sidecar_commit_sha}`\\n"
-            f"- Manifest SHA-256: `{pinned.ref.manifest_sha256}`\\n"
-            f"- E2 hits: {search_result.engine_result_count}; candidates: {len(search_result.batch.candidates)}\\n"
-            f"- Context Pack: `{pack['status']}`; Included: {len(pack['Included'])}; Deferred: {len(pack['Deferred'])}\\n"
-            f"- Scope budget (E3): `{budget_result['status']}`\\n\\n"
-            "| Scope | Status | Fragments | Roles |\\n"
-            "|---|---:|---:|---|\\n"
-            f"{scope_rows}\\n\\n"
+            "# Real E2 → E3 → E1 integration\n\n"
+            f"- Snapshot ID: `{pinned.ref.snapshot_id}`\n"
+            f"- Vault commit: `{pinned.ref.vault_commit_sha}`\n"
+            f"- Sidecar commit: `{pinned.ref.sidecar_commit_sha}`\n"
+            f"- Manifest SHA-256: `{pinned.ref.manifest_sha256}`\n"
+            f"- E2 hits: {search_result.engine_result_count}; candidates: {len(search_result.batch.candidates)}\n"
+            f"- Context Pack: `{pack['status']}`; Included: {len(pack['Included'])}; Deferred: {len(pack['Deferred'])}\n"
+            f"- Scope budget (E3): `{budget_result['status']}`\n\n"
+            "| Scope | Status | Fragments | Roles |\n"
+            "|---|---:|---:|---|\n"
+            f"{scope_rows}\n\n"
             "Read-only verification: SQLite, manifest, sidecar tree, Vault tree, "
-            "both Git HEADs, and both checkout statuses unchanged.\\n"
+            "both Git HEADs, and both checkout statuses unchanged.\n"
         )
         with Path(summary_path).open("a", encoding="utf-8") as handle:
             handle.write(summary)
