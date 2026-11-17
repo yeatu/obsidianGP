@@ -17,6 +17,50 @@ def test_happy_path_includes_exact_raw_text_and_marks_untrusted(builder):
     validate_context_pack(pack)
 
 
+def test_budget_counts_included_and_provenance_but_not_coverage(builder):
+    from sfra_context_builder import ContextBuilder
+
+    class Utf8ByteCounter:
+        def count(self, text):
+            return len(text.encode("utf-8"))
+
+        def metadata(self):
+            return {
+                "name": "utf8-byte-test-counter",
+                "version": "1",
+                "encoding": "utf8-bytes",
+                "exact_for_encoding": True,
+                "exact_for_client_model": False,
+            }
+
+    counter = Utf8ByteCounter()
+    local_builder = ContextBuilder(counter)
+    focus_ids = [f"aspect_{index:03d}" for index in range(80)]
+    candidate = make_candidate(
+        "n1", "source material", matched_focus_ids=focus_ids
+    )
+
+    baseline = local_builder.build(make_request(), make_batch(candidate))
+    budget = baseline["Statistics"]["tokens_used"]
+    focus = [
+        {"id": aspect_id, "label": f"Long focus aspect label {index}"}
+        for index, aspect_id in enumerate(focus_ids)
+    ]
+    pack = local_builder.build(
+        make_request(budget_tokens=budget, focus=focus),
+        make_batch(candidate),
+    )
+
+    assert [item["node_id"] for item in pack["Included"]] == ["n1"]
+    assert pack["Statistics"]["tokens_used"] == budget
+    assert pack["Statistics"]["response_tokens_estimated"] > budget
+    assert len(pack["Coverage"]) == 80
+    assert not any(
+        item["code"] == "coverage_metadata_exceeds_budget"
+        for item in pack["Diagnostics"]
+    )
+
+
 def test_bad_content_hash_is_rejected_not_deferred(builder):
     bad = make_candidate("bad", "true text", content_hash="sha256:" + "0" * 64)
     pack = builder.build(make_request(), make_batch(bad))
@@ -69,6 +113,46 @@ def test_unresolved_required_dependency_is_partial_not_budget_limited(builder):
     assert pack["status"] == "partial"
     assert pack["Deferred"][0]["reason"] == "unresolved_required_dependency"
     assert pack["Statistics"]["coverage_available_ratio"] is None
+
+
+def test_known_node_with_unresolved_required_with_dependency_is_partial(builder):
+    a = make_candidate("A", "known A", required_with=["M"])
+    request = make_request(
+        known=[{"node_id": "A", "content_hash": a["content_hash"]}]
+    )
+
+    pack = builder.build(request, make_batch(a))
+
+    assert pack["status"] == "partial"
+    assert pack["Included"] == []
+    assert [item["node_id"] for item in pack["Known"]] == ["A"]
+    assert pack["Deferred"] == []
+    diagnostic = next(
+        item for item in pack["Diagnostics"]
+        if item["code"] == "unresolved_required_dependency"
+    )
+    assert diagnostic["details"]["unresolved_dependency_ids"] == ["M"]
+
+
+def test_known_node_with_unresolved_parent_context_is_partial(builder):
+    a = make_candidate(
+        "A", "known A", parent_node_id="M", parent_context_required=True
+    )
+    request = make_request(
+        known=[{"node_id": "A", "content_hash": a["content_hash"]}]
+    )
+
+    pack = builder.build(request, make_batch(a))
+
+    assert pack["status"] == "partial"
+    assert pack["Included"] == []
+    assert [item["node_id"] for item in pack["Known"]] == ["A"]
+    assert pack["Deferred"] == []
+    diagnostic = next(
+        item for item in pack["Diagnostics"]
+        if item["code"] == "unresolved_required_dependency"
+    )
+    assert diagnostic["details"]["unresolved_dependency_ids"] == ["M"]
 
 
 def test_focus_known_only_counts_available_but_not_included(builder):
