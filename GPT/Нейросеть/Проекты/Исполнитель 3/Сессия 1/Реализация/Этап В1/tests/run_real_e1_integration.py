@@ -104,6 +104,8 @@ def main() -> int:
         search_limit=30,
     )
     dependency_resolver = E1DependencyResolver(source_reader)
+    e1_commit_sha = _git_head(e1_root)
+    e3_commit_sha = _git_head(Path.cwd())
     request = parse_search_request({
         "query": query,
         "task": "E3 real E1/E2 snapshot integration verification",
@@ -122,12 +124,6 @@ def main() -> int:
         raise RuntimeError(f"E1 resolve_current_node failed: {current.get('status')}")
     if current["address"]["content_hash"] != candidate.content_hash:
         raise RuntimeError("E1 current address hash differs from E2 candidate hash")
-
-    dependency = dependency_resolver.resolve_node(candidate.node_id, pinned.ref)
-    if dependency is None:
-        raise RuntimeError("E1 current-node resolver could not produce an exact dependency candidate")
-    if dependency["content_hash"] != candidate.content_hash:
-        raise RuntimeError("Dependency resolver returned a different current Content Hash")
 
     pipeline = ContextIntegrationPipeline(
         pinned_snapshot=pinned,
@@ -161,6 +157,34 @@ def main() -> int:
             strict=True,
         )
     }
+
+    parent_relation = next(
+        (
+            item for item in scope_results["parent"]["fragments"]
+            if item["role"] == "parent_context"
+        ),
+        None,
+    )
+    dependency_request_id = (
+        parent_relation["node_id"] if parent_relation is not None else candidate.node_id
+    )
+    dependency = dependency_resolver.resolve_node(dependency_request_id, pinned.ref)
+    if dependency is None:
+        raise RuntimeError(
+            "E1 current-node resolver could not produce exact source for the real parent dependency"
+        )
+    dependency_expected = parent_relation or {
+        "node_id": candidate.node_id,
+        "content_hash": candidate.content_hash,
+        "source_path": candidate.source_path,
+        "document_hash": candidate.document_hash,
+        "index_generation": candidate.index_generation,
+    }
+    for key in ("node_id", "content_hash", "source_path", "document_hash", "index_generation"):
+        if dependency.get(key) != dependency_expected.get(key):
+            raise RuntimeError(
+                f"DependencyResolver {key} differs from the exact parent relation address"
+            )
 
     node_fragment = scope_results["node"]["fragments"][0]
     target_source = scope_results["node"]["target_source"]
@@ -207,12 +231,6 @@ def main() -> int:
         or document_fragment["index_generation"] != candidate.index_generation
     ):
         raise RuntimeError("E1 full document identity differs from the exact target node")
-    if dependency.get("source_path") != candidate.source_path:
-        raise RuntimeError("DependencyResolver source_path differs from the current target")
-    for key in ("content_hash", "document_hash", "index_generation"):
-        if dependency.get(key) != expected_identity[key]:
-            raise RuntimeError(f"DependencyResolver {key} differs from current E1 target")
-
     # Context Pack must preserve exact E1-backed source identity, not only its text.
     pack = pipeline_result.context_pack
     if not pack.get("Included"):
@@ -277,6 +295,15 @@ def main() -> int:
 
     report = {
         "status": "success",
+        "implementation": {
+            "e1_commit_sha": e1_commit_sha,
+            "e3_commit_sha": e3_commit_sha,
+            "e1_public_api": [
+                "sfra_indexer.read_source_scope",
+                "sfra_indexer.resolve_current_node",
+                "sfra_indexer.verify_state_directory",
+            ],
+        },
         "snapshot": {
             "snapshot_id": pinned.ref.snapshot_id,
             "vault_commit_sha": pinned.ref.vault_commit_sha,
@@ -299,9 +326,13 @@ def main() -> int:
             "current_node_status": current["status"],
             "dependency_resolved": True,
             "current_target_identity": expected_identity,
-            "dependency_identity": {
-                key: dependency[key]
-                for key in ("node_id", "content_hash", "source_path", "document_hash", "index_generation")
+            "dependency_resolution": {
+                "relationship": "parent_context" if parent_relation is not None else "same-node fallback (no parent in E1 scope)",
+                "requested_node_id": dependency_request_id,
+                "resolved_identity": {
+                    key: dependency[key]
+                    for key in ("node_id", "content_hash", "source_path", "document_hash", "index_generation")
+                },
             },
             "scopes": {
                 scope: {

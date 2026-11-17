@@ -1,159 +1,90 @@
 # E1 Source Scope API v1 — интеграционный контракт E1/E3
 
-**Статус:** описание синхронизировано с публичным API, реализованным в ветке E1 PR #11. E3 потребляет только публичные экспорты \`sfra_indexer.read_source_scope\` и \`sfra_indexer.resolve_current_node\`. Production end-to-end считается неподтверждённым до отдельного прогона на согласованном snapshot.
+**Статус:** согласованный consumer contract для публичных экспортов \`sfra_indexer.read_source_scope\` и \`sfra_indexer.resolve_current_node\`. Реальную E1/Vault интеграцию доказывает только отдельный сквозной прогон на согласованном snapshot, не fixtures.
 
-## 1. Публичные операции
+## 1. Публичные сигнатуры
 
 \`\`\`python
 read_source_scope(
-    db_path,
-    vault_root,
-    node_id,
-    expected_hash,
-    *,
-    scope,
-    snapshot_id,
+    db_path, vault_root, node_id, expected_hash,
+    *, scope, snapshot_id,
 ) -> SourceScopeResult
 
 resolve_current_node(
-    db_path,
-    node_id,
-    *,
-    snapshot_id,
+    db_path, node_id, *, snapshot_id,
 ) -> CurrentNodeAddress
 \`\`\`
 
-Разрешённые \`scope\`: \`node\`, \`parent\`, \`neighbors\`, \`document\`.
+Scopes: \`node\`, \`parent\`, \`neighbors\`, \`document\`.
 
-У \`read_source_scope\` нет \`budget_tokens\`. E1 возвращает полный проверенный текст; токенный бюджет рассчитывает и применяет E3. E1 не выполняет Git fetch/checkout, не разрешает branch names и не переключает состояние.
+E1 не принимает token budget. E1 возвращает полный verified source text. E3 создаёт SnapshotRef, закрепляет checkout refs, проверяет manifest/SQLite и передаёт opaque \`snapshot_id\` в каждый E1 call. E1 echo-ит этот token, не выполняя Git fetch/checkout/branch resolution.
 
-\`resolve_current_node\` возвращает текущий однозначный адрес и producer Content Hash без \`raw_text\`. E3 после этого обязан выполнить exact \`read_source_scope(scope="node", expected_hash=...)\`. Fuzzy matching и historical fallback запрещены.
+\`resolve_current_node\` возвращает только актуальный адрес и Content Hash, не raw_text. E3 затем делает exact node scope read по полученному hash. Запрещены fuzzy matching и historical fallback.
 
-## 2. Snapshot binding
-
-E3 до первого E1 вызова формирует \`SnapshotRef\`:
-
-- \`vault_commit_sha\` — фактический HEAD чистого immutable Vault checkout;
-- \`sidecar_commit_sha\` — фактический HEAD чистого checkout ветки \`sfra-state\`;
-- \`manifest_sha256\` — SHA-256 точных байтов \`state/manifest.json\`.
-
-Проверки E3:
-- \`SnapshotRef.vault_commit_sha == manifest.source_commit\` (либо согласованный \`vault_commit_sha\`) == actual Vault HEAD;
-- sidecar checkout действительно находится на ветке \`sfra-state\`; recorded sidecar SHA равен его HEAD;
-- E1 \`verify_state_directory()\` успешно проверяет manifest/SQLite/schema/FK/integrity;
-- SHA SQLite равен \`manifest.database_sha256\`;
-- SHA manifest считается по raw bytes, а не по повторно сериализованному JSON;
-- оба checkout чистые; Vault root лежит внутри pinned Vault repository.
-
-\`snapshot_id\` — \`SnapshotRef.snapshot_id\`. E3 передаёт его в каждый \`read_source_scope()\` и \`resolve_current_node()\`. E1 возвращает его без изменений в каждом success/error result. Echo подтверждает корреляцию запроса, но не заменяет проверки Git/manifest, которые выполняет E3.
-
-## 3. Нативный response shape E1
+## 2. Native result shapes
 
 ### SourceScopeResult
 
-Результат имеет публичный \`to_dict()\` shape:
+\`to_dict()\` содержит:
+- \`snapshot_id\`, \`scope\`, \`status\`;
+- \`fragments\` — exact NodeRecord dictionaries для node/parent/neighbors; для document scope пустой список;
+- \`anchor\` — verified target NodeRecord;
+- \`parent\`, \`previous\`, \`next\` — verified relation records или null;
+- \`document\` — полный DocumentRecord для document scope либо null;
+- \`error\` — безопасная диагностика отказа.
 
-- \`snapshot_id\`;
-- \`scope\`;
-- \`status\`;
-- \`fragments\`: список \`NodeRecord.to_dict()\` для scope \`node\`, \`parent\`, \`neighbors\`; для \`document\` пустой список;
-- \`anchor\`: exact target \`NodeRecord\` при success;
-- \`parent\`, \`previous\`, \`next\`: соответствующий current relation record или \`null\`;
-- \`document\`: полный \`DocumentRecord.to_dict()\` для scope \`document\`, иначе \`null\`;
-- \`error\`: код и безопасное сообщение при отказе.
-
-На любом non-ok статусе \`fragments\` пуст, \`anchor/parent/previous/next/document\` равны \`null\`. Частичный source payload запрещён.
+Для любого non-ok result source records не возвращаются: \`fragments=[]\`, anchor/relation/document fields null.
 
 ### NodeRecord
 
-Включает как минимум:
-- \`node_id\`, \`content_hash\`, \`source_path\`;
-- \`node_type\`, \`parent_node_id\`, \`heading_path\`;
-- \`raw_text\`, \`line_start\`, \`line_end\`;
-- \`char_start\`, \`char_end\`, \`byte_start\`, \`byte_end\`;
-- \`source_sha256\`, \`document_hash\`, \`index_generation\`;
-- \`metadata\`.
+Содержит producer Node ID, Content Hash, source path, node type, parent Node ID, heading path, raw_text, line/char/byte coordinates, source/document hash, document-local index generation и metadata.
 
-\`document_hash\` и \`source_sha256\` соответствуют \`documents.source_sha256\`; \`index_generation\` — \`documents.generation\` этого \`source_path\`. Node content hash — SHA-256 точных UTF-8 байтов \`raw_text\`.
+Node Content Hash = SHA-256 точных UTF-8 байтов raw_text. \`document_hash\`/\`source_sha256\` соответствуют полному исходному документу; \`index_generation\` локален для конкретного source_path.
 
 ### DocumentRecord
 
-Включает:
-- \`source_path\`, \`source_sha256\`, \`document_hash\`, \`index_generation\`;
-- \`size_bytes\`, полный \`raw_text\`;
-- \`anchor_node_id\`, \`anchor_content_hash\`.
-
-Для \`document\` scope E1 возвращает полный оригинальный Markdown. \`document_hash == source_sha256 == SHA-256(raw_text UTF-8)\`. Документ не реконструируется из node versions и не обрезается.
+Содержит полный Markdown raw_text, source_path, source/document hash, document-local generation, UTF-8 size_bytes и anchor identity. Документ не реконструируется из node versions и не обрезается.
 
 ### CurrentNodeAddress
 
-Публичный \`to_dict()\` shape плоский:
-- \`snapshot_id\`, \`status\`;
-- \`node_id\`, \`content_hash\`, \`source_path\`;
-- \`document_hash\`, \`index_generation\`;
-- \`error\` при отказе.
+Содержит snapshot_id, status, node_id, content_hash, source_path, document_hash, index_generation и error. Не содержит raw_text. При non-ok все address поля пусты.
 
-Все address-поля \`null\` при non-ok. \`raw_text\` не возвращается.
+## 3. Семантика
 
-## 4. Семантика scope
-
-| Scope | Публичные поля | Семантика |
+| Scope | Records | Условие |
 |---|---|---|
-| \`node\` | \`anchor\`, \`fragments=[anchor]\` | Текущий exact structural node |
-| \`parent\` | \`anchor\`, optional \`parent\`, fragments target + parent | Непосредственный parent того же документа и поколения; root node возвращает только anchor |
-| \`neighbors\` | \`anchor\`, optional \`previous\`, \`next\`, fragments target + immediate siblings | Соседи под тем же parent, упорядочены по source coordinates; не descendants |
-| \`document\` | \`anchor\`, \`document\`, \`fragments=[]\` | Полный исходный Markdown, содержащий target |
+| node | anchor + [anchor] | exact current target |
+| parent | anchor + optional parent, fragments target + parent | immediate parent того же документа/generation; root возвращает только target |
+| neighbors | anchor + optional previous/next immediate siblings | тот же parent, source order, не descendants |
+| document | anchor + full document, fragments=[] | исходный Markdown целиком |
 
-E3 нормализует named relations в роли \`target\`, \`parent_context\`, \`previous_neighbor\`, \`next_neighbor\`, \`document\`. Он проверяет, что native \`fragments\` содержат те же Node IDs/hashes, что и named relation fields; отдельно сверяет parent identity, общий parent у siblings, source order и уникальность Node IDs.
+E3 сопоставляет named relation fields с fragments и независимо проверяет target/parent/sibling IDs, общий parent, source order, уникальность Node IDs и provenance всех fragments.
 
-## 5. Целостность и статусы
+## 4. Snapshot binding
 
-E1 отвечает за:
-- один SQLite connection и одну read transaction на scope;
-- DB-only integrity preflight;
-- current active/unambiguous records;
-- безопасность source path и чтения Vault;
-- document SHA и точные source slices/coordinates;
-- связи parent/siblings внутри одного документа и поколения;
-- no partial fragments при отказе.
+E3 проверяет:
+- actual Vault HEAD == manifest \`source_commit\` (или \`vault_commit_sha\`);
+- actual sidecar HEAD относится к branch \`sfra-state\`;
+- manifest bytes hash рассчитан по точным байтам;
+- E1 public \`verify_state_directory()\` успешно проверил sidecar state;
+- SQLite hash совпадает с manifest;
+- checkout чистые, Vault root лежит внутри pinned Vault checkout.
 
-E3 дополнительно сверяет:
-- expected target node + content hash;
-- echo snapshot_id и scope;
-- \`source_path\`, \`source_sha256/document_hash\`, \`index_generation\` между native results;
-- SHA-256 raw text фрагмента и полного документа;
-- relation identity/order в нормализованном ответе.
+Один SnapshotRef проходит через SearchAdapter, DependencyResolver и все SourceReader calls. Document-local E1 generation не используется вместо Vault snapshot identity и не сравнивается между разными source_path.
 
-Текущие E1 status values: \`ok\`, \`stale_source\`, \`deleted\`, \`ambiguous\`, \`not_found\`, \`invalid_request\`, \`integrity_error\`. E3 сохраняет эти отказы как явные статусы; ошибки контракта и snapshot mismatch также fail closed.
+## 5. Budget и policy metadata
 
-## 6. Token budget — только E3
+Token budget полностью принадлежит E3:
+- E1 возвращает полный текст;
+- E3 считает его через B1 TokenCounterProtocol;
+- превышение бюджета означает defer/reject целого контекста, без truncation и partial source fragment.
 
-- E1 никогда не принимает и не применяет token budget.
-- E1 возвращает полный точный текст каждого fragment/document.
-- E3 вызывает существующий \`TokenCounterProtocol\` на полном результате.
-- При превышении бюджета E3 возвращает \`budget_exceeded\` с пустыми fragments либо откладывает atomic group в Context Builder.
-- E3 не обрезает \`raw_text\` и не выдаёт partial excerpt за полный источник.
+E1 возвращает только реально существующие NodeRecord.metadata. При отсутствии \`preservation\`, \`required_with\`, \`parent_context_required\` E3 применяет B1 defaults \`normal / () / False\`, маркирует их как policy defaults и не выдаёт за source annotations.
 
-## 7. Dependency metadata
+## 6. Ошибки и границы
 
-E1 может передавать значения из реально существующего \`NodeRecord.metadata\`. Не следует требовать от структурного индексатора специальных policy-полей, если их источник не определён отдельным контрактом.
+E1 fail-closed для stale, ambiguous, deleted, not_found, invalid_request, integrity_error и не возвращает partial fragments. E3 дополнительно fail-closed для snapshot mismatch, malformed/missing provenance, wrong relation identity/order, content/document hash mismatch, budget_exceeded и E1 transport errors.
 
-Если реальные значения присутствуют, E3 может использовать:
-- \`preservation\`;
-- \`required_with\`;
-- \`parent_context_required\`.
-
-При отсутствии E3 применяет B1 defaults:
-- \`preservation = "normal"\`;
-- \`required_with = ()\`;
-- \`parent_context_required = False\`.
-
-E3 помечает defaults как policy defaults, а не source annotations. Поиск, excerpt и текст узла не являются источниками этих значений.
-
-## 8. Разделение ответственности
-
-- E1: текущая структурная идентичность, атомарное source read, проверка текста/хешей/путей/координат/relations, echo \`snapshot_id\`.
-- E3: закрепление Git HEADs, проверка \`sfra-state\` ref и Vault commit against manifest, raw manifest digest, SnapshotRef, token counter/budget, dependency policy defaults, Context Pack.
-- E2: только поиск и ranking через существующий SearchAdapter boundary.
-
-Ни одна из сторон не изменяет SQLite schema v2 в рамках этого интеграционного контракта.
+E1: SQLite read transaction + source verification + structural relations.  
+E2: retrieval/ranking only.  
+E3: Git/manifest/SnapshotRef binding + dependency policy + token budget + Context Pack.
