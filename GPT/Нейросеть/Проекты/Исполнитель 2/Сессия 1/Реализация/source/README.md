@@ -197,21 +197,26 @@ python -m pytest
 
 **Интеграционный блокер:** текущий Node v1 от Исполнителя 1 не содержит обязательного для схемы Исполнителя 3 `document_hash`. Модуль принимает его как опциональное расширение и честно возвращает `null`, если поле не передано. Нельзя подделывать хеш полного документа по одному узлу. До интеграции Исполнители 1 и 3 должны согласовать передачу/nullable-правило для этого поля.
 
-## Ограничения текущего прототипа
+## Ограничения и фактическая интеграционная проверка
 
-- Добавлен read-only адаптер фактической схемы SQLite Исполнителя 1 и одноразовый in-memory runtime. Автотесты используют тестовую SQLite-базу с теми же таблицами/полями; фактическая база, созданная `index_vault` на полном Vault, ещё должна быть прогнана новым runtime через Actions.
-- `pymorphy3` — основной нормализатор для штатной установки. В текущей изолированной среде без доступа к PyPI автоматические тесты выполняются с резервным NLTK Snowball. Его стемминг грубее лемматизации pymorphy3; отдельный workflow должен проверить основной путь при установке зависимостей.
-- Генерация кандидатов сущностей намеренно может давать ложноположительные подсказки: candidate никогда не становится подтверждённой сущностью автоматически.
-- Модуль не определяет достоверность, каноничность, отношения или фактический смысл упоминаний.
-- Модуль не строит Context Pack, не измеряет токеновый бюджет и не предоставляет MCP/API-сервер.
+- Пакет проверен не только на искусственной SQLite: одноразовый workflow E2 успешно выполнился на сохранённой структурной базе Исполнителя 1 из ветки sfra-state.
+- Запуск Actions: https://github.com/yeatu/obsidianGP/actions/runs/43997334585.
+- В проверенном снимке было 66 активных документов и 9 080 активных структурных узлов. SQLite quick_check — ok; SHA-256 базы совпал с manifest.
+- В workflow установлен pymorphy3 2.0.6. Запросы «реанимации» и «реанимацию» нормализованы к «реанимация» и вернули три одинаковые пары node_id + content_hash.
+- По каждой из трёх пар выполнен отдельный get-source. Полный raw_text возвращён, SHA-256 его точных UTF-8 байтов совпал с content_hash.
+- 57 автоматических тестов прошли в том же Actions run, включая регрессионный тест пустого диапазона строк E1.
+- Набор из 66 файлов Vault имел одинаковый SHA-256 digest до и после выполнения; git status и git diff для ГП остались чистыми.
+- SHA структурной SQLite и HEAD sfra-state не изменились. В RUNNER_TEMP не обнаружено файлов постоянного поискового индекса.
 
+Особенность контракта E1: пустой исходный интервал строк может иметь координаты line_end = line_start - 1 (например, line_start=1, line_end=0). Адаптер сохраняет координаты без коррекции только при пустом raw_text. Непустые фрагменты с некорректными координатами по-прежнему отклоняются. Структурная база E1 не модифицируется.
+
+Кандидаты сущностей намеренно могут давать ложноположительные подсказки: candidate никогда не становится подтверждённой сущностью автоматически. Модуль не определяет достоверность, каноничность, отношения или фактический смысл упоминаний. Модуль не строит Context Pack, не измеряет токеновый бюджет и не предоставляет MCP/API-сервер.
 
 ### API for Executor 3
 
 The search adapter contract deliberately separates search hints from source retrieval:
 
-- `search()` returns a bounded `excerpt` with `node_id`, `source_path`, `heading_path`, line coordinates, `content_hash`, `match_type`, `match_reasons`, and `relevance: {tier, bm25}`.
-- `get_node(node_id, content_hash)` returns the complete, exact-version `raw_text`, plus `index_generation` and `document_hash`. It never returns `excerpt` in place of source text.
-- `document_hash` is `null` when absent from the importer payload. It is not fabricated from one structural node. The structural indexer must supply the whole-document SHA-256, or the Executor 3 schema must permit null until that field is available.
+- search() returns a bounded excerpt with node_id, source_path, heading_path, line coordinates, content_hash, match_type, match_reasons, and relevance with tier and bm25.
+- get_node(node_id, content_hash) returns the complete, exact-version raw_text, plus index_generation and document_hash. It never returns excerpt in place of source text.
+- document_hash is null when absent from the importer payload. It is not fabricated from one structural node. The E1 structural index supplies the whole-document SHA-256 as documents.source_sha256 in the tested integration snapshot.
 
-The current automated suite has **47 passing tests**. It uses artificial Node v1 JSONL fixtures; no production Vault export has been imported yet.
