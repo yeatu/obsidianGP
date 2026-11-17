@@ -345,3 +345,22 @@ def test_read_source_request_validates_scope_hash_snapshot_and_budget() -> None:
             budget_tokens=True,  # type: ignore[arg-type]
         )
     assert bad_budget.value.code == "invalid_budget"
+
+
+
+def test_read_source_service_echoes_snapshot_id_on_fail_closed_errors() -> None:
+    response = source_response(status="deleted")
+    response["error"] = {
+        "code": "deleted",
+        "message": "The source was not returned.",
+    }
+    reader = FakeSourceReader(response)
+
+    result = ReadSourceService(reader).read(source_read_request())
+
+    assert result.status == "deleted"
+    assert result.snapshot_id == SNAPSHOT.snapshot_id
+    assert result.snapshot == SNAPSHOT
+    assert result.fragments == ()
+    assert result.error is not None
+    assert result.error.code == "deleted"
