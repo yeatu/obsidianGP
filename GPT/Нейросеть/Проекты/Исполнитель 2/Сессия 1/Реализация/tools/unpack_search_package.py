@@ -78,7 +78,7 @@ def main() -> int:
         ignore=shutil.ignore_patterns(".git", ".pytest_cache", "__pycache__", "*.pyc", "*.pyo"),
     )
     files = sorted(
-        str(p.relative_to(args.destination)).replace("\\\\", "/")
+        str(p.relative_to(args.destination)).replace("\\", "/")
         for p in args.destination.rglob("*") if p.is_file()
     )
     manifest = {
@@ -92,7 +92,7 @@ def main() -> int:
         "files": files,
     }
     (args.destination / "SOURCE_ARCHIVE_PROVENANCE.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n",
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print(json.dumps({
