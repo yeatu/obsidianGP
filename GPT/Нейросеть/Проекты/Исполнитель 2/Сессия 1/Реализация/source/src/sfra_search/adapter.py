@@ -53,22 +53,14 @@ def validate_node(node: dict[str, Any]) -> dict[str, Any]:
     heading_path = node["heading_path"]
     if not isinstance(heading_path, list) or any(not isinstance(x, str) for x in heading_path):
         raise ImportValidationError("heading_path must be an array of strings")
+    for key in ("line_start", "line_end"):
+        if isinstance(node[key], bool) or not isinstance(node[key], int) or node[key] < 1:
+            raise ImportValidationError(f"{key} must be a positive 1-based integer")
+    if node["line_end"] < node["line_start"]:
+        raise ImportValidationError("line_end must be greater than or equal to line_start")
     raw_text = node["raw_text"]
     if not isinstance(raw_text, str):
         raise ImportValidationError("raw_text must be a string")
-    line_start = node["line_start"]
-    line_end = node["line_end"]
-    if isinstance(line_start, bool) or not isinstance(line_start, int) or line_start < 1:
-        raise ImportValidationError("line_start must be a positive 1-based integer")
-    if isinstance(line_end, bool) or not isinstance(line_end, int) or line_end < 0:
-        raise ImportValidationError("line_end must be a non-negative 1-based line boundary")
-    # Empty source spans have no inclusive line. E1 represents them as
-    # line_end == line_start - 1 (for an empty file root: 1, 0).
-    # Preserve this exact producer coordinate; do not invent a fake line.
-    if line_end < line_start and not (raw_text == "" and line_end == line_start - 1):
-        raise ImportValidationError(
-            "line_end may precede line_start only for an empty source span"
-        )
     content_hash = node["content_hash"]
     if not isinstance(content_hash, str) or not HASH_RE.fullmatch(content_hash):
         raise ImportValidationError("content_hash must use sha256:<64 lowercase hex characters>")

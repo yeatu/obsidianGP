@@ -232,33 +232,3 @@ def test_get_source_cli_resolves_exact_pair(tmp_path, capsys):
     assert payload["node_id"] == node_id
     assert payload["content_hash"] == content_hash
     assert payload["raw_text"] == "Остановка кровообращения произошла в больнице."
-
-
-def test_empty_source_span_preserves_executor1_zero_end_line(tmp_path):
-    db_path = tmp_path / "structure.sqlite3"
-    create_executor1_database(db_path)
-    empty_hash = calculate_content_hash("")
-    connection = sqlite3.connect(db_path)
-    connection.execute(
-        """UPDATE structural_nodes
-           SET line_start=1, line_end=0, raw_text='', content_hash=?
-           WHERE node_id='node_executor1_root'""",
-        (empty_hash,),
-    )
-    connection.commit()
-    connection.close()
-    before = sha256_file(db_path)
-
-    nodes, summary = load_current_nodes(db_path)
-    root = next(node for node in nodes if node["node_id"] == "node_executor1_root")
-    assert root["line_start"] == 1
-    assert root["line_end"] == 0
-    assert root["raw_text"] == ""
-    assert root["content_hash"] == empty_hash
-
-    source = get_source_node(db_path, "node_executor1_root", empty_hash)
-    assert source is not None
-    assert source["line_start"] == 1
-    assert source["line_end"] == 0
-    assert source["raw_text"] == ""
-    assert sha256_file(db_path) == before
