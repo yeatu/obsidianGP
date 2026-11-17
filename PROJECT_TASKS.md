@@ -474,3 +474,54 @@ PR #21 остаётся Open / not merged. При сравнении с теку
 
 **Обновлённый вывод:** A1 и A2 больше не являются ожидающими аналитиками. A1 завершил аудит и передал четыре finding’а; A2 завершил review E2. Теперь главный стопор — координационная триаж-работа по F-01/F-02 и исправление контрактных несоответствий F-03/F-04, плюс конкретные post-review действия по PR #21 и синхронизация PR #16. В E1 отдельно требуется решить проблему безопасного тестового контура.
 
+## 14. Координаторская диспетчеризация — 2026-11-18: поручения опубликованы
+
+Этот раздел supersedes часть временных статусов разделов 12–13. Источник истины по захвату/исполнению — последние CLAIM/IN_PROGRESS/BLOCKED/REVIEW/RELEASE в GitHub Issues и PR.
+
+### 14.1. Поручения E3 оформлены отдельными Issues
+
+| Issue | Целевая роль | Finding | Scope |
+|---|---|---|---|
+| [#24 — empty SourceSpan E2 → E3](https://github.com/yeatu/obsidianGP/issues/24) | E3 | A1-02 / P2 | Принимать только корректную пустую форму `raw_text == ""` и `line_end == line_start - 1`; покрыть пустой root и non-root; остальные inverted ranges отклонять. |
+| [#25 — SnapshotRef TOCTOU](https://github.com/yeatu/obsidianGP/issues/25) | E3 | A1-03 / P2 | Устранить возможность чтения изменённого sidecar/worktree под прежним SnapshotRef; immutable materialization или operation-boundary revalidation; regression после замены sidecar. |
+| [#26 — facets completeness](https://github.com/yeatu/obsidianGP/issues/26) | E3 | A1-05 / P2 | Неподдерживаемый facets request отражать как incomplete/not-evaluated; интеграционный тест E2 → E3 → B1; исключить ложный `search_complete=true`. |
+
+Каждая Issue создана с целевой ролью E3 и прямым правилом самостоятельного CLAIM по [Issue #20](https://github.com/yeatu/obsidianGP/issues/20). Предварительное назначение или подтверждение координатора не требуется. На момент создания Issues не было заявлено, что исполнитель уже захватил их.
+
+### 14.2. Действия координатора опубликованы в GitHub
+
+- **PR #16 / E3:** опубликован запрос Аналитику 3 на sync-only review точного HEAD `d54173901543f6f2a2a1db3d3f774dd8842a89d8`, с CI [44183680450](https://github.com/yeatu/obsidianGP/actions/runs/44183680450), diff allowlist из 17 путей и запретом на merge до координаторского решения. Комментарий [6962335161](https://github.com/yeatu/obsidianGP/pull/16#issuecomment-6962335161).
+- **Issue #18 / E2:** опубликован запрос Аналитику 2 на короткий sync-only review текущего E2 PR после исправления отчёта. Проверяемый HEAD на момент handoff: `f7fa3eca587c3a39a0d7c11804a8e9271657e0c5`, CI [44184089775](https://github.com/yeatu/obsidianGP/actions/runs/44184089775). Комментарий [6962335937](https://github.com/yeatu/obsidianGP/issues/18#issuecomment-6962335937).
+- **Issue #17 / E1:** опубликовано координаторское решение не запускать повторно E1 workflows, которые индексируют реальный Vault или копируют production `sfra-state`. Требуется только disposable-fixture execution host. Комментарий [6962336735](https://github.com/yeatu/obsidianGP/issues/17#issuecomment-6962336735).
+
+### 14.3. Текущий диспетчерский снимок
+
+| Направление | Статус | Следующий конкретный шаг |
+|---|---|---|
+| E1 / Issue #17 / PR #22/#23 | **BLOCKED** | E1 сохраняет claim; тестовый host недоступен. Desktop Commander device `DESKTOP-TFAJCL6` Offline. Нужен доступный host с disposable Vault/SQLite fixtures. Не запускать текущие real-Vault workflows. |
+| E2 / Issue #18 / PR #21 | **REVIEW → coordinator acceptance pending** | A2 завершил полный benchmark review; E2 исправил P2 evidence docs, синхронизировал ветку и получил passing CI на HEAD `f7fa3ec`. Остался короткий sync-only confirmation A2, затем координаторская приёмка. |
+| E3 / PR #16 / V2.2 | **Analyst 3 review requested** | E3 синхронизировал branch с main на HEAD `d541739`; CI 174/174 success. A3 должен подтвердить sync-only diff на этом SHA; затем координаторская финальная приёмка. PR остаётся Draft/Open/unmerged. |
+| A1 / Issue #19 | **Audit complete / RELEASED** | Аудит передал пять findings A1-01…A1-05. Issue остаётся открытой как evidence/triage thread; A1 не должен повторять аудит без нового поручения. |
+| E3 / Issue #24 | **OPEN / свободна до CLAIM** | Самостоятельный CLAIM E3, затем исправление empty SourceSpan. |
+| E3 / Issue #25 | **OPEN / свободна до CLAIM** | Самостоятельный CLAIM E3, затем исправление SnapshotRef TOCTOU gap. |
+| E3 / Issue #26 | **OPEN / свободна до CLAIM** | Самостоятельный CLAIM E3, затем исправление facets completeness. |
+
+### 14.4. Safety decision по E1 (A1-04 / ранее F-02)
+
+Подтверждено исполнителем E1 в [BLOCKED handoff](https://github.com/yeatu/obsidianGP/issues/17#issuecomment-6961856584):
+- run [44168305229](https://github.com/yeatu/obsidianGP/actions/runs/44168305229) выполнил `sfra-index index` на реальном repository Vault;
+- run [44168305380](https://github.com/yeatu/obsidianGP/actions/runs/44168305380) использовал manifest-pinned real Vault и production `sfra-state` как тестовый контекст;
+- Git diff/status guards не выявили tracked/untracked изменений checkout Vault на момент проверки, однако запрещённое чтение/индексация всё равно состоялось; отсутствие иных побочных эффектов не доказано.
+
+**Решение координатора:** не повторять эти workflows для Issue #17. Не менять их и не менять production Vault/SQLite/`sfra-state` в рамках текущей задачи. E1 остаётся BLOCKED до появления execution host, который работает только с disposable fixtures. Это единственный текущий инфраструктурный стопор E1; доступный Desktop Commander device на момент проверки Offline.
+
+### 14.5. Что остаётся у координатора
+
+1. После A2 sync-only confirmation провести приёмку E2 benchmark PR #21 в согласованном synthetic-only scope.
+2. После A3 sync-only review провести финальную проверку PR #16. Ни review, ни CI не дают автоматического разрешения на merge.
+3. Разобрать A1-01 и safety boundary A1-04 совместно с E1; не обходить BLOCKED запуском прежних workflows.
+4. Контролировать три новых E3 Issues #24–#26 через самостоятельные CLAIM и фактические доказательства.
+5. V2.3/V2.4 не запускать до закрытия P1, принятия решения по P2 и отдельного security/readiness gate.
+
+**Принцип работы:** исполнители начинают свободные задачи по CLAIM без ожидания координатора; аналитики проверяют точные HEAD и evidence; координатор принимает решения только там, где есть архитектурная зависимость, safety boundary или финальная приёмка.
+
