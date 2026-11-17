@@ -99,3 +99,39 @@ CI workflow: `.github/workflows/sfra-e3-v2-1-application-tests.yml`. Он зап
 ## Security
 
 Репозиторий и GitHub Issues/comments публичные. Публикация raw_text, excerpts, quotes, titles, paths и source fragments запрещена по умолчанию. V2.1 не содержит механизма сериализации или внешней публикации содержимого Vault.
+
+
+## Фактические результаты проверки — 2026-11-17
+
+Проверенный implementation HEAD: `9b57c68a4d74240432a530f941f38e06c1100d3b`.
+
+- [V2.1 application service CI 44047430145](https://github.com/yeatu/obsidianGP/actions/runs/44047430145): success — B1 **45 passed**, C1 **56 passed**, V2.1 **18 passed**; transport dependency guard passed.
+- [C1 regression CI 44047430129](https://github.com/yeatu/obsidianGP/actions/runs/44047430129): success — B1 **45 passed**, C1 **56 passed**.
+- [Real E1/E2/E3 + V2.1 integration 44047430210](https://github.com/yeatu/obsidianGP/actions/runs/44047430210): success.
+- Machine-readable artifact: [ID 14311932536](https://github.com/yeatu/obsidianGP/actions/runs/44047430210), ZIP SHA-256 `sha256:804d99db6b9fb447bc8b854e10fb8d9aa9a86ffaeedcdf0676596c22b341419e`.
+
+### Real application-service exercise
+
+The real runner now invokes `SearchVaultService.search()` over the actual `ContextIntegrationPipeline` and `ReadSourceService.read()` over the actual E1 SourceReader. The results recorded in artifact 14311932536:
+
+| Scope | Status | Typed fragments |
+|---|---|---|
+| node | ok | 1 target |
+| parent | ok | 1 target + 1 parent_context |
+| neighbors | ok | 1 target + 1 next_neighbor |
+| document | ok | 1 document |
+
+All four ReadSourceResult values echo the same SnapshotRef. SearchVaultService returns the existing ContextIntegrationResult and preserves Context Pack status `budget_limited`. ReadSourceService document budget test returns `budget_exceeded`, no fragments, budget owner E3.
+
+### Pinned snapshot and read-only guards
+
+- E3 implementation: `9b57c68a4d74240432a530f941f38e06c1100d3b`.
+- E1 API: `a9ba3445d4a7bd4b6e6a9806770b75b4f16640ef`.
+- Vault commit: `2a3c54fa7a9e910f4c9621c8fe00f41a061fc158`.
+- sidecar commit: `fb0b45ae0e5043e342c790d43e2b341ca65d7f2b`.
+- manifest SHA-256: `sha256:3d5eacf5fc2f7f927af8f591f317ea95d56d0c0f53de1bc61cb54d23677fd072`.
+- SQLite SHA-256: `sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674`.
+
+The original E3 real negative matrix also remained green: stale hash, not_found, corrupt source, ambiguous/deleted disposable lifecycle, snapshot echo/request mismatch, document hash mismatch and generation mismatch all fail closed. Production SQLite, manifest, sidecar tree and Vault tree remained unchanged; HEADs and clean checkout guards passed.
+
+**Interpretation:** technical and CI gates for V2.1 are demonstrated on the above HEAD. This is an implementation handoff, not Analyst 3 acceptance. PR #14 remains Draft and unmerged.
