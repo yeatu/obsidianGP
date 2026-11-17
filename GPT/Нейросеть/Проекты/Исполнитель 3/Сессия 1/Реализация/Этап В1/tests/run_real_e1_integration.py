@@ -141,7 +141,15 @@ def _search_fixture_node(search_structural_database, database_path, query, expec
     )
 
 
-def _run_disposable_e1_lifecycle_cases(source_api, pinned, token_counter, index_vault, search_structural_database):
+def _run_disposable_e1_lifecycle_cases(
+    source_api,
+    pinned,
+    token_counter,
+    index_vault,
+    parse_markdown,
+    content_hash,
+    search_structural_database,
+):
     """Use E1's public indexer and reader APIs only; never modify E1 SQLite with SQL."""
     reports = {}
 
@@ -522,7 +530,8 @@ def main() -> int:
 
     from sfra_search.runtime import search_structural_database as _search_fixture
     disposable_lifecycle = _run_disposable_e1_lifecycle_cases(
-        source_api, pinned, token_counter, index_vault, _search_fixture
+        source_api, pinned, token_counter, index_vault,
+        parse_markdown, content_hash, _search_fixture
     )
 
     not_found_id = "node_00000000-0000-4000-8000-000000000001"
