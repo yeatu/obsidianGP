@@ -65,7 +65,7 @@
 
 | ID | Исполнитель | Работа | Статус | Что блокирует / следующий шаг |
 |---|---|---|---|---|
-| SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **ANALYST_COMPLETE_UNREVIEWED** | Проверенный финальный PR HEAD `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5` (implementation tree `433a474147b9353afdd4dee4af205a79dc21253d`); E1 scope завершён (`ANALYST_SCOPE_COMPLETE`), передан координатору на пакетный аудит. PR #11 открыт, mergeable, не объединён. |
+| SFRA-E1-01 | E1 | Единый атомарный Source Scope API + current-node resolver | **ANALYST_COMPLETE_UNREVIEWED** | Проверенный финальный PR HEAD `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5` (implementation tree `433a474147b9353afdd4dee4af205a79dc21253d`); E1 scope завершён (`ANALYST_SCOPE_COMPLETE`). PR #11 открыт, не объединён; mergeability требует повторной проверки после новых registry-only коммитов `main`. |
 | SFRA-E3-01 | E3 | C1: SourceReader, SearchAdapter, dependency metadata и E1 API adapter | **WAITING_FOR_IMPLEMENTATION** | Response adapter E1/E3 и real smoke уже работают; остаются E3-side parent/sibling cross-checks, adversarial tests, очистка resolver diagnostics между запусками, обновление README/PR description и синхронизация ветки с `main`. B1 policy defaults разрешены как defaults, не как source annotations. |
 | SFRA-E3-02 | E3 | Реальная интеграция E2 → E3 → E1 → Context Pack | **WAITING_FOR_ANALYST** | Manual run `44020916667` успешен на E3 HEAD `dfe8877` и E1 HEAD `a5456c4`; аналитик должен проверить доказательства. Итог был `budget_limited` (1 included, 2 deferred), а не `complete`; финальная приёмка зависит от закрытия C1 integrity checks. |
 | SFRA-E2-01 | E2 | Active-only фильтрация и интеграционная проверка | **COORDINATOR_ACCEPTED_NOT_MERGED** | Повторная реализация не требуется; PR #7 ещё открыт. |
@@ -81,8 +81,8 @@
 - [PR #11 — E1 atomic Source Scope API and current-node resolver](https://github.com/yeatu/obsidianGP/pull/11)
 - Финальный проверенный PR HEAD: `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5`.
 - Implementation tree: `433a474147b9353afdd4dee4af205a79dc21253d`; финальный HEAD дополнительно содержит merge-sync с актуальным `main` и аналитическую запись.
-- Состояние: open, not merged, mergeable.
-- После финальной синхронизации PR (`f9b0ede`) `main` получил дополнительные коммиты, затрагивающие только `PROJECT_TASKS.md`; E1 implementation files не менялись. GitHub API на момент сверки сообщает `mergeable=true`, `mergeable_state=clean`.
+- Состояние: open, not merged.
+- После финальной синхронизации PR (`f9b0ede`) `main` получил дополнительные коммиты, затрагивающие только `PROJECT_TASKS.md`; E1 implementation files не менялись. Compare показывает, что PR-ветка отстаёт от `main`; REST PR endpoint возвращает `mergeable=true / clean`, тогда как структурированный PR-ответ сообщает `mergeable=false`. Эти mergeability-сигналы расходятся, поэтому готовность к merge не считается подтверждённой до refresh/sync и повторной проверки.
 - Force-push не использовался; текущий PR HEAD остаётся `f9b0edef6d5bdc05c73be6a10d9e66c5b10c8cf5`.
 
 **CI на финальном HEAD**
