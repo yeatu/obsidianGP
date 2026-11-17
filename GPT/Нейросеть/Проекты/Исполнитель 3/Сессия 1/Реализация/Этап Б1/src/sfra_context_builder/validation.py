@@ -199,9 +199,9 @@ def parse_candidate(
     score_direction = obj.get("score_direction")
     if score_direction is not None and score_direction not in {"asc", "desc"}:
         raise ContractValidationError("candidate.score_direction must be asc or desc")
-    if tier is None and score is not None and score_direction is None:
+    if score is not None and score_direction is None:
         raise ContractValidationError(
-            "score_direction is required when score is supplied without relevance.tier"
+            "score_direction is required whenever score is supplied"
         )
 
     preservation = obj.get("preservation", "normal")
