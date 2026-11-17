@@ -1,0 +1,13 @@
+{
+  "entities": [
+    {
+      "entity_id": "character_daphne",
+      "canonical_name": "Дафна Гринграсс",
+      "aliases": [
+        "Дафна",
+        "Daphne Greengrass"
+      ],
+      "primary_source_path": "персонажи/Дафна Гринграсс.md"
+    }
+  ]
+}

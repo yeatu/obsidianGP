@@ -1,0 +1,154 @@
+{
+  "status": "passed",
+  "workflow_run_id": "43997334585",
+  "workflow_run_url": "https://github.com/yeatu/obsidianGP/actions/runs/43997334585",
+  "state_branch_sha": "c2a0cab63800bebfa693dbaa6ee97b2a8e8ad956",
+  "state_manifest": {
+    "database": "state/structure.sqlite3",
+    "database_sha256": "sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674",
+    "format_version": 1,
+    "indexer_version": "0.2.0",
+    "source_branch": "executor-1/sfra-indexer-session-1",
+    "source_commit": "f2e5ffa57d27df066a52173c149036a361aeaee6",
+    "source_repository": "yeatu/obsidianGP",
+    "sqlite_schema_version": 2,
+    "updated_at": "2026-11-17T01:31:46.435369+00:00",
+    "workflow_run_id": "43996241829"
+  },
+  "structural_db": {
+    "sha256": "sha256:2a6d792d5e5c458ffa87df32a082229fc548c42dab2d91a5cc8fa1195bcf6674",
+    "integrity_check": "ok",
+    "schema_version": 2,
+    "documents": 66,
+    "active_documents": 66,
+    "total_nodes": 9080,
+    "active_nodes": 9080,
+    "nodes_missing_identity": 0
+  },
+  "vault": {
+    "git_head": "f2e5ffa57d27df066a52173c149036a361aeaee6",
+    "tracked_files": 66,
+    "digest_before": "b53af0ad982c1c21d267dd1057eb60b7cf6676e237fbb4ca8d55af2de65e5a00",
+    "digest_after": "b53af0ad982c1c21d267dd1057eb60b7cf6676e237fbb4ca8d55af2de65e5a00",
+    "git_status_clean_before_after": true
+  },
+  "morphology": {
+    "engine": "pymorphy3",
+    "version": "2.0.6",
+    "test_forms": [
+      "реанимации",
+      "реанимацию"
+    ],
+    "lemmas": {
+      "реанимации": "реанимация",
+      "реанимацию": "реанимация"
+    },
+    "same_lemma": true,
+    "sfra_search_source_references_pymorphy3": true
+  },
+  "searches": [
+    {
+      "query": "реанимации",
+      "hit_count": 3,
+      "hits": [
+        {
+          "node_id": "node_9ca9ad76-8f04-48d5-a2b6-d163f60bcc9e",
+          "content_hash": "sha256:4efd270b3959a6c57799e94397d5583875e42be5d870967b3f3c61bdba628ed7",
+          "source_path": "персонажи/ученики/Молодая кровь/Генрих Фауст.md",
+          "node_type": "quote",
+          "heading_path": [
+            "Предыстория"
+          ],
+          "line_start": 2,
+          "line_end": 74,
+          "excerpt": ">  Семья\nГенрих родился в семье волшебников: его мать — британская волшебница, отец — маг из Германии. Родители сохраняют отношения, однако значительная часть их повседневной жизни проходит раздельно. Работа отца связана с частыми и продолжительными командировками по Германии, где он проводит немало времени. Их старший сын живёт вместе с ним и обучается в одной из магических академий Берлина. Генрих остаётся в Велико…",
+          "match_type": "morphological"
+        },
+        {
+          "node_id": "node_9b0e90f9-ac0c-44c3-84ce-92f035e0a32c",
+          "content_hash": "sha256:6e8b3e4ca8d0981e6ff7ac0aec05769d22a653d982ae1eb75a8512130c9568d3",
+          "source_path": "персонажи/ученики/Молодая кровь/Генрих Фауст.md",
+          "node_type": "heading",
+          "heading_path": [
+            "Предыстория"
+          ],
+          "line_start": 1,
+          "line_end": 77,
+          "excerpt": "# Предыстория\n>  Семья\nГенрих родился в семье волшебников: его мать — британская волшебница, отец — маг из Германии. Родители сохраняют отношения, однако значительная часть их повседневной жизни проходит раздельно. Работа отца связана с частыми и продолжительными командировками по Германии, где он проводит немало времени. Их старший сын живёт вместе с ним и обучается в одной из магических академий Берлина. Генрих ост…",
+          "match_type": "morphological"
+        },
+        {
+          "node_id": "node_130575e8-5339-486a-859d-44961df47848",
+          "content_hash": "sha256:a8dccb408cae4c9d978fa7d9985e85250ca1f711b0f52c2e02c4c26f30bd2802",
+          "source_path": "персонажи/ученики/Молодая кровь/Генрих Фауст.md",
+          "node_type": "document",
+          "heading_path": [],
+          "line_start": 1,
+          "line_end": 632,
+          "excerpt": "# Предыстория\n>  Семья\nГенрих родился в семье волшебников: его мать — британская волшебница, отец — маг из Германии. Родители сохраняют отношения, однако значительная часть их повседневной жизни проходит раздельно. Работа отца связана с частыми и продолжительными командировками по Германии, где он проводит немало времени. Их старший сын живёт вместе с ним и обучается в одной из магических академий Берлина. Генрих ост…",
+          "match_type": "morphological"
+        }
+      ]
+    },
+    {
+      "query": "реанимацию",
+      "hit_count": 3,
+      "hits": [
+        {
+          "node_id": "node_9ca9ad76-8f04-48d5-a2b6-d163f60bcc9e",
+          "content_hash": "sha256:4efd270b3959a6c57799e94397d5583875e42be5d870967b3f3c61bdba628ed7",
+          "source_path": "персонажи/ученики/Молодая кровь/Генрих Фауст.md",
+          "node_type": "quote",
+          "heading_path": [
+            "Предыстория"
+          ],
+          "line_start": 2,
+          "line_end": 74,
+          "excerpt": "…итическом состоянии. В больнице была зафиксирована остановка кровообращения, и врачам пришлось проводить реанимацию. Сердечную деятельность удалось восстановить.\nФизически Генрих постепенно восстановился. Обследования не выявили серьёзных неврологических нарушений, которые могли бы объяснить устойчивое повреждение мозга. Однако сам мальчик утверждал, что во время смерти находился в раю.\nОн рассказывал об увиденном с …",
+          "match_type": "exact_word_or_number"
+        },
+        {
+          "node_id": "node_9b0e90f9-ac0c-44c3-84ce-92f035e0a32c",
+          "content_hash": "sha256:6e8b3e4ca8d0981e6ff7ac0aec05769d22a653d982ae1eb75a8512130c9568d3",
+          "source_path": "персонажи/ученики/Молодая кровь/Генрих Фауст.md",
+          "node_type": "heading",
+          "heading_path": [
+            "Предыстория"
+          ],
+          "line_start": 1,
+          "line_end": 77,
+          "excerpt": "…итическом состоянии. В больнице была зафиксирована остановка кровообращения, и врачам пришлось проводить реанимацию. Сердечную деятельность удалось восстановить.\nФизически Генрих постепенно восстановился. Обследования не выявили серьёзных неврологических нарушений, которые могли бы объяснить устойчивое повреждение мозга. Однако сам мальчик утверждал, что во время смерти находился в раю.\nОн рассказывал об увиденном с …",
+          "match_type": "exact_word_or_number"
+        },
+        {
+          "node_id": "node_130575e8-5339-486a-859d-44961df47848",
+          "content_hash": "sha256:a8dccb408cae4c9d978fa7d9985e85250ca1f711b0f52c2e02c4c26f30bd2802",
+          "source_path": "персонажи/ученики/Молодая кровь/Генрих Фауст.md",
+          "node_type": "document",
+          "heading_path": [],
+          "line_start": 1,
+          "line_end": 632,
+          "excerpt": "…итическом состоянии. В больнице была зафиксирована остановка кровообращения, и врачам пришлось проводить реанимацию. Сердечную деятельность удалось восстановить.\nФизически Генрих постепенно восстановился. Обследования не выявили серьёзных неврологических нарушений, которые могли бы объяснить устойчивое повреждение мозга. Однако сам мальчик утверждал, что во время смерти находился в раю.\nОн рассказывал об увиденном с …",
+          "match_type": "exact_word_or_number"
+        }
+      ]
+    }
+  ],
+  "common_node_id_content_hash": [
+    {
+      "node_id": "node_130575e8-5339-486a-859d-44961df47848",
+      "content_hash": "sha256:a8dccb408cae4c9d978fa7d9985e85250ca1f711b0f52c2e02c4c26f30bd2802"
+    },
+    {
+      "node_id": "node_9b0e90f9-ac0c-44c3-84ce-92f035e0a32c",
+      "content_hash": "sha256:6e8b3e4ca8d0981e6ff7ac0aec05769d22a653d982ae1eb75a8512130c9568d3"
+    },
+    {
+      "node_id": "node_9ca9ad76-8f04-48d5-a2b6-d163f60bcc9e",
+      "content_hash": "sha256:4efd270b3959a6c57799e94397d5583875e42be5d870967b3f3c61bdba628ed7"
+    }
+  ],
+  "source_retrieval_count": 3,
+  "persistent_search_db_files": [],
+  "fts5_storage": "runtime process; no additional SQLite file detected under RUNNER_TEMP"
+}

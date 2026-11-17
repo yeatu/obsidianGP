@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfra-search"
+version = "0.1.0"
+description = "Local SQLite FTS5 search index for Source-First Retrieval Architecture"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pymorphy3==2.0.6",
+  "pymorphy3-dicts-ru==2.4.417150.4580142",
+  "nltk>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+sfra = "sfra_search.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

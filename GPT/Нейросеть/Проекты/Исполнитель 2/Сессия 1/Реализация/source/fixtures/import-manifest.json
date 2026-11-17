@@ -1,0 +1,10 @@
+{
+  "schema": "sfra-node-batch/v1",
+  "mode": "replace_documents",
+  "replace_source_paths": [
+    "персонажи/Генрих Фауст.md",
+    "иное/Демография.md",
+    "разобрать/Демография.md"
+  ],
+  "deleted_node_ids": []
+}
