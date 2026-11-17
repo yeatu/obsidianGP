@@ -353,11 +353,11 @@ Caller reusable workflow не может дать callee больше permission
 | PR | Объём | Выход |
 |---|---|---|
 | V2.1 Application services | Явные SearchVaultService и ReadSourceService поверх E3 pipeline; unit/contract tests | Транспорт-независимые application services |
-| V2.2 Issue worker | Parser, schema validation, allowlist, body hash, status store, snapshot pinning, result renderer, issues.opened и workflow_call | Event/manual worker без scheduled recovery |
-| V2.3 Recovery | Scheduled/manual dispatcher, candidate scan, reusable worker, per-Issue concurrency, retry/lease | Recovery после fault injection |
+| V2.2 Safe worker core | Strict Issue parser/schema, non-empty allowlist, body hash, status schema v2, snapshot binding, safe aggregate projector, worker core over fake/in-memory ports | Testable non-production core; no GitHub API, write calls or active workflows |
+| V2.3 GitHub transport + recovery | Separately approved GitHub API adapter, status persistence, per-Issue idempotency/concurrency, leases/retries, dispatcher and recovery sweep; fault injection | Non-production transport adapter and recovery evidence, still disabled pending V2.4 |
 | V2.4 Controlled rollout | Allowlist, ограниченный budget, audit, secrets review, permission review, эксплуатационные инструкции | Production readiness review |
 
-V2.1 должен быть принят до V2.2. V2.2 должен быть проверен на тестовом Issue до включения recovery. V2.3 не запускается на production Issues до завершения fault injection и разрешения владельца данных.
+V2.1 должен быть принят до V2.2. V2.2 не должен включать реальные GitHub API/write calls или активный issues.opened/workflow_call/schedule trigger. V2.2 проверяется только fake/in-memory ports. V2.3 не включается на production Issues до завершения fault injection и отдельного разрешения; V2.4 отдельно принимает controlled rollout.
 
 MCP может рассматриваться позднее как отдельный optional adapter к application services. Для GitHub Issue MVP он не является обязательной зависимостью.
 
@@ -481,3 +481,49 @@ MCP может рассматриваться позднее как отдель
 V2.1 разрешён к реализации. Production Issue worker, recovery scheduler и любые операции публикации SourceReadResult/ContextPack в GitHub остаются disabled до отдельной V2.2–V2.4 security/readiness acceptance. Требуются тестовый Issue, review permissions, author allowlist, status schema, body hash, snapshot pinning, fault-injection recovery и подтверждение безопасного результата.
 
 MCP остаётся optional и не является зависимостью GitHub Issue MVP.
+
+
+---
+
+## 14. Координаторское обновление после завершения V2.1 — 2026-11-17
+
+### Фактическое состояние foundation
+
+SFRA-E3-V2.1 завершена и объединена:
+- PR [#14](https://github.com/yeatu/obsidianGP/pull/14) merged в `main`, merge commit `9a0bfa012269590466a3b314770425a2a97dfe7f`.
+- `SearchVaultService` и `ReadSourceService` входят в main.
+- Issue [#13](https://github.com/yeatu/obsidianGP/issues/13) закрыт как completed.
+- Pre-merge C1/V2.1/real integration evidence зафиксированы в PR #14 и рабочих реестрах.
+
+Исторические формулировки в разделах 12–13, где следующим шагом называется V2.1, superseded этим обновлением.
+
+### Следующая разрешённая задача: V2.2 non-production safe worker core
+
+Создан отдельный Issue [#15](https://github.com/yeatu/obsidianGP/issues/15): **SFRA-E3-V2.2 non-production Issue validation and safe worker core**.
+
+V2.2 ограничена:
+- строгий parser/validator для `sfra.issue.v1`, title/repository/author allowlist и 32 KiB UTF-8 body limit;
+- UUID/operation/payload schemas с `additionalProperties=false`;
+- `request_body_sha256` по точным UTF-8 bytes и fail-closed при изменении body;
+- transport status schema v2 с обязательными `status_schema_version`, `request_body_sha256`, `worker_commit_sha`;
+- safe result projection только с allowlisted operational status и безопасными aggregate metadata;
+- testable IssueWorkerCore over fake/in-memory ports с использованием V2.1 application services;
+- adversarial tests, доказывающие, что reject не вызывает application services и что никакой source content не попадает в публичный projection.
+
+**Жёсткие запреты для V2.2:**
+- no GitHub API/SDK client, network calls, credentials or write permissions;
+- no active `issues.opened`, `workflow_call` or schedule workflow;
+- no real Issue/comment writes;
+- no source-text serialization, excerpts, paths, titles or result chunks;
+- no lease/retry/recovery, MCP, HTTP/webhooks or deployment;
+- no writes to Vault, `sfra-state` or E1 production SQLite.
+
+Владелец реализации по проектной роли — Исполнитель 3; независимая проверка — Аналитик 3; затем пакетная координаторская приёмка. Issue не назначен на GitHub login: проектная роль не сопоставлена с аккаунтом, login не выдумывается.
+
+### Последующие стадии
+
+- V2.3: GitHub API adapter, status persistence, idempotency, lease/retry/concurrency и recovery; отдельный issue/approval и fault injection.
+- V2.4: security/readiness audit и controlled rollout. Только отдельная координаторская release acceptance может разрешить production event workflow.
+- MCP optional, не входит в GitHub Issue MVP.
+
+**PR #12 остаётся Draft и proposal-only.** Он не включает worker/recovery implementation и не является разрешением на production transport. Public Vault source-content publication остаётся `DENY BY DEFAULT`.
