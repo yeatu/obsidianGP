@@ -1,7 +1,7 @@
 from __future__ import annotations
 from sfra_web_adapter import handle_opened_event
 
-BOT = {"login": "github-actions[bot]", "type": "Bot"}
+BOT = {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"}
 
 def payload(body='{"protocol_version":"sfra.issue.v1"}'):
     return {"repository": {"full_name": "yeatu/obsidianGP"},
@@ -156,3 +156,34 @@ def test_handler_rejects_unapproved_projection_fields():
     projection["raw_request"] = "must never be rendered"
     with pytest.raises(ValueError, match="invalid envelope"):
         _safe_synthetic_projection(projection, "search_vault")
+
+def test_status_store_ignores_markers_with_missing_or_wrong_bot_id():
+    from sfra_web_adapter.ports import GitHubCommentStatusStore
+    import pytest
+
+    class Client:
+        def __init__(self, user):
+            self.comments = [{
+                "body": "<!-- sfra-web-v1 issue=21 body_sha256=" + "a" * 64 + " state=COMPLETED -->",
+                "user": user,
+            }]
+            self.created = []
+        def list_comments(self, issue_number):
+            return self.comments
+        def create_comment(self, issue_number, body):
+            self.created.append(body)
+
+    identities = [
+        {"login": "github-actions[bot]", "type": "Bot"},
+        {"login": "github-actions[bot]", "id": 1, "type": "Bot"},
+        {"login": "github-actions[bot]", "id": "41898282", "type": "Bot"},
+        {"login": "github-actions[bot]", "id": 41898282, "type": "User"},
+    ]
+    for identity in identities:
+        client = Client(identity)
+        store = GitHubCommentStatusStore(client)
+        digest = "b" * 64
+
+        assert store.bind_request_body_sha256(21, digest) == digest
+        assert len(client.created) == 1
+        assert "state=STARTED" in client.created[0]
