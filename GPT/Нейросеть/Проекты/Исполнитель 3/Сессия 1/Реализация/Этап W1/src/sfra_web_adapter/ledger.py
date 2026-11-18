@@ -33,7 +33,8 @@ def authenticated_markers(issue_number: int,
     records: list[MarkerRecord] = []
     for comment in comments:
         user = comment.get("user")
-        if not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR:
+        if (not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR
+                or user.get("type") != "Bot"):
             continue
         text = comment.get("body")
         if not isinstance(text, str):
