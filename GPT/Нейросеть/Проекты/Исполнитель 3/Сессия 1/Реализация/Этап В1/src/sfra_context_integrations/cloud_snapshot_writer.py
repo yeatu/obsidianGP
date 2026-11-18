@@ -13,7 +13,11 @@ from .cloud_snapshot_bundle import (
     PreparedBundleObject,
     verify_prepared_cloud_snapshot_bundle,
 )
-from .cloud_snapshot_v2 import BuiltCloudSnapshotV2
+from .cloud_snapshot_v2 import (
+    BuiltCloudSnapshotV2,
+    CloudSnapshotContractError,
+    ImmutableObjectVersion,
+)
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -52,6 +56,25 @@ class InMemoryWriteFault(str, Enum):
     CORRUPT_READ_BACK = "corrupt_read_back"
 
 
+def _validate_immutable_version_id(version_id: str, *, acknowledgement: bool = False) -> None:
+    """Apply the exact #117 immutable-ID rules without normalizing provider values."""
+    try:
+        ImmutableObjectVersion(
+            key="writer-receipt-validation",
+            version_id=version_id,
+            sha256="sha256:" + "0" * 64,
+            byte_size=1,
+        )
+    except CloudSnapshotContractError as exc:
+        if acknowledgement:
+            raise ObjectStoreAcknowledgementError(
+                "write acknowledgement version_id violates CloudSnapshotRef v2 constraints"
+            ) from exc
+        raise ObjectStoreWriteContractError(
+            "receipt version_id violates CloudSnapshotRef v2 immutable identifier constraints"
+        ) from exc
+
+
 @dataclass(frozen=True, slots=True)
 class ObjectWriteReceipt:
     key: str
@@ -73,6 +96,7 @@ class ObjectWriteReceipt:
             raise ObjectStoreWriteContractError("receipt sha256 must be lowercase sha256:<64 hex>")
         if type(self.byte_size) is not int or self.byte_size <= 0:
             raise ObjectStoreWriteContractError("receipt byte_size must be a positive integer")
+        _validate_immutable_version_id(self.version_id)
 
 
 class ObjectStoreWritePort(Protocol):
@@ -100,16 +124,29 @@ class UploadedCloudSnapshotBundle:
     def __post_init__(self) -> None:
         if type(self.prepared_bundle) is not PreparedCloudSnapshotBundle:
             raise ObjectStoreWriteContractError("prepared_bundle must be the exact prepared bundle type")
+        if type(self.source_receipt) is not ObjectWriteReceipt or type(self.index_receipt) is not ObjectWriteReceipt:
+            raise ObjectStoreAcknowledgementError("uploaded bundle requires exact ObjectWriteReceipt values")
+        if type(self.built_snapshot) is not BuiltCloudSnapshotV2:
+            raise ObjectStoreWriteContractError("built_snapshot must be the exact BuiltCloudSnapshotV2 type")
         if self.source_receipt.key != self.prepared_bundle.source_object.key:
             raise ObjectStoreWriteContractError("source receipt key differs from the prepared descriptor")
         if self.index_receipt.key != self.prepared_bundle.index_object.key:
             raise ObjectStoreWriteContractError("index receipt key differs from the prepared descriptor")
         _check_receipt_matches_object(self.source_receipt, self.prepared_bundle.source_object)
         _check_receipt_matches_object(self.index_receipt, self.prepared_bundle.index_object)
-        if self.built_snapshot.ref.source_bundle.version_id != self.source_receipt.version_id:
-            raise ObjectStoreWriteContractError("v2 source version differs from the verified write receipt")
-        if self.built_snapshot.ref.index_bundle.version_id != self.index_receipt.version_id:
-            raise ObjectStoreWriteContractError("v2 index version differs from the verified write receipt")
+        try:
+            expected_built = self.prepared_bundle.build_cloud_snapshot_v2(
+                source_version_id=self.source_receipt.version_id,
+                index_version_id=self.index_receipt.version_id,
+            )
+        except Exception as exc:
+            raise ObjectStoreWriteContractError(
+                "could not derive the expected CloudSnapshotRef v2 from the prepared bundle and receipts"
+            ) from exc
+        if self.built_snapshot != expected_built:
+            raise ObjectStoreWriteContractError(
+                "built CloudSnapshotRef v2 and manifest differ from the prepared bundle and exact receipts"
+            )
 
     @property
     def snapshot_id(self) -> str:
@@ -153,6 +190,7 @@ def _validate_expected_payload(
 def _check_receipt_matches_object(receipt: ObjectWriteReceipt, obj: PreparedBundleObject) -> None:
     if type(receipt) is not ObjectWriteReceipt:
         raise ObjectStoreAcknowledgementError("write acknowledgement has an unsupported type")
+    _validate_immutable_version_id(receipt.version_id, acknowledgement=True)
     if (
         receipt.key != obj.key
         or receipt.sha256 != obj.sha256

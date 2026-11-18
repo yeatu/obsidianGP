@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "executor-3/issue-125-snapshot-writer"
+      - "executor-2/issue-172-writer-integrity"
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/src/sfra_context_integrations/cloud_snapshot_writer.py"
       - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/test_cloud_snapshot_writer.py"
