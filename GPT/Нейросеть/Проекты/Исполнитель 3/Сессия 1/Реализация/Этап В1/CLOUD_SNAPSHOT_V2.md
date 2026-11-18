@@ -57,7 +57,7 @@ The canonical UTF-8 JSON manifest has exactly these fields:
 
 The import variant replaces \`commit_sha\` with \`import_id\`. Both object identities are required and each includes key, immutable version ID, full-payload SHA-256 and positive byte size. Mutable aliases such as \`latest\`, \`current\`, \`head\` and \`*\` are rejected.
 
-Canonical serialization uses UTF-8, Unicode NFC strings, lexicographically sorted object keys, compact separators, no NaN/Infinity, no duplicate JSON keys and no trailing whitespace. Parsers reject non-canonical encodings even if they are semantically equivalent JSON.
+Canonical serialization uses UTF-8, Unicode NFC strings, lexicographically sorted object keys, compact separators, no NaN/Infinity, no duplicate JSON keys and no trailing whitespace. Parsers reject non-canonical encodings even if they are semantically equivalent JSON. The JSON Schema Draft 2020-12 files are a structural preflight layer: they reject empty/space-wrapped immutable identifiers and exact mutable aliases where expressible. Python runtime parsing remains the fail-closed authority for Unicode NFC and control/surrogate character checks that JSON Schema cannot portably express. Opaque IDs are never trimmed or normalized; accepted values are preserved exactly.
 
 The manifest does **not** contain \`manifest_sha256\` or \`snapshot_id\`. Its digest is the detached value \`sha256:<hex>\` over the exact canonical manifest bytes. This avoids a self-referential digest.
 
@@ -77,7 +77,14 @@ The identity tuple binds:
 
 The ref parser requires exact fields and exact schema version. It recomputes the ID and rejects forged, incomplete, unknown or unsupported values. \`verify_cloud_snapshot_manifest()\` additionally checks the digest over exact bytes, canonical serialization, and equality of every identity component with the ref.
 
-## Machine-readable schemas\n\n- `schemas/cloud-snapshot-manifest-v1.schema.json` — canonical manifest payload v1.\n- `schemas/cloud-snapshot-ref-v2.schema.json` — cloud SnapshotRef v2 wire identity.\n\nBoth files use JSON Schema Draft 2020-12 and close root and nested objects with `additionalProperties: false`. Runtime parsing applies the stricter Python validation as the fail-closed authority.\n\n## Public module API
+## Machine-readable schemas
+
+- `schemas/cloud-snapshot-manifest-v1.schema.json` — canonical manifest payload v1.
+- `schemas/cloud-snapshot-ref-v2.schema.json` — cloud SnapshotRef v2 wire identity.
+
+Both files use JSON Schema Draft 2020-12 and close root and nested objects with `additionalProperties: false`. Immutable object version IDs and immutable import IDs reject leading/trailing whitespace and the mutable aliases `latest`, `current`, `head` and `*`, case-insensitively. The schemas are a structural preflight layer; the Python runtime remains authoritative for Unicode NFC and control/surrogate validation that is not expressed portably in JSON Schema. Accepted opaque identifiers are not trimmed or normalized.
+
+## Public module API
 
 Import from \`sfra_context_integrations.cloud_snapshot_v2\`:
 

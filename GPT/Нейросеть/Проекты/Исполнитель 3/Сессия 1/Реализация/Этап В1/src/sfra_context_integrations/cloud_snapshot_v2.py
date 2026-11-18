@@ -38,6 +38,17 @@ def _text(value: Any, name: str) -> str:
         raise CloudSnapshotContractError(f"{name} contains a control or surrogate character")
     return value
 
+def _immutable_identifier(value: Any, name: str) -> str:
+    """Validate an opaque immutable ID without normalizing the provider value."""
+    identifier = _text(value, name)
+    if identifier != identifier.strip():
+        raise CloudSnapshotContractError(
+            f"{name} must not have leading or trailing whitespace"
+        )
+    if identifier.casefold() in _MUTABLE_VERSION_ALIASES:
+        raise CloudSnapshotContractError(f"{name} must be immutable, not a mutable alias")
+    return identifier
+
 
 def _sha256(value: Any, name: str) -> str:
     if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
@@ -107,9 +118,7 @@ class ImmutableImportSourceRevision:
     import_id: str
 
     def __post_init__(self) -> None:
-        _text(self.import_id, "source_revision.import_id")
-        if self.import_id.casefold() in _MUTABLE_VERSION_ALIASES:
-            raise CloudSnapshotContractError("source_revision.import_id must be immutable")
+        _immutable_identifier(self.import_id, "source_revision.import_id")
 
     def to_dict(self) -> dict[str, str]:
         return {"kind": "immutable_import", "import_id": self.import_id}
@@ -143,11 +152,7 @@ class ImmutableObjectVersion:
 
     def __post_init__(self) -> None:
         _text(self.key, "object.key")
-        version = _text(self.version_id, "object.version_id")
-        if version.casefold() in _MUTABLE_VERSION_ALIASES:
-            raise CloudSnapshotContractError(
-                "object.version_id must be an immutable version, not a mutable alias"
-            )
+        _immutable_identifier(self.version_id, "object.version_id")
         _sha256(self.sha256, "object.sha256")
         _positive_int(self.byte_size, "object.byte_size")
 

@@ -335,3 +335,147 @@ def test_published_json_schemas_are_versioned_and_closed() -> None:
     assert ref_schema["additionalProperties"] is False
     assert "manifest_sha256" in ref_schema["required"]
     assert ref_schema["properties"]["snapshot_id"]["$ref"] == "#/$defs/sha256"
+
+
+def _schema_instances():
+    """Build structurally valid examples through the public Python contract."""
+    from sfra_context_integrations.cloud_snapshot_v2 import build_cloud_snapshot_v2
+
+    git_manifest = _manifest().to_dict()
+    import_manifest = _manifest(
+        source_revision=ImmutableImportSourceRevision("vault-import:2026-11-18:0001")
+    ).to_dict()
+    git_ref = build_cloud_snapshot_v2(_manifest()).ref.to_dict()
+    import_ref = build_cloud_snapshot_v2(
+        _manifest(
+            source_revision=ImmutableImportSourceRevision("vault-import:2026-11-18:0001")
+        )
+    ).ref.to_dict()
+    return git_manifest, import_manifest, git_ref, import_ref
+
+
+def test_published_schemas_pass_draft_2020_12_and_validate_both_revision_variants():
+    from jsonschema import Draft202012Validator, FormatChecker
+
+    schema_dir = Path(__file__).resolve().parents[1] / "schemas"
+    manifest_schema = json.loads(
+        (schema_dir / "cloud-snapshot-manifest-v1.schema.json").read_text(encoding="utf-8")
+    )
+    ref_schema = json.loads(
+        (schema_dir / "cloud-snapshot-ref-v2.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(manifest_schema)
+    Draft202012Validator.check_schema(ref_schema)
+    manifest_validator = Draft202012Validator(manifest_schema, format_checker=FormatChecker())
+    ref_validator = Draft202012Validator(ref_schema, format_checker=FormatChecker())
+
+    git_manifest, import_manifest, git_ref, import_ref = _schema_instances()
+    assert manifest_validator.is_valid(git_manifest)
+    assert manifest_validator.is_valid(import_manifest)
+    assert ref_validator.is_valid(git_ref)
+    assert ref_validator.is_valid(import_ref)
+
+    bad_manifest = dict(git_manifest)
+    bad_manifest["unexpected"] = True
+    assert not manifest_validator.is_valid(bad_manifest)
+    bad_ref = dict(git_ref)
+    bad_ref["unexpected"] = True
+    assert not ref_validator.is_valid(bad_ref)
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "latest", "LATEST", "current", "CURRENT", "head", "HEAD", "*",
+        " latest ", "CURRENT ", " Head ", " * ", " ", "\tversion", "version\n",
+    ],
+)
+def test_schemas_reject_mutable_aliases_and_surrounding_whitespace(identifier):
+    from copy import deepcopy
+    from jsonschema import Draft202012Validator
+
+    schema_dir = Path(__file__).resolve().parents[1] / "schemas"
+    manifest_schema = json.loads(
+        (schema_dir / "cloud-snapshot-manifest-v1.schema.json").read_text(encoding="utf-8")
+    )
+    ref_schema = json.loads(
+        (schema_dir / "cloud-snapshot-ref-v2.schema.json").read_text(encoding="utf-8")
+    )
+    manifest_validator = Draft202012Validator(manifest_schema)
+    ref_validator = Draft202012Validator(ref_schema)
+    git_manifest, _, git_ref, _ = _schema_instances()
+
+    for field in ("source_bundle", "index_bundle"):
+        candidate = deepcopy(git_manifest)
+        candidate[field]["version_id"] = identifier
+        assert not manifest_validator.is_valid(candidate), (field, identifier)
+        candidate_ref = deepcopy(git_ref)
+        candidate_ref[field]["version_id"] = identifier
+        assert not ref_validator.is_valid(candidate_ref), (field, identifier)
+
+    candidate = deepcopy(git_manifest)
+    candidate["source_revision"] = {"kind": "immutable_import", "import_id": identifier}
+    assert not manifest_validator.is_valid(candidate), identifier
+    candidate_ref = deepcopy(git_ref)
+    candidate_ref["source_revision"] = {"kind": "immutable_import", "import_id": identifier}
+    assert not ref_validator.is_valid(candidate_ref), identifier
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "latest", "LATEST", "current", "CURRENT", "head", "HEAD", "*",
+        " latest ", "CURRENT ", " Head ", " * ", "\tversion", "version\n",
+    ],
+)
+def test_runtime_rejects_mutable_aliases_and_surrounding_whitespace(identifier):
+    with pytest.raises(CloudSnapshotContractError):
+        ImmutableObjectVersion(
+            key="objects/source.tar",
+            version_id=identifier,
+            sha256="sha256:" + "a" * 64,
+            byte_size=1,
+        )
+    with pytest.raises(CloudSnapshotContractError):
+        ImmutableImportSourceRevision(identifier)
+
+
+def test_opaque_immutable_identifiers_are_preserved_without_trimming():
+    version_id = "release 17 / provider-generation:ABC-17"
+    import_id = "customer import #17"
+    obj = ImmutableObjectVersion(
+        key="objects/source.tar",
+        version_id=version_id,
+        sha256="sha256:" + "a" * 64,
+        byte_size=1,
+    )
+    revision = ImmutableImportSourceRevision(import_id)
+
+    assert obj.version_id == version_id
+    assert obj.to_dict()["version_id"] == version_id
+    assert revision.import_id == import_id
+    assert revision.to_dict()["import_id"] == import_id
+
+
+@pytest.mark.parametrize("identifier", ["e\u0301", "version\u0001id"])
+def test_json_schema_is_structural_preflight_while_runtime_enforces_unicode_rules(identifier):
+    from jsonschema import Draft202012Validator
+
+    schema_dir = Path(__file__).resolve().parents[1] / "schemas"
+    manifest_schema = json.loads(
+        (schema_dir / "cloud-snapshot-manifest-v1.schema.json").read_text(encoding="utf-8")
+    )
+    validator = Draft202012Validator(manifest_schema)
+    manifest = _manifest().to_dict()
+    manifest["source_bundle"]["version_id"] = identifier
+
+    # Portable JSON Schema checks structure and immutable identifier boundaries,
+    # but Unicode NFC and control/surrogate categories remain Python-runtime rules.
+    assert validator.is_valid(manifest)
+    with pytest.raises(CloudSnapshotContractError):
+        ImmutableObjectVersion(
+            key="objects/source.tar",
+            version_id=identifier,
+            sha256="sha256:" + "a" * 64,
+            byte_size=1,
+        )

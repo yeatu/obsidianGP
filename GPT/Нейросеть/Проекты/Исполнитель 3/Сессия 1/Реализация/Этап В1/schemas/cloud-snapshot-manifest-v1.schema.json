@@ -13,47 +13,82 @@
     "sqlite_schema_identity"
   ],
   "properties": {
-    "manifest_schema_version": { "const": 1 },
+    "manifest_schema_version": {
+      "const": 1
+    },
     "source_revision": {
       "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "commit_sha"],
+          "required": [
+            "kind",
+            "commit_sha"
+          ],
           "properties": {
-            "kind": { "const": "git_commit" },
-            "commit_sha": { "$ref": "#/$defs/gitCommitSha" }
+            "kind": {
+              "const": "git_commit"
+            },
+            "commit_sha": {
+              "$ref": "#/$defs/gitCommitSha"
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "import_id"],
+          "required": [
+            "kind",
+            "import_id"
+          ],
           "properties": {
-            "kind": { "const": "immutable_import" },
-            "import_id": { "$ref": "#/$defs/nonEmptyIdentifier" }
+            "kind": {
+              "const": "immutable_import"
+            },
+            "import_id": {
+              "$ref": "#/$defs/immutableIdentifier"
+            }
           }
         }
       ]
     },
-    "source_bundle": { "$ref": "#/$defs/immutableObjectVersion" },
-    "index_bundle": { "$ref": "#/$defs/immutableObjectVersion" },
+    "source_bundle": {
+      "$ref": "#/$defs/immutableObjectVersion"
+    },
+    "index_bundle": {
+      "$ref": "#/$defs/immutableObjectVersion"
+    },
     "indexer_identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "version"],
+      "required": [
+        "name",
+        "version"
+      ],
       "properties": {
-        "name": { "$ref": "#/$defs/nonEmptyIdentifier" },
-        "version": { "$ref": "#/$defs/nonEmptyIdentifier" }
+        "name": {
+          "$ref": "#/$defs/nonEmptyIdentifier"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyIdentifier"
+        }
       }
     },
     "sqlite_schema_identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["engine", "user_version"],
+      "required": [
+        "engine",
+        "user_version"
+      ],
       "properties": {
-        "engine": { "const": "sqlite" },
-        "user_version": { "type": "integer", "minimum": 1 }
+        "engine": {
+          "const": "sqlite"
+        },
+        "user_version": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     }
   },
@@ -80,13 +115,33 @@
     "immutableObjectVersion": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "version_id", "sha256", "byte_size"],
+      "required": [
+        "key",
+        "version_id",
+        "sha256",
+        "byte_size"
+      ],
       "properties": {
-        "key": { "$ref": "#/$defs/nonEmptyIdentifier" },
-        "version_id": { "$ref": "#/$defs/immutableVersionId" },
-        "sha256": { "$ref": "#/$defs/sha256" },
-        "byte_size": { "type": "integer", "minimum": 1 }
+        "key": {
+          "$ref": "#/$defs/nonEmptyIdentifier"
+        },
+        "version_id": {
+          "$ref": "#/$defs/immutableIdentifier"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
+    },
+    "immutableIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?![Ll][Aa][Tt][Ee][Ss][Tt]$)(?![Cc][Uu][Rr][Rr][Ee][Nn][Tt]$)(?![Hh][Ee][Aa][Dd]$)(?!\\*$)\\S(?:[\\s\\S]*\\S)?(?![\\s\\S])"
     }
   }
 }
