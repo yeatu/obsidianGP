@@ -427,7 +427,7 @@ Encryption in transit (TLS) и at-rest encryption должны быть вклю
 | 3. Synthetic object-store proof | Only synthetic archive/SQLite fixture; upload, version, download exact version, tamper/partial upload, CAS concurrency and restore. | A review + C acceptance. No production credentials/source. |
 | 4. Initial cloud import | Browser/mobile/remote source import to staging, full hash verification, initial source+DB snapshot. | Owner explicitly approves source of truth and import path; one-time upload action if source is not already remote. |
 | 5. Incremental synchronization | Remote source commit → hosted ingestion → immutable new snapshot → verify → atomic catalogue switch. | Separate E implementation issue + A review + C release/merge gate. |
-| 6. Read-only production pilot | One marked request, pinned snapshot, read-only E1/E2/E3/V2.1, bounded originating Issue response; rollback and audit. | Explicit C/owner production pilot approval, plus accepted verifier chain #36/#51/#67/#79 via #96, accepted MCP/bootstrap and read_source gates as applicable. |
+| 6. Read-only production pilot | One marked request, pinned snapshot, read-only E1/E2/E3/V2.1, bounded originating Issue response; rollback and audit. | Explicit C/owner production pilot approval, plus the separately reviewed cloud SnapshotRef provider/materializer and Web response-worker path, each with its own exact-head A review and C acceptance; any production source-read activation still requires a separate explicit C/owner decision. Historical local-adapter work is not a prerequisite for the cloud-only Web route. |
 | 7. Managed data service (optional) | Warm cache/service, read-only API, scaling/monitoring. | Only if measured latency/traffic requires it; separate C decision and issues. |
 
 ### 11.1. Нужные engineering streams после C approval (не создаются этим анализом)
@@ -492,7 +492,7 @@ These are proposed workstreams, not opened child Issues or assigned tasks.
 6. **Retention/deletion:** how many versions or days; whether user can request immediate removal; backup/replication requirements; no irreversible WORM retention until C explicitly approves.
 7. **Output scope:** allowed source content per operation (node/parent/neighbors/document), max inline response bytes/tokens, when to chunk, and whether any cloud object download link is supported by the actual ChatGPT Web GitHub connector.
 8. **Real-data pilot:** exact named owner, target snapshot, workflow permissions, rollout window, monitoring and rollback procedure.
-9. **Prerequisites:** accept verifier chain #36/#51/#67/#79 only after C decision #96; independently accept #38/bootstrap, #40/read_source and W1 production response path at their own gates. A positive cloud design analysis is not authorization to bypass them.
+9. **Prerequisites:** verifier chain #36/#51/#67/#79 is accepted via C decision #96; independently review and C-accept the Web response path and cloud SnapshotRef provider/materializer at their own exact-head gates. Any production source-read capability requires a separate explicit C/owner activation decision. Historical held local-adapter tasks #38 and #40 are not prerequisites for the Web/cloud-only architecture. A positive cloud design analysis is not authorization to bypass any production gate.
 
 ## 15. Conclusion
 
