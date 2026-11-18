@@ -264,3 +264,139 @@ def test_rejects_ambiguous_or_mutable_import_identifiers(tmp_path):
                     "active_node_count": 0, "passage_count": 0,
                 },
             }))
+
+
+def test_source_revision_failure_has_its_own_stable_code(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    attestation["source_revision"] = {"kind": "unknown_revision", "id": "x"}
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "source_revision_invalid"
+
+
+def test_rejects_unexpected_schema_table(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("CREATE TABLE unexpected_cloud_table (value TEXT)")
+        connection.commit()
+    finally:
+        connection.close()
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "schema_mismatch"
+
+
+def test_distinguishes_foreign_key_failure(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("UPDATE passages SET owner_node_pk=999999")
+        connection.commit()
+    finally:
+        connection.close()
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "foreign_key_failure"
+
+
+def test_rejects_event_history_corruption_even_with_matching_database_digest(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "UPDATE node_match_events SET event_type='not-an-e1-event' "
+            "WHERE event_pk=(SELECT MIN(event_pk) FROM node_match_events)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_integrity_failure"
+
+
+def test_rejects_node_coordinate_corruption_even_with_matching_database_digest(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "UPDATE structural_nodes SET char_start=char_start+1 "
+            "WHERE node_pk=(SELECT MIN(node_pk) FROM structural_nodes)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_integrity_failure"
+
+
+def test_rejects_extra_markdown_file_and_invalid_utf8_markdown(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    (root / "extra.md").write_text("not indexed", encoding="utf-8")
+    with pytest.raises(CloudIndexVerificationError) as extra:
+        _verify(root, db_path, inventory, attestation)
+    assert extra.value.code == "inventory_mismatch"
+
+    (root / "extra.md").unlink()
+    (root / "bad.md").write_bytes(b"\xff")
+    with pytest.raises(CloudIndexVerificationError) as invalid:
+        _verify(root, db_path, inventory, attestation)
+    assert invalid.value.code == "filesystem_unsafe"
+
+
+def test_rejects_malformed_inventory_bytes_without_partial_report(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        verify_materialized_cloud_index(
+            db_path, root, attestation=_canonical(attestation), markdown_inventory=b"\xff"
+        )
+    assert error.value.code == "inventory_invalid"
+    assert str(root) not in str(error.value)
+
+
+def test_verification_report_is_deterministic_for_identical_fixture(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    first = _verify(root, db_path, inventory, attestation)
+    second = _verify(root, db_path, inventory, attestation)
+    assert first == second
+
+
+def test_verifier_has_no_provider_or_e3_import_dependency():
+    import ast
+
+    source = (Path(__file__).parents[1] / "sfra_indexer" / "cloud_index_verifier.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+    forbidden = {
+        name for name in imported
+        if name.startswith(("sfra_context_integrations", "boto3", "botocore",
+                            "google.cloud", "azure", "requests"))
+        or name.endswith("cloud_snapshot_v2")
+    }
+    assert forbidden == set()
