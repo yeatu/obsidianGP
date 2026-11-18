@@ -142,7 +142,7 @@ def test_inventory_rejects_symlinks_without_following_them(tmp_path: Path):
 def test_inventory_rejects_invalid_utf8_markdown_bytes(tmp_path: Path):
     source_root = tmp_path / "source"
     source_root.mkdir()
-    (source_root / "bad.md").write_bytes(b"invalid-\\xff-markdown")
+    (source_root / "bad.md").write_bytes(b"invalid-\xff-markdown")
     with pytest.raises(UnsafeSourceTreeError, match="UTF-8"):
         build_markdown_inventory(source_root)
 
