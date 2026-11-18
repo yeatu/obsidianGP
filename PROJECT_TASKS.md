@@ -27,7 +27,7 @@
 
 | Issue | Статус / роль | Следующий результат | Приоритет / зависимость |
 |---|---|---|---|
-| [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / UNBLOCKED** | Завершить интеграцию writer stack: branch sync #170/#179 выполнен; exact-head fixture/cross-layer CI и свежий интегрированный A review остаются | **P1**; #170 `123de377...` (main 9/0, 4 writer paths); #179 `f4f8e78...` (от #170 9/0, 4 correction paths; combined main diff — 4 уникальных файла); новые exact-head CI ещё не подтверждены |
+| [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / UNBLOCKED** | Завершить cumulative writer stack #170/#179, довести exact writer fixture evidence, обновить PR/Issue records и открыть свежий интегрированный A review | **P1**; #170 `5612a705...` (main 10/0, 4 writer paths); #179 `85126e33...` (main 21/0, 4 unique paths; refreshed #170 first parent + prior child second); C1/V2.1/V2.2 passed on both exact PR HEADs; dedicated writer suite is only on prior `19c0a01...` |
 | [#120](https://github.com/yeatu/obsidianGP/issues/120) | **E — READY TO CLAIM** | Read-only exact-version resolver и materializer для эфемерного GitHub-hosted runner | **P2**; #117/#118/#119 приняты и merged; synthetic/in-memory tests only |
 | [#240](https://github.com/yeatu/obsidianGP/issues/240) | **E1 — READY TO CLAIM** | Additive E1 cloud-index attestation и read-only verifier | **P1**; принятые design #132 и decision #142; bundle #119 уже merged; E1 files/tests only; свежий A review обязателен |
 | [#229](https://github.com/yeatu/obsidianGP/issues/229) | **E — GATED / unclaimed** | Синхронизировать benchmark PR #84 с main, повторить два 42-case прогона и открыть A review | **P1**; ждать A acceptance, C merge и merge панели PR #223 по #234; сохранить main `PROJECT_TASKS.md` verbatim и оставить четыре benchmark technical paths |
@@ -61,12 +61,13 @@
 
 ## 4. Writer stack — P1 conflict resolution
 
-- PR #170 current HEAD: `123de3771cc2aab1664bbecdfc5533df90696c6a`. Its sync commit `123de377...` has ordered parents current main `8d1d3c9...` first and former writer HEAD `b0bcf7...` second. Direct main compare: **9 ahead / 0 behind**, merge base equals main; exactly four writer-owned files (workflow, docs, module, tests).
-- PR #179 current HEAD: `f4f8e78f4ce8714b9f12247041563474cdf61aec`. Its propagation commit has refreshed #170 `123de377...` first and former correction HEAD `035a79d...` second. Direct #170 → #179 compare: **9 ahead / 0 behind**, merge base equals refreshed #170; correction delta is exactly the same four writer-owned paths.
-- **Combined-scope clarification:** parent #170 diff from main = four paths; child #179 incremental correction diff = four paths; combined main → #179 diff = **four unique paths total**, not eight. Do not duplicate files to satisfy the earlier incorrect “eight paths” wording; C3 corrected this in #196 comment #6994531621.
-- The corrected bundle tree is in main `8d1d3c9...`; E1's existing CLAIM remains active. Both writer branch sync steps are complete, but new exact-head fixture/cross-layer CI has not yet been found for these two HEADs. Historical runs #44389072053 (18 passed) and #44389159850 (27 passed) apply only to former partial heads.
-- Next: run the parent and child writer fixture workflows plus required bundle/C1/V2.1/V2.2 suites against the final exact child merge-ref; record checkout SHA, ordered parents, test counts and dependency skips; then create one fresh independent A review for the complete integrated writer stack.
-- Historical A2 #171 / A1 #180 verdicts apply only to their old exact heads. Keep PR #170/#179 open and unmerged until fresh A acceptance and separate C integration decision.
+- PR #170 current HEAD: `5612a70520c91efcb9d4ccdd955f207c63bef641`, base current main `8d1d3c937abf1e6f651d077c409d1b3dfad1a9cb`. It descends from guarded sync `123de377...`; the final `5612a7...` commit records the accepted bundle baseline in writer docs. Direct main compare: **10 ahead / 0 behind**, exactly four writer-owned paths (workflow, docs, module, tests). Parent PR C1 #44420262234, V2.1 #44420262255 and V2.2 #44420262274 all succeeded on this exact HEAD.
+- PR #179 current HEAD: `85126e3301e127b125d2ed4b8a554f0cdb32d15a`, now targets `main`. The ordered stack is refreshed #170 `5612a7...` first, then prior correction child `f4f8e78...` second (intermediate sync #179 HEAD `19c0a01...`); final docs baseline commit `85126e...` is a descendant. Current main → #179 compare: **21 ahead / 0 behind**, exactly four unique writer-owned paths. PR merge-ref `de621bb325446cc25193b29b7cbeb723c2a1d88c` has current main `8d1d3c9...` first and final #179 HEAD `85126e...` second.
+- **Combined-scope clarification:** parent #170 diff from main = four paths; child #179 incremental correction delta from refreshed parent = the same four paths; combined main → #179 diff = **four unique paths total**, not eight. Do not duplicate files to satisfy the earlier incorrect “eight paths” wording; C2/C3 path accounting remains in #196.
+- Cross-layer CI on exact current refs: parent #170 C1/V2.1/V2.2 #44420262234/#44420262255/#44420262274 all SUCCESS; child #179 C1/V2.1/V2.2 #44420917905/#44420917898/#44420918378 all SUCCESS (pull_request events, exact respective HEAD SHAs).
+- Dedicated writer fixture run #44420528540 is SUCCESS on prior child HEAD `19c0a01...`, before final documentation-only commit `85126e...`; it is not exact final-head evidence. The writer workflow is push-only and path-filtered; dedicated writer test evidence on final parent/child refs remains outstanding.
+- Next: obtain dedicated writer fixture evidence for exact parent #170 HEAD `5612a7...` and final child #179 HEAD `85126e...` (or document a protocol-compliant reason if the run cannot be triggered), confirm PR event merge-ref checkout `de621bb...`, update PR #170/#179 and Issues #125/#172/#196 with current refs/run IDs, then RELEASE #196 and request one fresh integrated independent A review.
+- Historical A2 #171 / A1 #180 verdicts apply only to their old exact heads. Keep PR #170/#179 open and unmerged until fresh integrated A acceptance and a separate C integration decision.
 - No provider, credentials, upload, catalogue activation, real data, workflow_dispatch or production operation is authorized.
 
 ## 5. Benchmark — P1 shared-file conflict remains
@@ -114,7 +115,7 @@ PR #84 current historical HEAD `64924c204f006bf9d41a42ca0724d8e026325014` was sy
 - #229 remains gated by panel PR #223 A/C/merge under #234; no parallel benchmark sync.
 - #124 remains gated by #120, #125 and accepted #240.
 - #134/#136/#137/#138 remain gated by the explicit dependency chain in their Issues.
-- Superseded panel reviews #233/#238 and older targets have no verdict transfer. The next panel review is bound to the new post-main-sync HEAD created from this file.
+- Earlier panel reviews #233/#238 returned CHANGES_REQUESTED on older targets; #244 was RELEASED by A1 without verdict after HEAD drift; #245 was closed before CLAIM because writer refs advanced. No verdict transfers. The next panel review must be opened only after the writer ref/evidence snapshot is stable.
 - Branch history is preserved: no force-push, rebase/reset, delete or automatic cleanup. Any unexpected shared-file/contract conflict is a stop-and-escalate event.
 
 ## 10. Operational rule
