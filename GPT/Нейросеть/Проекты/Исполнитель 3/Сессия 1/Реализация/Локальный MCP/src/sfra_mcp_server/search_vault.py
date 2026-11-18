@@ -6,8 +6,6 @@ to SearchVaultService, and projects the already-computed result into the accepte
 local MCP envelope.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 import math
 from typing import Any, Callable, Literal
