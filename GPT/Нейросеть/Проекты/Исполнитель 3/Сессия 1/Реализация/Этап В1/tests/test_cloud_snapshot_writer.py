@@ -302,20 +302,19 @@ def test_invalid_source_receipt_stops_before_the_index_object_write(tmp_path: Pa
 
         def put_if_absent(self, key, payload, *, expected_sha256, expected_byte_size):
             self.put_keys.append(key)
-            # A conforming store must construct the shared receipt type. Its constructor
-            # rejects this non-NFC ID before the writer can attempt the second object.
-            return ObjectWriteReceipt(
-                key=key,
-                version_id="decomposed-e\u0301",
-                sha256=expected_sha256,
-                byte_size=expected_byte_size,
-            )
+            # Simulate an untrusted adapter that bypasses the receipt constructor.
+            receipt = object.__new__(ObjectWriteReceipt)
+            object.__setattr__(receipt, "key", key)
+            object.__setattr__(receipt, "version_id", "decomposed-e\u0301")
+            object.__setattr__(receipt, "sha256", expected_sha256)
+            object.__setattr__(receipt, "byte_size", expected_byte_size)
+            return receipt
 
         def read_exact(self, key, version_id):
             raise AssertionError("read-back must not run for an invalid receipt")
 
     store = InvalidFirstReceiptStore()
-    with pytest.raises(ObjectStoreWriteContractError):
+    with pytest.raises(ObjectStoreAcknowledgementError):
         write_prepared_cloud_snapshot_bundle(bundle, store)
 
     assert store.put_keys == [bundle.source_object.key]
