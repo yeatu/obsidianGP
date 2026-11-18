@@ -31,12 +31,23 @@ def test_http_error_is_sanitized_and_does_not_echo_response_body(monkeypatch):
     assert str(error.value) == "GitHub API request failed"
 
 
-def test_comment_history_limit_fails_closed(monkeypatch):
+def test_comment_history_uses_bounded_pagination(monkeypatch):
     instance = client()
-    monkeypatch.setattr(instance, "_request", lambda *args, **kwargs: [{"body": ""}] * 99)
-    assert len(instance.list_comments(9)) == 99
+    calls = []
+    def paged(method, path, payload=None):
+        calls.append(path)
+        if "page=1" in path:
+            return [{"body": str(i)} for i in range(100)]
+        return [{"body": "last"}]
+    monkeypatch.setattr(instance, "_request", paged)
+    assert len(instance.list_comments(9)) == 101
+    assert len(calls) == 2
+    assert "page=1" in calls[0] and "page=2" in calls[1]
+
+def test_comment_history_over_pagination_limit_fails_closed(monkeypatch):
+    instance = client()
     monkeypatch.setattr(instance, "_request", lambda *args, **kwargs: [{"body": ""}] * 100)
-    with pytest.raises(GitHubAPIError, match="single-page limit"):
+    with pytest.raises(GitHubAPIError, match="pagination limit"):
         instance.list_comments(9)
 
 
@@ -55,7 +66,7 @@ class FakeComments:
     def list_comments(self, issue_number):
         return list(self.comments)
     def create_comment(self, issue_number, body):
-        self.comments.append({"body": body})
+        self.comments.append({"body": body, "user": {"login": "github-actions[bot]"}})
 
 
 def test_comment_status_store_preserves_first_digest_on_retry_or_changed_body():
