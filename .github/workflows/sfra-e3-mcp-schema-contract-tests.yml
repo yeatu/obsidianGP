@@ -1,0 +1,51 @@
+name: SFRA E3 MCP schema contract fixture tests
+
+on:
+  push:
+    branches:
+      - "executor-3/issue-72-mcp-schema-correction"
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP/**"
+      - ".github/workflows/sfra-e3-mcp-schema-contract-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-schema-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP/pyproject.toml"
+      - name: Install local E1, E2, B1, integration and MCP packages
+        shell: bash
+        run: |
+          E1_DIR="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          INTEGRATION_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          MCP_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$E1_DIR"
+          python -m pip install -e "$E2_DIR"
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$INTEGRATION_DIR"
+          python -m pip install -e "$MCP_DIR[test]"
+      - name: Verify the exact MCP SDK version
+        run: |
+          python - <<'PY'
+          from importlib.metadata import version
+          actual = version("mcp")
+          if actual != "2.3.0":
+              raise SystemExit(f"Expected MCP SDK 2.3.0, found {actual}")
+          print("MCP SDK version:", actual)
+          PY
+      - name: Run the fixture-only MCP package suite
+        run: |
+          MCP_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP"
+          python -m pytest -q "$MCP_DIR/tests"
