@@ -236,3 +236,24 @@ The state branch separates files and Git history from the source Vault but does 
 Each persistence run checks out an explicit `vault_ref` input (default: `executor-1/sfra-indexer-session-1`; never an implicit switch to `main`), resolves its actual `vault_commit_sha` using `git rev-parse HEAD`, indexes only that checkout's `ГП/` tree, and stores both values in `state/manifest.json`. Legacy `source_branch` and `source_commit` keys remain as aliases so existing manifest readers continue to work. When manually dispatching the workflow, choose the Vault ref deliberately; the implementation branch and Vault source ref are separate concepts.
 
 The independent-run integration test will use its own fixture Vault, SQLite database, and \`sfra-state-test\` branch. It must never write test data to production \`sfra-state\`.
+
+
+## Additive E1 cloud-index verification
+
+The public, read-only cloud-index verification API is additive and separate from
+the Git-backed v1 state manifest and restore workflow:
+
+- parse_cloud_index_attestation(raw_bytes) parses the exact canonical
+  sfra.e1.cloud-index-attestation.v1 payload into immutable E1-owned types.
+- verify_materialized_cloud_index(database_path, source_root, attestation=...,
+  markdown_inventory=...) verifies the already-materialized Markdown tree,
+  the exact #119 inventory and attestation bytes, and the E1 SQLite database.
+- The result is an immutable CloudIndexVerificationReport; failures raise
+  CloudIndexVerificationError with a stable code and a safe message.
+
+The verifier opens SQLite read-only, enables query-only mode, checks the exact
+schema_info.schema_version value (currently 2), and never calls the mutating
+database connection or migration path. Git revisions and opaque immutable-import
+IDs remain separate tagged variants. The report establishes consistency of the
+materialized snapshot; it does not authenticate source origin or provider
+immutability. All tests use temporary synthetic fixtures only.
