@@ -1,13 +1,49 @@
 # SFRA — оперативная панель проекта
 
-> Краткая сводка текущего состояния и навигация по активной работе.  
-> **Источник истины по задаче:** соответствующая GitHub Issue и её последние действующие события.  
-> **Нормативный протокол:** [Issue #20 — Governance Protocol v2](https://github.com/yeatu/obsidianGP/issues/20).  
+> Краткая сводка текущего состояния и точка входа для любой новой нейросети, подключающейся к работе.  
+> **Источник истины по конкретной задаче:** соответствующая GitHub Issue и её последние действующие события.  
+> **Нормативный протокол:** [Issue #20 — Governance Protocol v2.1](https://github.com/yeatu/obsidianGP/issues/20).  
 > Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Main HEAD before this dashboard update:** `6f655e77a8071445544f77ee4b8c75278649e100`  
+**Main HEAD before this dashboard update:** `11ce3f2bd02e5bb9fb6974e1735aaacd0637846b`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
+
+## 0. Как новой нейросети начать работу
+
+Не требуется отдельное назначение задачи пользователем или координатором. Прочитай эту панель, выбери свободную задачу своей роли, самостоятельно зафиксируй CLAIM и начинай работу.
+
+### Роли
+
+- **E — исполнитель.** Захватывает задачи `IMPLEMENTATION` и `INTEGRATION`.
+- **A — аналитик.** Захватывает задачи `ANALYSIS` и `REVIEW_REQUEST`, включая независимый аудит.
+- **Coordinator — координатор.** Только координатор захватывает `COORDINATOR_DECISION`; полномочия координатора определены в Issue #20.
+
+Буква в Agent ID определяет роль. `E1`, `E2`, `E3` — участники одной роли E; `A1`, `A2`, `A3` — участники одной роли A. Цифра нужна только для уникальности участника. Она не задаёт старшинство, приоритет, исключительное право на конкретную задачу или запрет на её захват другим участником той же роли.
+
+### Если у тебя ещё нет Agent ID
+
+Сохрани Agent ID/роль, если они уже заданы средой или предыдущей договорённостью проекта. Если идентификатора нет, выбери роль по типу подходящей задачи и зарегистрируй следующий свободный номер этой роли: например, новый исполнитель может стать `E4`, новый аналитик — `A4`. Перед выбором проверь последние CLAIM и активные идентификаторы в GitHub, чтобы не дублировать действующий ID. Нумерация E и A независимая. Никакой автоматизации или предварительного назначения не требуется.
+
+### Порядок самостоятельного CLAIM
+
+1. Найди в таблице ниже задачу, тип которой соответствует твоей роли.
+2. Выбери задачу без действующего владельца, без статуса BLOCKED и с выполненными зависимостями. Для зависимой задачи дождись выполнения перечисленных предварительных условий.
+3. Открой её GitHub Issue. Проверь state, описание, критерии приёмки, scope, последние комментарии, действующие CLAIM/RELEASE/BLOCKED/REVIEW и пересекающуюся работу в соседних Issues/PR. Панель является навигацией, а не заменой этой проверки.
+4. Опубликуй в Issue комментарий:
+   ```
+   CLAIM
+   Task: #<issue>
+   Agent: <E<n>|A<n>>
+   Role: <E|A>
+   Scope: <что именно беру>
+   Started: <UTC timestamp>
+   ```
+5. Сразу повторно прочитай комментарии Issue. При одновременном захвате действует корректный CLAIM с наименьшим GitHub comment ID. Если твой CLAIM проиграл, прекрати пересекающуюся работу и зафиксируй `CLAIM_CONFLICT_YIELD`.
+6. После успешной повторной проверки немедленно начинай работу. Не жди подтверждения координатора и не проси пользователя назначить задачу, если подходящая свободная задача существует.
+7. В ходе работы публикуй `PROGRESS`, фиксируй evidence в Issue/PR/commit/Actions. По завершении самостоятельно создай `REVIEW_REQUEST`; независимый reviewer должен быть участником роли A и не должен участвовать в проверяемом результате.
+
+**Запрещено:** E не захватывает задачи роли A, A не захватывает задачи роли E. Цифровой суффикс не меняет ролевые права. Если подходящей свободной задачи своей роли нет, проверь готовые подзадачи и зависимости и следуй §10 Issue #20.
 
 ## 1. Текущий этап
 
@@ -26,27 +62,27 @@
 
 ## 2. Активные задачи
 
-Все задачи ниже открыты и доступны для самостоятельного CLAIM подходящим свободным участником. E/A-префикс не ограничивает захват. Фактический владелец определяется последним действующим CLAIM в соответствующей Issue.
+Целевая роль определяется типом по §4 Governance Protocol. Свободность и готовность к старту всегда подтверждай в самой Issue: открытая задача не считается свободной, если у неё есть действующий CLAIM, BLOCKED или невыполненные зависимости.
 
-| Issue | Приоритет | Тип | Задача / следующий результат | Зависимости |
-|---|---:|---|---|---|
-| [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
-| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
-| [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
-| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
-| [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
-| [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
-| [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | 30–50 synthetic gold cases с обязательными Node IDs и критическими условиями | Нет; параллельно |
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
-| [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
+| Issue | Приоритет | Тип | Роль | Задача / следующий результат | Зависимости / условие старта |
+|---|---:|---|:---:|---|---|
+| [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | **A** | Независимый аудит Governance Protocol v2.1 и этой панели | Нет; только независимый reviewer, не участвовавший в изменениях |
+| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | **E** | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
+| [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | **A** | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
+| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | **E** | Локальный MCP stdio scaffold, конфигурация и composition root | Можно начать bootstrap/lifecycle; public signatures не фиксировать до #37 |
+| [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | **E** | `search_vault` adapter поверх SearchVaultService | Начать после #37 и #38 |
+| [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | **E** | `read_source` adapter поверх ReadSourceService | Начать после #36, #37 и #38 |
+| [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | **A** | 30–50 synthetic gold cases с обязательными Node IDs и критическими условиями | Нет; параллельно |
+| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | **E** | End-to-end benchmark runner и метрики Context Pack | Начать после утверждения gold corpus в #41 |
+| [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | **E** | MCP conformance, read-only/security checks и quickstart | Начать после #36–#40 |
 
 ## 3. Порядок параллельной работы
 
-**Можно начинать сразу и независимо:** #36, #37, #41, #34.  
-**Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
-**Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
-**Quality runner:** #42 после утверждения gold corpus #41.  
-**Финальная интеграция:** #43 после двух handlers и snapshot guard.
+**Можно начинать независимо при условии, что Issue свободна:** #36 (E), #37 (A), #41 (A), #34 (A, независимый audit).  
+**Bootstrap lane:** #38 (E) может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
+**Tool handlers:** #39 (E) после #37/#38; #40 (E) после #36/#37/#38.  
+**Quality runner:** #42 (E) после утверждения gold corpus #41.  
+**Финальная интеграция:** #43 (E) после двух handlers и snapshot guard.
 
 Родительская запись #35 закрыта как завершённое координаторское решение. Это не означает завершение milestone: дочерние Issues остаются активными.
 
@@ -60,8 +96,8 @@
 
 ## 5. Действующие ограничения
 
-- [Issue #20](https://github.com/yeatu/obsidianGP/issues/20) — нормативный протокол CLAIM, динамических функций, декомпозиции, review, эскалации и полномочий координатора.
-- [Issue #34](https://github.com/yeatu/obsidianGP/issues/34) — независимая проверка Governance v2. Она продолжается параллельно и не блокирует независимые инженерные задачи, если reviewer не обнаружит затрагивающий их governance defect.
+- [Issue #20](https://github.com/yeatu/obsidianGP/issues/20) — нормативный Governance Protocol v2.1: роли E/A, правила цифровой идентификации, CLAIM, декомпозиция, review, эскалация и полномочия координатора.
+- [Issue #34](https://github.com/yeatu/obsidianGP/issues/34) — независимый audit v2.1. Он проверяет соответствие ролевой модели и автономного старта; не блокирует независимые инженерные задачи.
 - GitHub Issue Worker/Recovery, GitHub API writes, remote MCP HTTP/SSE/WebSocket, production indexing/persistence и публикация содержимого Vault в публичные Issues/comments не разрешаются этим milestone.
 - MCP MVP ограничен локальным stdio и двумя read-only tools. Не добавлять произвольный доступ к файловой системе или write tools.
 - E1 routine CI должен оставаться fixture-only. Не индексировать реальный Vault ради проверки задач.
@@ -70,12 +106,12 @@
 
 ## 6. Правила ведения панели
 
-1. Координатор поддерживает этот файл как короткий снимок активной работы, а не как хронику.
-2. Для каждой активной задачи указываются Issue, приоритет, тип, следующий результат и зависимости. Фактический владелец берётся из последнего действующего CLAIM в Issue.
+1. Координатор поддерживает этот файл как короткий снимок активной работы и точку входа для новых участников, а не как хронику.
+2. Для каждой активной задачи указываются Issue, приоритет, тип, целевая роль, следующий результат и зависимости. Фактический владелец берётся из последнего действующего CLAIM в Issue.
 3. Подробные findings, отчёты, review, CI runs, артефакты и HEAD-specific evidence остаются в соответствующей Issue, PR, commit или Actions run.
 4. Завершённые задачи удаляются из активной таблицы. История остаётся в GitHub и Git.
 5. Если панель расходится с GitHub, приоритет имеет текущее состояние Issue/PR/commit/Actions. Панель исправляется, но не переопределяет источник истины.
 
 ---
 
-**Рабочее правило:** открой эту панель, чтобы понять, что активно, какие зависимости существуют и какой этап развивается. Точный статус и права на CLAIM всегда проверяй в самой Issue.
+**Рабочее правило:** начни с этой панели, выбери задачу своей роли, проверь её актуальное состояние в Issue, зафиксируй CLAIM и приступай. Точный статус и все ограничения всегда проверяй в GitHub.
