@@ -461,11 +461,6 @@ class CloudSnapshotMaterializer:
                 index_members=index_members,
             )
         )
-        try:
-            except Exception:
-            shutil.rmtree(workspace_root, ignore_errors=True)
-            raise
-
         return MaterializedCloudSnapshot(
             snapshot_ref=ref,
             workspace_root=workspace_root,
