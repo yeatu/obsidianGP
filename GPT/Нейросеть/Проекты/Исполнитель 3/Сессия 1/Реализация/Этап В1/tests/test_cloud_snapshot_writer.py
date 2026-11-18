@@ -7,9 +7,11 @@ from pathlib import Path
 import pytest
 
 from sfra_context_integrations.cloud_snapshot_v2 import (
+    CloudSnapshotManifestV1,
     GitCommitSourceRevision,
     IndexerIdentity,
     SqliteSchemaIdentity,
+    build_cloud_snapshot_v2,
 )
 from sfra_context_integrations.cloud_snapshot_bundle import (
     PreparedCloudSnapshotBundle,
@@ -23,7 +25,9 @@ from sfra_context_integrations.cloud_snapshot_writer import (
     ObjectStorePartialWriteError,
     ObjectStoreReadBackError,
     ObjectStoreWriteContractError,
+    ObjectWriteReceipt,
     PreparedBundleRejectedError,
+    UploadedCloudSnapshotBundle,
     write_prepared_cloud_snapshot_bundle,
 )
 
@@ -265,3 +269,78 @@ def test_writer_accepts_only_the_exact_prepared_bundle_type():
     with pytest.raises(PreparedBundleRejectedError):
         write_prepared_cloud_snapshot_bundle({"source": b"not a descriptor"}, store)
     assert store.put_calls == 0
+
+
+@pytest.mark.parametrize(
+    "version_id",
+    [
+        "\\x00",
+        "control\\x1fcharacter",
+        "decomposed-e\\u0301",
+        "surrogate-\\ud800",
+        "v" * 4097,
+        " leading-space",
+        "trailing-space ",
+    ],
+)
+def test_write_receipts_reject_version_ids_outside_the_exact_v2_contract(version_id):
+    with pytest.raises(ObjectStoreWriteContractError):
+        ObjectWriteReceipt(
+            key="objects/source.zip",
+            version_id=version_id,
+            sha256="sha256:" + "a" * 64,
+            byte_size=1,
+        )
+
+
+def test_invalid_source_receipt_stops_before_the_index_object_write(tmp_path: Path):
+    bundle = _prepared_bundle(tmp_path)
+
+    class InvalidFirstReceiptStore:
+        def __init__(self):
+            self.put_keys = []
+
+        def put_if_absent(self, key, payload, *, expected_sha256, expected_byte_size):
+            self.put_keys.append(key)
+            # A conforming store must construct the shared receipt type. Its constructor
+            # rejects this non-NFC ID before the writer can attempt the second object.
+            return ObjectWriteReceipt(
+                key=key,
+                version_id="decomposed-e\\u0301",
+                sha256=expected_sha256,
+                byte_size=expected_byte_size,
+            )
+
+        def read_exact(self, key, version_id):
+            raise AssertionError("read-back must not run for an invalid receipt")
+
+    store = InvalidFirstReceiptStore()
+    with pytest.raises(ObjectStoreWriteContractError):
+        write_prepared_cloud_snapshot_bundle(bundle, store)
+
+    assert store.put_keys == [bundle.source_object.key]
+
+
+def test_uploaded_bundle_rejects_a_different_but_internally_valid_v2_identity(tmp_path: Path):
+    bundle = _prepared_bundle(tmp_path)
+    uploaded = write_prepared_cloud_snapshot_bundle(bundle, InMemoryImmutableObjectStore())
+    original = uploaded.built_snapshot.ref
+    forged_manifest = CloudSnapshotManifestV1(
+        source_revision=original.source_revision,
+        source_bundle=replace(original.source_bundle, key=original.source_bundle.key + ".unrelated"),
+        index_bundle=original.index_bundle,
+        indexer_identity=original.indexer_identity,
+        sqlite_schema_identity=original.sqlite_schema_identity,
+    )
+    forged_built = build_cloud_snapshot_v2(forged_manifest)
+
+    assert forged_built.ref.source_bundle.version_id == uploaded.source_receipt.version_id
+    assert forged_built.ref.index_bundle.version_id == uploaded.index_receipt.version_id
+    assert forged_built.ref.snapshot_id != uploaded.snapshot_id
+    with pytest.raises(ObjectStoreWriteContractError):
+        UploadedCloudSnapshotBundle(
+            prepared_bundle=bundle,
+            source_receipt=uploaded.source_receipt,
+            index_receipt=uploaded.index_receipt,
+            built_snapshot=forged_built,
+        )
