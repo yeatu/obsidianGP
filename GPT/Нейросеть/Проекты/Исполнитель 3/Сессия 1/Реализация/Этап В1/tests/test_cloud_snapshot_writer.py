@@ -237,3 +237,31 @@ def test_store_does_not_overwrite_existing_bytes_on_retry_after_partial_write(tm
 
     with pytest.raises(ObjectStoreConditionalConflictError):
         write_prepared_cloud_snapshot_bundle(bundle, store)
+
+
+def test_write_receipts_reject_mutable_aliases_but_preserve_opaque_provider_ids():
+    from sfra_context_integrations.cloud_snapshot_writer import ObjectWriteReceipt
+
+    for alias in ("latest", "LATEST", "current", "HEAD", "*"):
+        with pytest.raises(ObjectStoreWriteContractError):
+            ObjectWriteReceipt(
+                key="objects/source.zip",
+                version_id=alias,
+                sha256="sha256:" + "a" * 64,
+                byte_size=1,
+            )
+
+    receipt = ObjectWriteReceipt(
+        key="objects/source.zip",
+        version_id="provider-generation/2026-11-18:Opaque-0007",
+        sha256="sha256:" + "a" * 64,
+        byte_size=1,
+    )
+    assert receipt.version_id == "provider-generation/2026-11-18:Opaque-0007"
+
+
+def test_writer_accepts_only_the_exact_prepared_bundle_type():
+    store = RecordingStore()
+    with pytest.raises(PreparedBundleRejectedError):
+        write_prepared_cloud_snapshot_bundle({"source": b"not a descriptor"}, store)
+    assert store.put_calls == 0
