@@ -283,13 +283,13 @@ def test_sqlite_schema_identity_binds_e1_schema_info_version_and_snapshot_id() -
 def test_legacy_user_version_field_is_rejected_by_manifest_and_ref_parser() -> None:
     manifest_data = _manifest().to_dict()
     manifest_identity = manifest_data["sqlite_schema_identity"]
-    manifest_identity["user_version"] = manifest_identity.pop("schema_info_version")
+    manifest_identity["user_version"] = manifest_identity["schema_info_version"]
     with pytest.raises(CloudSnapshotContractError, match="unsupported field"):
         cloud_snapshot_manifest_from_dict(manifest_data)
 
     ref_data = build_cloud_snapshot_v2(_manifest()).ref.to_dict()
     ref_identity = ref_data["sqlite_schema_identity"]
-    ref_identity["user_version"] = ref_identity.pop("schema_info_version")
+    ref_identity["user_version"] = ref_identity["schema_info_version"]
     with pytest.raises(CloudSnapshotContractError, match="unsupported field"):
         cloud_snapshot_ref_v2_from_dict(ref_data)
 
@@ -385,7 +385,7 @@ def test_published_schemas_reject_legacy_user_version_property():
 
     old_manifest = deepcopy(git_manifest)
     identity = old_manifest["sqlite_schema_identity"]
-    identity["user_version"] = identity.pop("schema_info_version")
+    identity["user_version"] = identity["schema_info_version"]
     assert not manifest_validator.is_valid(old_manifest)
 
     old_ref = deepcopy(git_ref)
