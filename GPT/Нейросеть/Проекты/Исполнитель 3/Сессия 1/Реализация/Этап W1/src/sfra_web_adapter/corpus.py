@@ -93,7 +93,10 @@ class SyntheticGoldCorpus:
     def case_for_node(self, node_id: str) -> SyntheticCase | None:
         return next((case for case in self._cases.values() if node_id in case.node_ids), None)
 
-    def evidence(self, case: SyntheticCase, node_ids: tuple[str, ...] | None = None) -> dict[str, object]:
+    def evidence(self, case: SyntheticCase, node_ids: tuple[str, ...] | None = None,
+                 *, operation: str = "search_vault") -> dict[str, object]:
+        if operation not in {"search_vault", "read_source"}:
+            raise ValueError("unsupported synthetic evidence operation")
         selected = case.node_ids if node_ids is None else node_ids
         if not selected or len(selected) > 8:
             raise ValueError("synthetic response evidence must contain 1..8 nodes")
@@ -118,5 +121,6 @@ class SyntheticGoldCorpus:
             "corpus_version": CORPUS_VERSION,
             "corpus_sha256": CORPUS_SHA256,
             "case_id": case.case_id,
+            "operation": operation,
             "evidence": items,
         }
