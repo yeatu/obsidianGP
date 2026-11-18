@@ -86,3 +86,12 @@ The dedicated workflow `.github/workflows/sfra-gold-benchmark.yml` runs on pull 
 ## Checkout and PR identity
 
 The report records the PR head, the effective PR base verified from the checked-out merge-commit parents, the raw webhook event base, the actual checkout SHA and workflow checkout SHA separately. This avoids reporting a stale webhook base as the tree actually tested after a current-main synchronization. If the merge-ref graph cannot prove the base/head pairing, the report retains the event base and leaves the verified parent fields unavailable.\n\nThe merge parents are read from the raw commit object with `git cat-file -p`, not `git rev-list --parents`. This matters for the default depth-one GitHub Actions checkout: shallow boundaries can hide parents from revision traversal even though the checked-out merge commit object still contains both parent headers. The first parent is reported as the tested base only when the commit has exactly two parents and the second parent matches the exact PR head; otherwise the raw event base is retained and the verified parent fields remain unavailable.
+
+
+## Final implementation handoff — 18 November 2026
+
+The sequential benchmark corrections #113, #114 and #121 are implemented on PR #84. Task #121 has been RELEASED by E1; independent exact-head review is requested in Issue #151. The final synchronized implementation HEAD is `f9b12dcab26965b5d94f30d9194dde01184ef4b2`, based on current main `2996e0f6a2cf4e65271d92330138e77899cad692` (17 ahead / 0 behind).
+
+The complete 42-case synthetic corpus was run twice on that same implementation HEAD. Both runs produced identical JSON and Markdown reports: 40 cases passed and 2 E2 forbidden-node findings (gq-010, gq-036) remained failed as required by coordinator decision #115. The three gq-025/gq-028/gq-029 legacy corpus expectation mismatches and 11 other ContextPack status mismatches remain visible diagnostics; explicit SourceRead status mismatches are zero. Corpus v1.0.0 bytes and digest are unchanged. Run IDs, artifacts and SHA-256 values are recorded in #121 and review request #151.
+
+No retrieval/ranking/token-budget runtime, corpus, production state, Vault, SQLite, sidecar or provider integration was changed. PR #84 remains Draft/unmerged pending independent A review and C acceptance.
