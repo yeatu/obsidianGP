@@ -163,9 +163,10 @@ class _FakeDependencySourceReader:
 
     def resolve_current_node(self, node_id, snapshot):
         if self.resolve_status != "ok":
-            return {"status": self.resolve_status}
+            return {"status": self.resolve_status, "snapshot_id": snapshot.snapshot_id}
         return {
             "status": "ok",
+            "snapshot_id": snapshot.snapshot_id,
             "address": {"content_hash": self.hash_value},
         }
 
@@ -173,6 +174,7 @@ class _FakeDependencySourceReader:
         self.scope_calls += 1
         return {
             "status": "ok",
+            "snapshot_id": snapshot.snapshot_id,
             "target_source": dict(self.target),
             "fragments": [{"raw_text": "synthetic dependency"}],
         }
