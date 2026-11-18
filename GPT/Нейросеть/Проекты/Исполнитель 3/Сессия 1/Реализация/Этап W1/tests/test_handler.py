@@ -92,3 +92,39 @@ def test_status_store_ignores_human_forged_first_seen_marker():
     assert store.bind_request_body_sha256(21, digest) == digest
     assert len(client.created) == 1
     assert "state=STARTED" in client.created[0]
+
+def test_handler_renders_only_allowlisted_synthetic_evidence_in_issue_comment():
+    comments, worker = Comments(), Worker()
+    projection = {
+        "schema_version": 1,
+        "operation": "search_vault",
+        "items": [{
+            "node_id": "manual_intro",
+            "source_path": "synthetic/operations/manual.md",
+            "content_hash": "sha256:" + "a" * 64,
+            "line_start": 1,
+            "line_end": 2,
+            "excerpt": "Synthetic corpus excerpt.",
+        }],
+    }
+    handle_opened_event(payload(), event_name="issues", action="opened",
+        comments=comments, worker=worker, snapshot=object(), worker_commit_sha="a" * 40,
+        response_projection=lambda operation: projection)
+    rendered = comments.items[-1]["body"]
+    assert "SFRA synthetic evidence v1" in rendered
+    assert "Synthetic corpus excerpt." in rendered
+    assert "synthetic/operations/manual.md" in rendered
+
+def test_handler_rejects_non_synthetic_projection_provenance():
+    from sfra_web_adapter.handler import _safe_synthetic_projection
+    bad = {
+        "schema_version": 1, "operation": "search_vault",
+        "items": [{
+            "node_id": "node", "source_path": "/private/vault.md",
+            "content_hash": "sha256:" + "a" * 64,
+            "line_start": 1, "line_end": 1, "excerpt": "not allowed",
+        }],
+    }
+    import pytest
+    with pytest.raises(ValueError, match="not synthetic"):
+        _safe_synthetic_projection(bad, "search_vault")
