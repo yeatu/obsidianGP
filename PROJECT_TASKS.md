@@ -51,7 +51,7 @@
 
 **PinnedSnapshot security:** A2 review #55 found a mutable callback `__code__` bypass in PR #54. E2 implemented #67 in PR #70, but A1's independent review #78 found two more P1 bypasses: public binder `__closure__` exposes mutable registry state, and caller subclasses can override `verify_current()` while passing `isinstance` checks. A1 also found that previous CI did not test the current stacked #54 + #70 tree. Correction [#79](https://github.com/yeatu/obsidianGP/issues/79) is now the active implementation target. Neither #36/#51/#67 nor PR #54/#70 is accepted; no `read_source` runtime until #79, fresh independent A review and C acceptance.
 
-**Local MCP public contract:** A1 review #65 found actual MCP SDK-generated tool schemas did not enforce all constraints accepted in #37. Canonical correction [#72](https://github.com/yeatu/obsidianGP/issues/72) is open and free; #71 is a duplicate. PR #47 remains unmerged and handlers stay fail-closed pending #72 correction, fresh A review and C acceptance.
+**Local MCP public contract:** A1 review #65 found actual MCP SDK-generated tool schemas did not enforce all constraints accepted in #37. Canonical correction [#71](https://github.com/yeatu/obsidianGP/issues/71) is open and free; [#72](https://github.com/yeatu/obsidianGP/issues/72) is closed as its duplicate. PR #47 remains unmerged and handlers stay fail-closed pending #71 correction, fresh A review and C acceptance.
 
 **read_source preparation:** A1 accepted the parser-only slice in PR #66 at exact HEAD `b6db66655fa1ab476413c5259246e22d5279c43d` (26 fixture tests). Review #69 is closed. This does not complete #40 or enable runtime reading.
 
@@ -70,11 +70,11 @@
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | `IMPLEMENTATION` | **E** | `read_source` handler / service integration | E3 CLAIM; parser prep PR #66 принят по #69; runtime wiring после verifier и #38 gates |
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Synthetic benchmark runner и метрики Context Pack | E1 CLAIM; corpus v1.0.0 принят; Draft 2020-12 schema validation before execution |
 | [#53](https://github.com/yeatu/obsidianGP/issues/53) | P1 | `COORDINATOR_DECISION` | **C** | Owner-side retention/removal review старого Actions run/artifact | C1 CLAIM; Actions DELETE требует `Actions: write`; текущая интеграция не предоставляет DELETE |
-| [#72](https://github.com/yeatu/obsidianGP/issues/72) | P2 | `IMPLEMENTATION` | **E** | Enforce accepted #37 constraints in actual generated MCP tool schemas | Canonical correction to #65/#47; свободна; только tools.py/schema/tests |
+| [#71](https://github.com/yeatu/obsidianGP/issues/71) | P2 | `IMPLEMENTATION` | **E** | Enforce accepted #37 constraints in actual generated MCP tool schemas | Canonical correction to #65/#47; свободна; #72 closed as duplicate |
 | [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Synthetic ChatGPT Web Issues → Actions → SFRA response worker | E2 CLAIM; decision #75; isolated package/workflow/tests; synthetic fixtures only |
 | [#79](https://github.com/yeatu/obsidianGP/issues/79) | P1 | `IMPLEMENTATION` | **E** | Закрыть registry closure и subclass verifier bypass; исправить CI evidence | Follow-up to #67/PR #70; E implementation; security boundary; fixture-only |
 
-**Закрыты / приняты:** #37 (tool contracts), #41 (gold corpus), #49 (parallelization analysis), #63 (architecture analysis), #69 (parser-only review), #75 (Web adapter decision). #55/#65/#78 завершены с CHANGES_REQUESTED; #71 — duplicate #72; #76 — duplicate review request #78. #36/#51/#67 остаются не приняты до #79, свежего A review и C acceptance. #38/#47 остаются не приняты до #72, свежего A review и C acceptance. #40 runtime remains blocked.
+**Закрыты / приняты:** #37 (tool contracts), #41 (gold corpus), #49 (parallelization analysis), #63 (architecture analysis), #69 (parser-only review), #75 (Web adapter decision). #55/#65/#78 завершены с CHANGES_REQUESTED; #72 — duplicate #71; #76 — duplicate review request #78. #36/#51/#67 остаются не приняты до #79, свежего A review и C acceptance. #38/#47 остаются не приняты до #71, свежего A review и C acceptance. #40 runtime remains blocked.
 
 
 ## 2.1. Новое правило декомпозиции: parallel-first
@@ -86,7 +86,7 @@
 | PR | Состояние | Указание |
 |---|---|---|
 | [#44 — governance / active panel](https://github.com/yeatu/obsidianGP/pull/44) | Открыт | Точный review HEAD указан в Issue #34; merge только после независимого A3 review |
-| [#47 — local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт | HEAD `9abf82036b71a8b1a55b3e4f43f124c4611ed2f3`; A1 CHANGES_REQUESTED #65; correction #72; не merge |
+| [#47 — local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт | HEAD `9abf82036b71a8b1a55b3e4f43f124c4611ed2f3`; A1 CHANGES_REQUESTED #65; correction #71; не merge |
 | [#54 — PinnedSnapshot verifier correction](https://github.com/yeatu/obsidianGP/pull/54) | Открыт | HEAD `f234c5e2de0f8ed8684a8605bafc50d83abf5d74`; A2 CHANGES_REQUESTED #55; corrections #67/#79; не merge |
 | [#70 — hide verifier callback](https://github.com/yeatu/obsidianGP/pull/70) | Открыт | HEAD `c7d99a822229c31d21688e04f23cf0a5ce06f722`; A1 CHANGES_REQUESTED #78; follow-up #79; no merge |
 | [#57 — search_vault handler](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft | Подготовительный handler для #39; интеграция после принятия #38 |
