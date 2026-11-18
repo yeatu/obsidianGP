@@ -62,7 +62,6 @@
 |---|---:|---|:---:|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | `REVIEW_REQUEST` | **A** | Независимый аудит Governance v2.3 и PR #44 | Проверить актуальный HEAD PR #44 и Issue #20; после merge сверить результат в main |
 | [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | `IMPLEMENTATION` | **E** | Обязательная проверка активного verifier PinnedSnapshot до любого чтения E1 | Нет |
-| [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | `ANALYSIS` | **A** | Единые контракты MCP-инструментов и непрерывность SnapshotRef между stateless-вызовами | Нет |
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | `IMPLEMENTATION` | **E** | Локальный каркас MCP stdio-сервера, конфигурация и сборка сервисов | Базовый жизненный цикл и конфигурацию можно делать до #37; публичные сигнатуры не фиксировать |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | `IMPLEMENTATION` | **E** | `search_vault` поверх SearchVaultService | После #37 и #38 |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | `IMPLEMENTATION` | **E** | `read_source` поверх ReadSourceService | После #36, #37 и #38 |
