@@ -74,3 +74,21 @@ def test_handler_ignores_human_forged_completed_marker():
     assert handle_opened_event(payload(), event_name="issues", action="opened",
         comments=comments, worker=worker, snapshot=object(), worker_commit_sha="a" * 40) == "COMPLETED"
     assert worker.calls == 1
+
+def test_status_store_ignores_human_forged_first_seen_marker():
+    from sfra_web_adapter.ports import GitHubCommentStatusStore
+    class Client:
+        def __init__(self):
+            self.comments = [{"body": "<!-- sfra-web-v1 issue=21 body_sha256=" + "a" * 64 + " state=COMPLETED -->",
+                              "user": {"login": "attacker"}}]
+            self.created = []
+        def list_comments(self, issue_number):
+            return self.comments
+        def create_comment(self, issue_number, body):
+            self.created.append(body)
+    client = Client()
+    store = GitHubCommentStatusStore(client)
+    digest = "b" * 64
+    assert store.bind_request_body_sha256(21, digest) == digest
+    assert len(client.created) == 1
+    assert "state=STARTED" in client.created[0]
