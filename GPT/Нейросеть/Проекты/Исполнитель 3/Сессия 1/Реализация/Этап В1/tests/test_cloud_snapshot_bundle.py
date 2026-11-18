@@ -82,10 +82,10 @@ def _build(
 
 _INVALID_V2_OBJECT_KEYS = [
     pytest.param(" \\t ", id="whitespace-only"),
-    pytest.param("prepared/bad\\nkey.zip", id="control-character"),
-    pytest.param("prepared/cafe\\u0301.zip", id="non-nfc"),
+    pytest.param("prepared/bad\nkey.zip", id="control-character"),
+    pytest.param("prepared/cafe\u0301.zip", id="non-nfc"),
     pytest.param("prepared/" + ("x" * 4090), id="over-4096-characters"),
-    pytest.param("prepared/\\ud800.zip", id="surrogate"),
+    pytest.param("prepared/\ud800.zip", id="surrogate"),
 ]
 
 
