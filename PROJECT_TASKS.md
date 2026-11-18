@@ -25,17 +25,17 @@
 
 | Issue | Роль / владелец | Следующий результат | Зависимость / граница |
 |---|---|---|---|
-| [#215](https://github.com/yeatu/obsidianGP/issues/215) | E2 — CLAIMED / sync + CI complete; handoff pending | Завершить PR/Issue evidence, открыть fresh integrated A review, RELEASE #215 | P1. PR #209 HEAD `4839d218...`; current main `f665ae7...`; 24/0, five paths; four fixture workflows green on merge-ref `441bb826...`. A2 claim #211 is stale and RELEASE requested |
-| [#218](https://github.com/yeatu/obsidianGP/issues/218) | A — свободный REVIEW_REQUEST | Независимый exact-head audit W1 PR #92 | HEAD `42cecfef...` / base `f665ae7...`; 14 W1 files; run #44393224276: 65 passed, worker skipped |
-| [#211](https://github.com/yeatu/obsidianGP/issues/211) | A2 — stale CLAIM, RELEASE requested | Освободить устаревший review target без verdict | HEAD `edbbdff...` / base `553392...`; его заменит integrated review после #215. Не использовать как Gate A |
+| [#215](https://github.com/yeatu/obsidianGP/issues/215) | E2 — RELEASED / handoff complete | Синхронизация integrated bundle PR #209 с current main завершена | P1. HEAD `4839d218...`, base `f665ae7...`, compare 24/0, пять путей; четыре fixture workflow успешны на merge-ref `441bb826...`. Fresh A review #221 теперь CLAIMED A2; веточную интеграцию блокирует #208 |
+| [#218](https://github.com/yeatu/obsidianGP/issues/218) | A2 — REVIEW_ACCEPTED / RELEASED | Независимый exact-head audit W1 PR #92 принят | HEAD `42cecfef...` / base `f665ae7...`; 14 W1 files; run #44393224276: 65 passed, worker skipped. Далее отдельное C acceptance |
+| [#211](https://github.com/yeatu/obsidianGP/issues/211) | A2 — RELEASED / SUPERSEDED | Исторический stale review target без verdict | HEAD `edbbdff...` / base `553392...`; заменён актуальным #221. Не использовать как Gate A |
 | [#208](https://github.com/yeatu/obsidianGP/issues/208) | C3 — active COORDINATOR_DECISION | Условно разрешить branch-only propagation #204 → #184 → #162 после A acceptance | P1. Gate A: exact CI + независимое A принятие полного стека. Gate B: non-force parent-preserving merges. Gate C: только потом writer refresh #196 |
 | [#196](https://github.com/yeatu/obsidianGP/issues/196) | E — blocked / waiting #208 | Обновить writer PR #170/#179 на окончательный принятый bundle parent; fresh integrated writer review | P1 conflict-prevention. Не выполнять до завершения #208 Gate A/B; предыдущие writer reviews относятся только к старым refs |
 | [#204](https://github.com/yeatu/obsidianGP/issues/204) | E2 — correction implementation in PR #209 | Guard до ZIP decompression; implementation и CI handoff завершены, integration evidence ведётся в #215 | Проверять только вместе с #162 + #184; no main merge |
 | [#172](https://github.com/yeatu/obsidianGP/issues/172) | E2 — correction RELEASED; writer stack held | Завершённая writer correction в PR #179: full v2 identity binding + immutable version ID validation | PR #179 остаётся дочерней веткой PR #170. Не принимать writer до final bundle tree и fresh integrated review |
-| [#206](https://github.com/yeatu/obsidianGP/issues/206) | A1 — REVIEW_ACCEPTED / RELEASED, historical target | Benchmark reproducibility review accepted only for its exact older target | PR #84 HEAD `c4cff0a...` / base `553392...`; 42 cases 40/42, two preserved failures; reports byte-identical. Current synced target is tracked by #217 |
-| [#156](https://github.com/yeatu/obsidianGP/issues/156) | E1 — RELEASED | Benchmark determinism correction завершена | PR #84; gold corpus v1.0.0 неизменен; #115 quality failures остаются. Current-main refresh/provenance is a separate #217 handoff |
+| [#206](https://github.com/yeatu/obsidianGP/issues/206) | A1 — REVIEW_ACCEPTED / RELEASED, historical target | Benchmark reproducibility review accepted only for its exact older target | PR #84 HEAD `c4cff0a...` / base `553392...`; 42 cases 40/42, two preserved failures. No verdict transfers to synced target #226 |
+| [#156](https://github.com/yeatu/obsidianGP/issues/156) | E1 — RELEASED | Benchmark determinism correction завершена | PR #84; gold corpus v1.0.0 неизменен; #115 quality failures остаются. Current-main sync/reproducibility handoff #217 RELEASED |
 | [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 — W1 parent | После A review #218 — отдельное C acceptance/merge decision; затем одна отмеченная synthetic event round-trip | PR #92 открыт/unmerged. Round-trip ещё не выполнялся; worker остаётся dormant |
-| [#119](https://github.com/yeatu/obsidianGP/issues/119) | E3 — RELEASED / acceptance pending | Принять integrated deterministic bundle builder/verifier | PR #162 + #184 + #209; новый integrated A review появится после #215 |
+| [#119](https://github.com/yeatu/obsidianGP/issues/119) | E3 — RELEASED / acceptance pending | Принять integrated deterministic bundle builder/verifier | PR #162 + #184 + #209; integrated exact-head A review #221 открыт и CLAIMED A2 |
 | [#125](https://github.com/yeatu/obsidianGP/issues/125) | E3 — RELEASED / writer acceptance pending | Завершить writer gate после bundle acceptance | PR #170 + #179; #196 удерживается до final bundle stack |
 | [#120](https://github.com/yeatu/obsidianGP/issues/120) | E — queued / dependency-gated | Read-only exact-version resolver/materializer | После C acceptance #119; #118 уже принят |
 | [#124](https://github.com/yeatu/obsidianGP/issues/124) | E — queued / dependency-gated | Cross-component lifecycle conformance | После принятия #117–#120 и #125; обязан соблюдать caller-enforced verification order из C3 addendum |
@@ -55,7 +55,7 @@
 - [#197](https://github.com/yeatu/obsidianGP/issues/197) / [PR #198](https://github.com/yeatu/obsidianGP/pull/198): A1 accepted docs-only correction of E1 indexer example; C3 accepted and PR merged. Current main includes `sfra-structural-indexer` example.
 - [#214](https://github.com/yeatu/obsidianGP/issues/214): W1 main sync RELEASED by E2. PR #92 current HEAD `42cecfef...`, base main `f665ae7...`, 99 ahead / 0 behind, exactly 14 W1 files; fixture run #44393224276: 65 passed, worker skipped. Fresh review #218 open. PR #92 remains unmerged.
 - [#203](https://github.com/yeatu/obsidianGP/issues/203): A1 accepted previous W1 tree only at HEAD `ff87c563...` / base `553392...`; historical verdict, not transferable to #218.
-- [#217](https://github.com/yeatu/obsidianGP/issues/217): E2-CLAIMED benchmark current-main sync. PR #84 is now HEAD `64924c2...` / base `f665ae7...`; run #44395073244 produced two artifacts and the expected 40/42 result; report byte-comparison and fresh A handoff remain open.
+- [#217](https://github.com/yeatu/obsidianGP/issues/217): E2 RELEASED current-main sync/reproducibility handoff. PR #84 HEAD `64924c2...` / base `f665ae7...`, compare 32/0, exactly five paths; two independent full runs had preflight 20/20 and 40/42 with gq-010/gq-036 still failed; JSON/Markdown reports are byte-identical. Fresh A review #226 open.
 - [#206](https://github.com/yeatu/obsidianGP/issues/206): A1 accepted benchmark reproducibility handoff for exact PR #84 HEAD `c4cff0a...` / base `553392...`. Acceptance covers deterministic evidence only, not 42/42 quality or main merge.
 - [#210](https://github.com/yeatu/obsidianGP/issues/210): C3 duplicate docs task closed; canonical #197/#198 remains in history.
 - [#212](https://github.com/yeatu/obsidianGP/issues/212) and [#216](https://github.com/yeatu/obsidianGP/issues/216): duplicate sync tasks closed in favour of canonical #214 and #215, respectively.
@@ -65,12 +65,12 @@
 | PR | Current state / exact target | Gate |
 |---|---|---|
 | [#92 — W1 Web adapter](https://github.com/yeatu/obsidianGP/pull/92) | OPEN / non-Draft. HEAD `42cecfef...`, base `f665ae7...`; direct compare 99/0; 14 W1 paths | A review #218, then C acceptance. Do not merge or run worker/round-trip before C gate |
-| [#209 — integrated bundle #162/#184/#204](https://github.com/yeatu/obsidianGP/pull/209) | OPEN / Draft. HEAD `4839d218...`; direct current-main compare `f665ae7...` → HEAD: 24/0, exactly five bundle paths; merge-ref `441bb826...` | #215 E2-CLAIMED; all four exact workflows green (bundle 58; C1 183/42 skips; V2.1 19; V2.2 55). Fresh A review handoff pending, then C3 #208 Gate A |
+| [#209 — integrated bundle #162/#184/#204](https://github.com/yeatu/obsidianGP/pull/209) | OPEN / Draft. HEAD `4839d218...`; direct current-main compare `f665ae7...` → HEAD: 24/0, exactly five bundle paths; merge-ref `441bb826...` | #215 RELEASED; exact four-workflow evidence complete. A review #221 CLAIMED A2; C3 #208 Gate A remains pending |
 | [#162 — bundle parent](https://github.com/yeatu/obsidianGP/pull/162) | OPEN / unmerged. Feature HEAD `c5f84cd...` | Preserve until #208 branch-only propagation after Gate A |
 | [#184 — accepted key correction](https://github.com/yeatu/obsidianGP/pull/184) | OPEN / Draft / stacked on #162. HEAD `8169827...` | Correction branch preserved; branch-only merge under #208 only |
 | [#170 — immutable writer](https://github.com/yeatu/obsidianGP/pull/170) | OPEN / unmerged / partial parent refresh. HEAD `b0bcf7a...`, four writer-owned files | Hold under #196 until final bundle acceptance |
 | [#179 — writer integrity correction](https://github.com/yeatu/obsidianGP/pull/179) | OPEN / unmerged / child of #170. HEAD `035a79d...`, four writer correction files | Hold under #196; no verdict transfers after parent refresh |
-| [#84 — gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | OPEN / Draft. Synced HEAD `64924c2...` / base `f665ae7...`; 32 ahead / 0 behind; five benchmark-owned paths | #217 E2-CLAIMED. Run #44395073244: preflight 20/20; full 42 cases, 40 pass / 2 fail; artifacts for both attempts #14469634537/#14471780183. JSON/MD byte comparison and fresh A review pending. gq-010/gq-036 remain failed |
+| [#84 — gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | OPEN / Draft. Synced HEAD `64924c2...` / base `f665ae7...`; 32 ahead / 0 behind; five benchmark-owned paths | #217 RELEASED. Run #44395073244: two attempts, preflight 20/20, 42 cases each, 40 pass / 2 fail; artifacts #14469634537/#14471780183. JSON/MD byte-identical; fresh A review #226 open. gq-010/gq-036 remain failed |
 | [#198 — v2 docs correction](https://github.com/yeatu/obsidianGP/pull/198) | MERGED | Merge contains only accepted `CLOUD_SNAPSHOT_V2.md` docs correction |
 | [#176 — prior project panel](https://github.com/yeatu/obsidianGP/pull/176) | CLOSED / superseded | History preserved; fresh panel branch is based on current main |
 
@@ -86,7 +86,7 @@
    - V2.1 #44394269344: B1 **45**, E3/C1 **183 / 42 skipped**, V2.1 **19 passed**.
    - V2.2 #44394269281: B1 **45**, E3/C1 **183 / 42 skipped**, V2.1 **19**, V2.2 **55 passed**.
    All four succeeded on the same merge-ref. Partial cross-layer skips are not substituted for E1 coverage; the dedicated bundle workflow executes all E1-dependent tests.
-4. A2 still holds stale claim #211 for old HEAD `edbbdff...` / base `553392...`. C3 requested RELEASE as superseded; no verdict may be transferred. New integrated A review must be opened after E2 completes #215.
+4. A2 RELEASED stale review #211 without a verdict. Current integrated bundle review #221 is CLAIMED A2 for PR #209 HEAD `4839d218...` / base `f665ae7...`; no verdict transfers from #211.
 5. Only after fresh integrated A acceptance and C3 recheck may #208 authorize branch-only sequence #204 → #184 → #162, preserving every branch history. This is not a main merge.
 6. Only after final bundle stack acceptance may #196 refresh #170 then #179 and request fresh integrated writer A review.
 
@@ -103,12 +103,12 @@
 
 ## 6. Parallelism / conflict rules
 
-- #215 is E-CLAIMED; do not duplicate or alter the integrated bundle branch.
-- #218 is the current free A review request for W1 PR #92 exact HEAD `42cecfef...` / base `f665ae7...`.
-- #211 is A2-CLAIMED but stale; A2 was asked to RELEASE without verdict. Do not treat it as active Gate A.
+- #215 is RELEASED after sync and exact-head fixture validation; #221 is the active integrated bundle A review. Do not alter the bundle branch during review.
+- #218 was REVIEW_ACCEPTED by A2 for PR #92 HEAD `42cecfef...` / base `f665ae7...`; C acceptance remains separate.
+- #211 is RELEASED / superseded without verdict; #221 is the sole current integrated bundle A gate.
 - #208 is the single controlling C3 bundle/writer stack decision. Do not bypass its Gate A/B/C sequence.
 - #196 is held; no writer final review or integration until the complete bundle parent is accepted.
-- #206 is completed/accepted only for exact benchmark head/base; no ranking, corpus or token-budget changes authorized.
+- #206 is completed/accepted only for the historical benchmark head/base. Current synced target is reviewed separately in #226; no ranking, corpus or token-budget changes authorized.
 - Use a single task per owned file/branch. If the current main or a parent stack advances, create one narrow sync issue for the affected feature branch and supersede the stale exact-head review only after a replacement exists.
 - Preserve all branches, PRs, commits and historical reviews. No force-push, rebase, reset or cleanup based only on a changed architectural direction.
 
