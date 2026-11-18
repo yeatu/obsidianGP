@@ -12,10 +12,21 @@ from pathlib import Path
 from typing import Any
 
 from sfra_context_builder.models import SnapshotRef
-from sfra_context_integrations.snapshot import (
-    PinnedSnapshot,
-    _register_snapshot_verifier,
-)
+from sfra_context_integrations.snapshot import PinnedSnapshot, SnapshotBindingError
+
+
+class _FixturePinnedSnapshot(PinnedSnapshot):
+    """Synthetic-only subclass with a test-controlled verifier callback."""
+
+    __slots__ = ("_fixture_verifier",)
+
+    def verify_current(self) -> None:
+        try:
+            self._fixture_verifier()
+        except SnapshotBindingError:
+            raise
+        except Exception as exc:
+            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
 
 
 def make_test_pinned_snapshot(
@@ -34,7 +45,7 @@ def make_test_pinned_snapshot(
     # This constructor bypass is intentionally confined to the test fixture.
     # Production code has no importable verifier minting class/token and must
     # use bind_pinned_snapshot(), which creates its own verified closure.
-    pinned = object.__new__(PinnedSnapshot)
+    pinned = object.__new__(_FixturePinnedSnapshot)
     object.__setattr__(pinned, "ref", ref)
     object.__setattr__(pinned, "sidecar_root", sidecar_root)
     object.__setattr__(pinned, "database_path", database_path)
@@ -42,5 +53,5 @@ def make_test_pinned_snapshot(
     object.__setattr__(pinned, "vault_git_root", vault_git_root)
     object.__setattr__(pinned, "vault_root", vault_root)
     object.__setattr__(pinned, "manifest", manifest)
-    _register_snapshot_verifier(pinned, callback)
+    object.__setattr__(pinned, "_fixture_verifier", callback)
     return pinned
