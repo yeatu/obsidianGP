@@ -426,3 +426,38 @@ def test_detects_source_file_replacement_during_read(tmp_path, monkeypatch):
     with pytest.raises(CloudIndexVerificationError) as error:
         _verify(root, db_path, inventory, attestation)
     assert error.value.code == "filesystem_race"
+
+
+def test_missing_materialized_root_has_safe_typed_failure(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    root.rename(tmp_path / "moved-vault")
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "filesystem_unsafe"
+    assert str(root) not in str(error.value)
+    assert error.value.__cause__ is None
+
+
+def test_race_failure_does_not_retain_raw_os_exception(tmp_path, monkeypatch):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    target = root / "nested" / "note.md"
+    os_module = __import__("os")
+    original_read = os_module.read
+    target_inode = target.stat().st_ino
+    replaced = False
+
+    def racing_read(fd, size):
+        nonlocal replaced
+        chunk = original_read(fd, size)
+        if not replaced and os_module.fstat(fd).st_ino == target_inode:
+            replaced = True
+            target.unlink()
+        return chunk
+
+    monkeypatch.setattr("sfra_indexer.cloud_index_verifier.os.read", racing_read)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "filesystem_race"
+    assert error.value.__cause__ is None
+    assert str(root) not in str(error.value)
