@@ -30,7 +30,7 @@ Delivery is at-least-once for service execution, not exactly-once. Per-Issue con
 - A changed body under the same Issue is rejected and never rebound.
 - A FAILED marker is terminal. Recovery requires preserving the original Issue and all markers, then opening a new owner-authored [SFRA] Issue with a new request ID and unchanged payload intent, linking it to the failed Issue. Do not edit or delete the original Issue/comments.
 - Only bot-authored markers count. Human comments containing marker-shaped text are ignored.
-- Comment history is bounded to 1000 entries (10 pages × 100). If more history exists, the worker fails closed rather than silently dropping the first-seen marker.
+- Comment history is bounded to fewer than 1000 entries (10 pages × 100). At 1000 or more comments the worker fails closed rather than silently dropping the first-seen marker.
 
 ## Safety
 
