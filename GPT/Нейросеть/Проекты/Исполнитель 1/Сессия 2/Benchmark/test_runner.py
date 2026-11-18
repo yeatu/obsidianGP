@@ -233,11 +233,14 @@ def test_failed_dependency_address_resolution_counts_zero_fallback_reads():
 
 
 def test_e2_hit_and_explicit_scope_reads_do_not_inflate_fallback_rate():
+    from sfra_context_builder.models import SnapshotRef
+
+    snapshot = SnapshotRef("a" * 40, "b" * 40, "sha256:" + "c" * 64)
     fake = _FakeDependencySourceReader()
     reader = runner.CountingSourceReader(fake)
 
-    reader.read_node("node_hit", "hash", "snapshot")
-    reader.read_scope("node_explicit", fake.hash_value, "document", "snapshot")
+    reader.read_node("node_hit", "hash", snapshot)
+    reader.read_scope("node_explicit", fake.hash_value, "document", snapshot)
 
     assert reader.e2_exact_source_reads == 1
     assert reader.explicit_source_reads == 1
