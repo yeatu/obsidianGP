@@ -65,7 +65,7 @@
 
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / владелец |
 |---|---:|---|:---:|---|---|
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, повторить 42 synthetic cases, выпустить exact-head report | E1 CLAIM; PR #84 Draft; текущий report: 40/42 gates passed, два gate failures и отдельный completeness invariant; не ослаблять assertions |
+| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, обновить PR к current main, повторить 42 synthetic cases и выпустить exact-head report | E1 CLAIM; PR #84 Draft на старой base `3388e040…`; report: 40/42 gates passed, два gate failures и отдельный completeness invariant; rebase на `9ba9d040…` и rerun обязательны; не ослаблять assertions |
 | [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Обновить W1 branch к текущему main, повторить exact-head fixture CI, затем передать на новый A review; позже отдельно провести один marked synthetic `issues.opened` round-trip | E2 CLAIM; PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; прежний run #44240799599: 44 passed на старой base `2051d0…`; review #97 закрыт как stale после merge PR #87; текущий main `9ba9d040…` |
 | [#86](https://github.com/yeatu/obsidianGP/issues/86) | P1 | `ANALYSIS` | **A** | Спроектировать cloud data plane и computer-independent import/sync; сравнить durable storage и каналы публикации | A1 CLAIM; analysis-only; не читать/экспортировать/переносить production Vault |
 
@@ -81,7 +81,7 @@
 | PR | Состояние | Трактовка |
 |---|---|---|
 | [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / awaiting rebase | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; base `2051d0ce6cdbceab1fc825c617708f8255266476` устарела после PR #87 merge; run #44240799599: 44 passed на прежней merge-ref; rebase на `9ba9d040…` и новый exact-head CI обязательны до нового A review |
-| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; prior fixture report 40/42 with unresolved failures; E1 correction continues |
+| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft / stale base | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; base `3388e040…` predates PR #87 merge; prior fixture report 40/42 with unresolved failures; E1 must rebase to `9ba9d040…` and rerun before final review |
 | [#47 — historical Local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт / Draft / HOLD | Preserved, not a target, do not merge |
 | [#57 — historical MCP search adapter](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft / HOLD | Preserved; no further MCP-only work or merge |
 | [#66 — historical read_source parser preparation](https://github.com/yeatu/obsidianGP/pull/66) | Открыт / Draft / HOLD | Accepted parser-only slice preserved for possible adaptation |
