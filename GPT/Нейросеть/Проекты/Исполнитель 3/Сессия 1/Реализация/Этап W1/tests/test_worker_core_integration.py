@@ -75,7 +75,7 @@ def test_synthetic_applications_expose_bounded_gold_corpus_projection():
     assert projected["evidence"][0]["node_id"] == "gate_rule"
     assert projected["evidence"][0]["source_path"] == "synthetic/policies/limits.md"
 
-    node = corpus.node("manual_intro")
+    node = corpus.node("gate_rule")
     assert node is not None
     read = SyntheticReadSourceApplication(corpus)
     request = SimpleNamespace(node_id=node.node_id, expected_hash=node.content_hash)
