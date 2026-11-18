@@ -6,7 +6,7 @@ This isolated package implements the approved GitHub Issues → GitHub Actions �
 
 - Fail-closed issues.opened gate: exact repository (yeatu/obsidianGP), owner-authored Issue, matching webhook sender, non-PR Issue and [SFRA] title prefix.
 - Strict 32 KiB UTF-8 body cap and SHA-256 over exact event-body bytes.
-- Comment-backed immutable first-seen digest; only comments whose author has both the exact login `github-actions[bot]` and GitHub account type `Bot` are trusted as ledger markers.
+- Comment-backed immutable first-seen digest; marker authors must match the exact GitHub Actions bot login `github-actions[bot]` and stable numeric user ID `41898282`. If GitHub comment metadata includes an account `type`, it must be `Bot`; missing or mismatched numeric IDs fail closed. The stable ID is verified from GitHub's public user profile API: https://api.github.com/users/github-actions%5Bbot%5D. Both `MarkerLedger` and `GitHubCommentStatusStore` consume markers through the same `authenticated_markers()` function.
 - Bounded comment pagination reads at most 10 pages of 100 comments; excess history fails closed.
 - GitHub REST Issue/comment ports with bounded responses, sanitized failures and no request/response logging.
 - Thin handler around the existing V2.2 IssueWorkerCore contract.
@@ -30,7 +30,7 @@ Delivery is at-least-once for service execution, not exactly-once. Per-Issue con
 - A changed body under the same Issue is rejected and never rebound.
 - A FAILED marker is terminal. Recovery requires preserving the original Issue and all markers, then opening a new owner-authored [SFRA] Issue with a new request ID and unchanged payload intent, linking it to the failed Issue. Do not edit or delete the original Issue/comments.
 - Only bot-authored markers count. Human comments containing marker-shaped text are ignored.
-- Comment history is bounded to fewer than 1000 entries (10 pages × 100). At 1000 or more comments the worker fails closed rather than silently dropping the first-seen marker.
+- Comment history is bounded to fewer than 1000 entries (10 pages × 100). At 1000 or more comments the worker fails closed rather than silently dropping the first-seen marker. Recovery from the history cap is to preserve the original Issue and comments, open a new owner-authored `[SFRA]` Issue with a new request ID, and link it to the history-capped Issue. Do not delete/edit old markers or bypass the cap.
 
 ## Safety
 
