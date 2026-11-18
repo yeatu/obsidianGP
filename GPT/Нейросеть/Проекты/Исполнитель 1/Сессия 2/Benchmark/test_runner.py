@@ -90,11 +90,17 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
         # canonical Node ID and source-state markers must remain stable.
         connection.execute(
             "UPDATE structural_nodes SET local_key = ?, status = ? WHERE node_pk = 1",
-            ("__archived__1", "stale"),
+            ("__deleted__1", "stale"),
         )
         connection.execute(
             "UPDATE documents SET status = ? WHERE document_pk = 1",
             ("deleted",),
+        )
+        # E1 uses a distinct tombstone key when a document is re-indexed and
+        # an individual old node is archived rather than the whole document.
+        connection.execute(
+            "UPDATE structural_nodes SET local_key = ?, status = ? WHERE node_pk = 2",
+            ("__archived__2", "stale"),
         )
         connection.commit()
     finally:
@@ -115,9 +121,12 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
             canonical_before_archive[1],
             runner._stable_synthetic_node_id("indexed-node", "synthetic/b.md\\nchild"),
         ]
-        assert rows[0][2:] == ("__archived__1", "stale", "deleted")
+        assert rows[0][2:] == ("__deleted__1", "stale", "deleted")
+        assert rows[1][2:4] == ("__archived__2", "stale")
         assert second_mapping[canonical_before_archive[1]] == canonical_before_archive[1]
         assert third_mapping[canonical_before_archive[1]] == canonical_before_archive[1]
+        assert second_mapping[canonical_before_archive[2]] == canonical_before_archive[2]
+        assert third_mapping[canonical_before_archive[2]] == canonical_before_archive[2]
         assert list(second_mapping.values()) == list(third_mapping.values())
         parent = connection.execute(
             "SELECT parent_node_id, metadata_json FROM node_versions WHERE node_version_pk = 1"

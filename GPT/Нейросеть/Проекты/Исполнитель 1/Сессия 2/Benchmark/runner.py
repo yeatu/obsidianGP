@@ -208,9 +208,9 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
     A benchmark fixture is different: equal-rank B1 candidates use Node ID as
     a deterministic tie-breaker, so random fixture IDs would perturb metrics.
     This helper is benchmark-only and runs against the temporary SQLite copy.
-    When E1 archives a deleted row by replacing local_key with
-    "__archived__{node_pk}", the already-assigned UUIDv5 is preserved because
-    the original parser local_key is no longer available.
+    When E1 retires a row by replacing local_key with either
+    "__archived__{node_pk}" or "__deleted__{node_pk}", the already-assigned
+    UUIDv5 is preserved because the original parser local_key is unavailable.
     """
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
@@ -226,10 +226,14 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
             node_pk = int(row["node_pk"])
             old_id = str(row["node_id"])
             local_key = str(row["local_key"])
-            if local_key == f"__archived__{node_pk}":
-                # E1 archives a removed row by replacing its local_key after
-                # the first index pass. That original key is no longer present,
-                # so preserve the UUIDv5 already assigned to this tombstone.
+            if local_key in {
+                f"__archived__{node_pk}",
+                f"__deleted__{node_pk}",
+            }:
+                # E1 replaces local_key when a prior row is no longer current:
+                # __archived__ for a changed document and __deleted__ when the
+                # whole source document disappears. The original parser key is
+                # no longer present, so preserve the UUIDv5 already assigned.
                 # Fail closed if an archived row was not canonicalized before
                 # E1 changed its key; never silently bless a random UUIDv4.
                 try:
