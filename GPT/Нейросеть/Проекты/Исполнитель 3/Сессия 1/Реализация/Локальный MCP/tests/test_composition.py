@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 import sfra_mcp_server.composition as composition
 from sfra_context_builder import SnapshotRef
 from sfra_indexer import verify_state_directory
@@ -46,8 +45,11 @@ def test_e1_adapter_delegates_to_published_e1_functions(monkeypatch) -> None:
         calls.append(("resolve", args, kwargs))
         return Result()
 
-    monkeypatch.setattr(composition, "read_source_scope", fake_read)
-    monkeypatch.setattr(composition, "resolve_current_node", fake_resolve)
+    fake_e1 = SimpleNamespace(
+        read_source_scope=fake_read,
+        resolve_current_node=fake_resolve,
+    )
+    monkeypatch.setattr(composition, "_require_package", lambda name: fake_e1)
     adapter = E1SourceAPIAdapter()
     assert adapter.read_source_scope(
         "/sidecar/state/structure.sqlite3", "/vault/ГП", "node_test",
@@ -112,13 +114,28 @@ def test_application_composition_uses_one_verified_snapshot_and_search_services(
         def __init__(self, pipeline_arg):
             assert pipeline_arg.kwargs["pinned_snapshot"] is pinned
 
-    monkeypatch.setattr(composition, "bind_pinned_snapshot", fake_bind)
-    monkeypatch.setattr(composition, "TiktokenCounter", FakeCounter)
-    monkeypatch.setattr(composition, "E1SourceReader", make_reader)
-    monkeypatch.setattr(composition, "E2SearchAdapter", FakeSearchAdapter)
-    monkeypatch.setattr(composition, "ContextBuilder", FakeContextBuilder)
-    monkeypatch.setattr(composition, "ContextIntegrationPipeline", FakePipeline)
-    monkeypatch.setattr(composition, "SearchVaultService", FakeSearchService)
+    fake_e1 = SimpleNamespace(
+        verify_state_directory=verify_state_directory,
+        read_source_scope=lambda *args, **kwargs: None,
+        resolve_current_node=lambda *args, **kwargs: None,
+    )
+    fake_b1 = SimpleNamespace(
+        TiktokenCounter=FakeCounter,
+        ContextBuilder=FakeContextBuilder,
+    )
+    fake_integration = SimpleNamespace(
+        bind_pinned_snapshot=fake_bind,
+        E1SourceReader=make_reader,
+        E2SearchAdapter=FakeSearchAdapter,
+        ContextIntegrationPipeline=FakePipeline,
+        SearchVaultService=FakeSearchService,
+    )
+    modules = {
+        "sfra_indexer": fake_e1,
+        "sfra_context_builder": fake_b1,
+        "sfra_context_integrations": fake_integration,
+    }
+    monkeypatch.setattr(composition, "_require_package", lambda name: modules[name])
 
     # Test-local monkeypatches only. Production cannot inject a verifier/snapshot.
     result = build_application_services(config)
@@ -135,14 +152,33 @@ def test_application_composition_uses_one_verified_snapshot_and_search_services(
     assert not hasattr(result, "read_source")
 
 
+def test_missing_local_dependency_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    config = valid_config(tmp_path)
+
+    def missing_package(name: str):
+        raise CompositionError(f"Required local package {name!r} is unavailable")
+
+    monkeypatch.setattr(composition, "_require_package", missing_package)
+    with pytest.raises(CompositionError, match="Required local package"):
+        build_application_services(config)
+
+
 def test_application_composition_fails_closed_when_binding_fails(
     tmp_path: Path, monkeypatch
 ) -> None:
     config = valid_config(tmp_path)
-
-    def reject_binding(**kwargs):
-        raise ValueError("fixture snapshot rejected")
-
-    monkeypatch.setattr(composition, "bind_pinned_snapshot", reject_binding)
+    fake_e1 = SimpleNamespace(verify_state_directory=verify_state_directory)
+    fake_b1 = SimpleNamespace()
+    fake_integration = SimpleNamespace(
+        bind_pinned_snapshot=lambda **kwargs: (_ for _ in ()).throw(
+            ValueError("fixture snapshot rejected")
+        )
+    )
+    modules = {
+        "sfra_indexer": fake_e1,
+        "sfra_context_builder": fake_b1,
+        "sfra_context_integrations": fake_integration,
+    }
+    monkeypatch.setattr(composition, "_require_package", lambda name: modules[name])
     with pytest.raises(CompositionError, match="composition failed"):
         build_application_services(config)
