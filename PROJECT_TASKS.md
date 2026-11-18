@@ -6,7 +6,7 @@
 > Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Main HEAD before this dashboard update:** `6f655e77a8071445544f77ee4b8c75278649e100`  
+**Main HEAD before this dashboard update:** `2795307045bc2af98bc918daffe1d688e4418cd2`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
 ## 1. Текущий этап
@@ -26,28 +26,26 @@
 
 ## 2. Активные задачи
 
-Все задачи ниже открыты и доступны для самостоятельного CLAIM подходящим свободным участником. E/A-префикс не ограничивает захват. Фактический владелец определяется последним действующим CLAIM в соответствующей Issue.
+Таблица отражает текущие открытые work items. Доступность для CLAIM определяется последними событиями и выполненными зависимостями в самой Issue; REVIEW_REQUEST и COORDINATOR_DECISION не являются реализационными задачами.
 
 | Issue | Приоритет | Тип | Задача / следующий результат | Зависимости |
 |---|---:|---|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
 | [#55](https://github.com/yeatu/obsidianGP/issues/55) | P1 | REVIEW_REQUEST | Независимая повторная проверка PinnedSnapshot verifier guard (#36/#51) по точному HEAD | PR #54, HEAD `f234c5e2de0f8ed8684a8605bafc50d83abf5d74`; C acceptance перед подключением `read_source` |
-| [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
-| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
-| [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
-| [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
-| [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | 30–50 synthetic gold cases с обязательными Node IDs и критическими условиями | Нет; параллельно |
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
+| [#65](https://github.com/yeatu/obsidianGP/issues/65) | P2 | REVIEW_REQUEST | Независимая проверка локального MCP stdio scaffold/composition (#38 / PR #47) | Точный HEAD и fixture-only CI в #65; C acceptance до интеграции handlers |
+| [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37 принят; #38 ожидает #65/A+C acceptance |
+| [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #55/#36 guard acceptance, #37 принято, #65/#38 C acceptance |
+| [#61](https://github.com/yeatu/obsidianGP/issues/61) | P1 | COORDINATOR_DECISION | Принять synthetic gold corpus v1 для #41 / PR #58 | A1 передал corpus; координаторское решение ожидается |
+| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #61 acceptance corpus v1 |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
 
 
 ## 3. Порядок параллельной работы
 
-**Можно начинать сразу и независимо:** #37, #41, #34, #55 (independent review; #36/#51 are in REVIEW).  
-**Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
-**Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
-**Quality runner:** #42 после утверждения gold corpus #41.  
-**Финальная интеграция:** #43 после двух handlers и snapshot guard.
+**Независимые передачи на проверку:** #55 (PinnedSnapshot verifier) и #65 (MCP composition) ожидают A; #61 ожидает решения C по quality corpus.  
+**Tool handlers:** #39 имеет владельца E1 и может готовить отдельный handler slice; runtime integration ждёт принятия #38 через #65. #40 имеет владельца E3; read_source остаётся отключённым до принятия #36/#51 и #38.  
+**Quality runner:** #42 после координаторского принятия corpus v1 в #61.  
+**Финальная интеграция:** #43 после принятия guard/composition и завершения #39/#40.
 
 Родительская запись #35 закрыта как завершённое координаторское решение. Это не означает завершение milestone: дочерние Issues остаются активными.
 
@@ -56,6 +54,8 @@
 | PR | Состояние | Трактовка |
 |---|---|---|
 | [#54 — PinnedSnapshot verifier correction](https://github.com/yeatu/obsidianGP/pull/54) | OPEN / READY | Correction PR for #36/#51; exact HEAD and fixture-only CI evidence are recorded in [review request #55](https://github.com/yeatu/obsidianGP/issues/55). Do not merge before independent review and Coordinator disposition where required. |
+| [#47 — Local MCP stdio bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | OPEN / READY | Composition handoff for #38; independent A review in #65 and C acceptance required before handler integration. |
+| [#58 — Synthetic gold corpus v1](https://github.com/yeatu/obsidianGP/pull/58) | OPEN / READY | A1 deliverable for #41, awaiting coordinator decision #61. |
 | [#12 — GitHub Issue Worker and Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | OPEN / DRAFT | Отдельное предложение по GitHub transport/worker/recovery. Не входит в текущий milestone и не разрешает production worker, recovery, real Issue writes, event workflows или публикацию source content. |
 | [#1 — structural indexer v1](https://github.com/yeatu/obsidianGP/pull/1) | OPEN | Исторический PR раннего прототипа; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
 | [#2 — structural indexer pytest harness](https://github.com/yeatu/obsidianGP/pull/2) | OPEN | Исторический PR раннего тестового стенда; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
