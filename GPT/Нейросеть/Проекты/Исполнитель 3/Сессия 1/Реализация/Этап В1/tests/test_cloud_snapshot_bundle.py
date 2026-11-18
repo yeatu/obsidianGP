@@ -278,6 +278,7 @@ def test_changed_source_bytes_cannot_be_hidden_by_old_index_database(tmp_path: P
 
 
 def test_corrupt_or_partial_sqlite_is_rejected_before_a_candidate_is_returned(tmp_path: Path):
+    pytest.importorskip("sfra_indexer")
     source_root = tmp_path / "source"
     source_root.mkdir()
     (source_root / "one.md").write_text("synthetic source", encoding="utf-8")
