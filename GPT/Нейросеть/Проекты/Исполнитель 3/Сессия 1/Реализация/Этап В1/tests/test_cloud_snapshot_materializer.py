@@ -177,6 +177,29 @@ def test_missing_exact_object_version_fails_without_creating_materialization(tmp
     assert list(workspace.iterdir()) == []
 
 
+
+def test_wrong_key_echo_is_rejected_even_when_version_and_payload_match(tmp_path: Path):
+    _, _, _, built, catalogue, store = _fixture(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    class WrongKeyStore:
+        def read_exact(self, key: str, version_id: str) -> ObjectStoreReadResult:
+            result = store.read_exact(key, version_id)
+            return ObjectStoreReadResult(
+                key=result.key + "/unexpected",
+                version_id=result.version_id,
+                payload=result.payload,
+            )
+
+    with pytest.raises(SnapshotObjectVersionMismatchError):
+        CloudSnapshotMaterializer(catalogue, WrongKeyStore()).materialize(
+            built.ref.snapshot_id,
+            workspace,
+        )
+
+    assert list(workspace.iterdir()) == []
+
 def test_latest_only_or_wrong_version_response_is_rejected(tmp_path: Path):
     _, _, _, built, catalogue, store = _fixture(tmp_path)
     workspace = tmp_path / "workspace"
@@ -278,7 +301,7 @@ def test_compressed_archive_is_rejected_before_member_read(tmp_path: Path, monke
     assert list(workspace.iterdir()) == []
 
 
-def test_catalogue_a_to_b_switch_fails_closed_without_reading_b(tmp_path: Path):
+def test_catalogue_a_to_b_switch_keeps_request_on_pinned_a_snapshot(tmp_path: Path):
     _, _, prepared_a, built_a, catalogue, store_a = _fixture(tmp_path / "a")
     (tmp_path / "b").mkdir()
     _, _, prepared_b, built_b, _, _ = _fixture(
@@ -306,10 +329,20 @@ def test_catalogue_a_to_b_switch_fails_closed_without_reading_b(tmp_path: Path):
             return result
 
     switching_store = SwitchingStore()
+
+    class CountingCatalogue:
+        def __init__(self):
+            self.lookup_count = 0
+
+        def get_exact(self, snapshot_id: str):
+            self.lookup_count += 1
+            return catalogue.get_exact(snapshot_id)
+
+    counting_catalogue = CountingCatalogue()
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    result = CloudSnapshotMaterializer(catalogue, switching_store).materialize(
+    result = CloudSnapshotMaterializer(counting_catalogue, switching_store).materialize(
         built_a.ref.snapshot_id,
         workspace,
     )
@@ -318,6 +351,7 @@ def test_catalogue_a_to_b_switch_fails_closed_without_reading_b(tmp_path: Path):
     # It never resolves or reads B, and it does not mutate the catalogue.
     assert result.snapshot_ref == built_a.ref
     assert result.snapshot_id == built_a.ref.snapshot_id
+    assert counting_catalogue.lookup_count == 1
     assert switching_store.calls == [
         (built_a.ref.source_bundle.key, built_a.ref.source_bundle.version_id),
         (built_a.ref.index_bundle.key, built_a.ref.index_bundle.version_id),
