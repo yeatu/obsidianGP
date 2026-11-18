@@ -99,6 +99,9 @@ def _safe_synthetic_projection(value: object, operation: str) -> dict[str, objec
             "node_id", "source_path", "content_hash", "excerpt"
         )):
             raise ValueError("synthetic response evidence text fields are invalid")
+        if (not item["source_path"].startswith("synthetic/")
+                or ".." in item["source_path"].split("/") or len(item["source_path"]) > 240):
+            raise ValueError("synthetic response provenance is not synthetic")
         expected = APPROVED_EVIDENCE_BY_NODE.get(item["node_id"])
         if expected is None:
             raise ValueError("synthetic response node is not approved")
