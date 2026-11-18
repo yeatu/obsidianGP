@@ -6,6 +6,7 @@ import pytest
 
 import sfra_web_adapter.github_api as github_api
 from sfra_web_adapter import GitHubAPIError, GitHubREST, GitHubCommentStatusStore
+from sfra_web_adapter.ledger import MarkerLedger, authenticated_markers
 
 
 def client():
@@ -72,10 +73,55 @@ class FakeComments:
 def test_comment_status_store_preserves_first_digest_on_retry_or_changed_body():
     comments = FakeComments()
     store = GitHubCommentStatusStore(comments)
-    first = "a" * 64
-    changed = "b" * 64
+    first = "sha256:" + "a" * 64
+    changed = "sha256:" + "b" * 64
     assert store.bind_request_body_sha256(9, first) == first
     assert len(comments.comments) == 1
+    markers = authenticated_markers(9, comments.comments)
+    assert len(markers) == 1
+    assert markers[0].body_sha256 == "a" * 64
+    assert markers[0].state == "STARTED"
     assert store.bind_request_body_sha256(9, first) == first
     assert store.bind_request_body_sha256(9, changed) == first
     assert len(comments.comments) == 1
+
+
+@pytest.mark.parametrize(
+    "digest",
+    [
+        "a" * 64,
+        "SHA256:" + "a" * 64,
+        "sha256:" + "A" * 64,
+        "sha256:" + "a" * 63,
+        "sha256:" + "a" * 64 + "x",
+        "sha256:",
+        None,
+    ],
+)
+def test_comment_status_store_rejects_malformed_v2_digest_before_reading_or_writing(digest):
+    comments = FakeComments()
+    store = GitHubCommentStatusStore(comments)
+    with pytest.raises(ValueError, match="sha256:<64 lowercase hex>"):
+        store.bind_request_body_sha256(9, digest)
+    assert comments.comments == []
+
+
+def test_comment_status_store_fails_closed_on_conflicting_authenticated_markers():
+    comments = FakeComments()
+    comments.comments.extend([
+        {
+            "body": MarkerLedger._marker(9, "a" * 64, "STARTED"),
+            "user": {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"},
+        },
+        {
+            "body": MarkerLedger._marker(9, "b" * 64, "STARTED"),
+            "user": {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"},
+        },
+    ])
+    store = GitHubCommentStatusStore(comments)
+
+    baseline = store.bind_request_body_sha256(9, "sha256:" + "a" * 64)
+
+    assert baseline.startswith("sha256:")
+    assert baseline != "sha256:" + "a" * 64
+    assert len(authenticated_markers(9, comments.comments)) == 2

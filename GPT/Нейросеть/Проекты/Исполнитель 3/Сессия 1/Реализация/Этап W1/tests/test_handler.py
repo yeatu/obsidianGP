@@ -88,7 +88,7 @@ def test_status_store_ignores_human_forged_first_seen_marker():
             self.created.append(body)
     client = Client()
     store = GitHubCommentStatusStore(client)
-    digest = "b" * 64
+    digest = "sha256:" + "b" * 64
     assert store.bind_request_body_sha256(21, digest) == digest
     assert len(client.created) == 1
     assert "state=STARTED" in client.created[0]
@@ -182,7 +182,7 @@ def test_status_store_ignores_markers_with_missing_or_wrong_bot_id():
     for identity in identities:
         client = Client(identity)
         store = GitHubCommentStatusStore(client)
-        digest = "b" * 64
+        digest = "sha256:" + "b" * 64
 
         assert store.bind_request_body_sha256(21, digest) == digest
         assert len(client.created) == 1
