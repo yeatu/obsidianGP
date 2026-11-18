@@ -348,7 +348,10 @@ def _read_deterministic_zip(raw: bytes, name: str) -> dict[str, bytes]:
 
             files: dict[str, bytes] = {}
             for info in infos:
-                member = _validate_relative_posix_path(info.filename)
+                try:
+                    member = _validate_relative_posix_path(info.filename)
+                except UnsafeSourceTreeError as exc:
+                    raise BundleIntegrityError(f"{name} contains an unsafe archive path") from exc
                 if info.is_dir() or (info.external_attr >> 16) & stat.S_IFMT(0o170000) == stat.S_IFLNK:
                     raise BundleIntegrityError(f"{name} contains a non-regular archive member")
                 mode = (info.external_attr >> 16) & 0o170000
@@ -630,8 +633,10 @@ def _validate_prepared_bundle(bundle: PreparedCloudSnapshotBundle) -> None:
     if not isinstance(bundle.markdown_inventory_bytes, bytes) or not isinstance(bundle.attestation_bytes, bytes):
         raise BundleIntegrityError("inventory/attestation payloads must be bytes")
     _validate_indexer_identity(bundle.indexer_identity)
-    if type(bundle.sqlite_schema_identity) is not SqliteSchemaIdentity:
-        raise BundleIntegrityError("sqlite_schema_identity is invalid")
+    try:
+        _validate_sqlite_schema_identity(bundle.sqlite_schema_identity)
+    except (CloudSnapshotBundleError, AttributeError, TypeError, ValueError) as exc:
+        raise BundleIntegrityError("sqlite_schema_identity is invalid") from exc
 
 
 def build_prepared_cloud_snapshot_bundle(
