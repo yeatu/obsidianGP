@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 import hashlib
 import json
+
+import sfra_context_integrations.snapshot as snapshot_module
 
 import pytest
 
@@ -123,9 +126,9 @@ def test_requires_e1_state_verifier(tmp_path):
         )
 
 
-def test_pinned_snapshot_rejects_an_unsealed_noop_verifier(tmp_path):
+def test_pinned_snapshot_rejects_public_direct_construction_with_noop(tmp_path):
     root = tmp_path.resolve()
-    with pytest.raises(SnapshotBindingError, match="sealed active verifier"):
+    with pytest.raises(SnapshotBindingError, match="bind_pinned_snapshot"):
         PinnedSnapshot(
             ref=SnapshotRef("a" * 40, "b" * 40, "sha256:" + "c" * 64),
             sidecar_root=root,
@@ -134,8 +137,25 @@ def test_pinned_snapshot_rejects_an_unsealed_noop_verifier(tmp_path):
             vault_git_root=root,
             vault_root=root / "ГП",
             manifest={"source_commit": "a" * 40},
-            _verifier=lambda: None,
+            _verifier_callback=lambda: None,
         )
+
+
+def test_bound_verifier_callback_cannot_be_replaced(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
+    pinned = _binder(sidecar, vault_git, vault_root, manifest)
+
+    with pytest.raises(FrozenInstanceError):
+        pinned._verifier_callback = lambda: None
+
+    database.write_bytes(b"replacement after attempted verifier replacement")
+    with pytest.raises(SnapshotBindingError, match="SQLite database digest changed"):
+        pinned.verify_current()
+
+
+def test_snapshot_module_exposes_no_verifier_minting_symbols():
+    assert not hasattr(snapshot_module, "_SnapshotVerifier")
+    assert not hasattr(snapshot_module, "_SNAPSHOT_VERIFIER_SEAL")
 
 
 def test_rejects_vault_root_outside_pinned_git_checkout(tmp_path):
