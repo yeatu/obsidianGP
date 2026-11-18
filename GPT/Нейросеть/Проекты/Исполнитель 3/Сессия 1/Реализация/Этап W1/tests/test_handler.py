@@ -1,9 +1,11 @@
 from __future__ import annotations
-import json
 from sfra_web_adapter import handle_opened_event
 
-def payload(body='{"protocol_version":"sfra.issue.v1"}'):
+BOT = {"login": "github-actions[bot]"}
+
+def payload(body='{"protocol_version":"sfra.issue.v1}'):
     return {"repository": {"full_name": "yeatu/obsidianGP"},
+            "sender": {"login": "yeatu"},
             "issue": {"number": 21, "title": "[SFRA] synthetic", "body": body,
                       "user": {"login": "yeatu"}}}
 
@@ -13,7 +15,7 @@ class Comments:
     def list_comments(self, issue_number):
         return list(self.items)
     def create_comment(self, issue_number, body):
-        self.items.append({"body": body})
+        self.items.append({"body": body, "user": BOT})
 
 class Status:
     def __init__(self, digest, state="COMPLETED"):
@@ -60,4 +62,15 @@ def test_handler_rejects_changed_body_before_worker():
     changed = payload('{"protocol_version":"sfra.issue.v1","changed":true}')
     assert handle_opened_event(changed, event_name="issues", action="opened",
         comments=comments, worker=worker, snapshot=object(), worker_commit_sha="a" * 40) == "request_body_changed"
+    assert worker.calls == 1
+
+def test_handler_ignores_human_forged_completed_marker():
+    comments, worker = Comments(), Worker()
+    import hashlib
+    body = payload()["issue"]["body"].encode()
+    digest = hashlib.sha256(body).hexdigest()
+    forged = f"<!-- sfra-web-v1 issue=21 body_sha256={digest} state=COMPLETED -->"
+    comments.items.append({"body": forged, "user": {"login": "attacker"}})
+    assert handle_opened_event(payload(), event_name="issues", action="opened",
+        comments=comments, worker=worker, snapshot=object(), worker_commit_sha="a" * 40) == "COMPLETED"
     assert worker.calls == 1
