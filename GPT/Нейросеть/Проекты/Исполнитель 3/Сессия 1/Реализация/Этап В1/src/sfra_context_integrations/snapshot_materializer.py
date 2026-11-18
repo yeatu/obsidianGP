@@ -45,7 +45,6 @@ from .snapshot_catalogue import (
     SnapshotCatalogueError,
     SnapshotCataloguePort,
     SnapshotLifecycleState,
-    SnapshotRetiredError,
 )
 
 
@@ -410,9 +409,7 @@ class CloudSnapshotMaterializer:
         ref = entry.snapshot
 
         source_result = self._read_object(ref.source_bundle)
-        self._recheck_binding(ref)
         index_result = self._read_object(ref.index_bundle)
-        self._recheck_binding(ref)
 
         manifest = CloudSnapshotManifestV1(
             source_revision=ref.source_revision,
@@ -456,7 +453,6 @@ class CloudSnapshotMaterializer:
                 "outer manifest or prepared source/index bundle verification failed"
             ) from exc
 
-        self._recheck_binding(ref)
         workspace_root, source_root, index_root, database_path, attestation_path, inventory_path = (
             self._write_workspace(
                 workspace,
@@ -466,8 +462,7 @@ class CloudSnapshotMaterializer:
             )
         )
         try:
-            self._recheck_binding(ref)
-        except Exception:
+            except Exception:
             shutil.rmtree(workspace_root, ignore_errors=True)
             raise
 
@@ -515,18 +510,6 @@ class CloudSnapshotMaterializer:
         ):
             raise SnapshotBindingChangedError("catalogue returned an unsupported lifecycle state")
         return entry
-
-    def _recheck_binding(self, expected: CloudSnapshotRefV2) -> None:
-        try:
-            current = self._get_exact_entry(expected.snapshot_id)
-        except SnapshotCatalogueError as exc:
-            raise SnapshotBindingChangedError(
-                "the exact snapshot became unavailable while materialization was in flight"
-            ) from exc
-        if current.snapshot.to_dict() != expected.to_dict():
-            raise SnapshotBindingChangedError(
-                "the exact snapshot identity changed while materialization was in flight"
-            )
 
     def _read_object(self, object_ref: ImmutableObjectVersion) -> ObjectStoreReadResult:
         try:

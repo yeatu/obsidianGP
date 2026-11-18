@@ -30,7 +30,6 @@ from sfra_context_integrations.snapshot_materializer import (
     CloudSnapshotMaterializer,
     InMemoryVersionedObjectStore,
     ObjectStoreReadResult,
-    SnapshotBindingChangedError,
     SnapshotMaterializationIntegrityError,
     SnapshotObjectIntegrityError,
     SnapshotObjectUnavailableError,
@@ -45,7 +44,11 @@ SQLITE_SCHEMA = SqliteSchemaIdentity(engine="sqlite", schema_info_version=2)
 
 def _fixture(tmp_path: Path, *, immutable_import: bool = False):
     tmp_path.mkdir(parents=True, exist_ok=True)
-    from sfra_indexer import index_vault
+    indexer = pytest.importorskip(
+        "sfra_indexer",
+        reason="the full materializer fixture suite runs in the dedicated E1-installed workflow",
+    )
+    index_vault = indexer.index_vault
 
     source_root = tmp_path / "synthetic-source"
     source_root.mkdir()
@@ -127,6 +130,8 @@ def test_materializes_exact_versions_and_preserves_raw_e1_artifacts(tmp_path: Pa
     assert result.attestation_path.read_bytes() == expected_attestation
     assert result.markdown_inventory_path.read_bytes() == expected_inventory
     assert result.index_bundle_sha256 == built.ref.index_bundle.sha256
+    assert catalogue.get_exact(built.ref.snapshot_id).state is SnapshotLifecycleState.STAGED
+    assert catalogue.read_state().active_snapshot_id is None
     assert result.bundle_report.e1_legacy_verifier == (
         "verified_with_public_e1_v1_git_state_api"
     )
@@ -303,20 +308,27 @@ def test_catalogue_a_to_b_switch_fails_closed_without_reading_b(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    with pytest.raises(SnapshotBindingChangedError):
-        CloudSnapshotMaterializer(catalogue, switching_store).materialize(
-            built_a.ref.snapshot_id,
-            workspace,
-        )
+    result = CloudSnapshotMaterializer(catalogue, switching_store).materialize(
+        built_a.ref.snapshot_id,
+        workspace,
+    )
 
+    # The request stays pinned to A even after the active pointer switches to B.
+    # It never resolves or reads B, and it does not mutate the catalogue.
+    assert result.snapshot_ref == built_a.ref
+    assert result.snapshot_id == built_a.ref.snapshot_id
     assert switching_store.calls == [
-        (built_a.ref.source_bundle.key, built_a.ref.source_bundle.version_id)
+        (built_a.ref.source_bundle.key, built_a.ref.source_bundle.version_id),
+        (built_a.ref.index_bundle.key, built_a.ref.index_bundle.version_id),
     ]
     assert catalogue.read_state().active_snapshot_id == built_b.ref.snapshot_id
     assert catalogue.get_exact(built_b.ref.snapshot_id).snapshot == built_b.ref
     with pytest.raises(SnapshotRetiredError):
         catalogue.get_exact(built_a.ref.snapshot_id)
-    assert list(workspace.iterdir()) == []
+    assert result.index_database_path.is_file()
+    assert result.attestation_bytes == prepared_a.attestation_bytes
+    assert result.markdown_inventory_bytes == prepared_a.markdown_inventory_bytes
+    shutil.rmtree(result.workspace_root)
 
 
 def test_retired_snapshot_and_mutable_alias_are_rejected(tmp_path: Path):

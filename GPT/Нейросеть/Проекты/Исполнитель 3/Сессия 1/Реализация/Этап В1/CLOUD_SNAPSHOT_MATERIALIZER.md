@@ -12,14 +12,15 @@ The read port is intentionally small:
 
 ## Verification sequence
 
-1. Resolve the exact snapshot ID once and retain the immutable v2 identity.
-2. Read the source object by its exact key and opaque version ID. Re-read the same catalogue ID and compare the complete identity before continuing.
-3. Read the index object by its exact key and opaque version ID. Recheck the same catalogue identity again.
-4. Reconstruct the canonical outer manifest from the ref, verify its detached manifest digest and all identity fields.
+1. Resolve the exact snapshot ID once and retain the immutable v2 identity for the whole request. The resolver does not re-resolve the catalogue after object reads begin.
+2. Read the source object by its exact key and opaque version ID. Verify the returned key/version and full payload hash/size.
+3. Read the index object by its exact key and opaque version ID. Verify the returned key/version and full payload hash/size.
+4. Reconstruct the canonical outer manifest from the pinned ref, verify its detached manifest digest and all identity fields.
 5. Admit both archives only through the accepted #119 deterministic ZIP reader. It rejects compressed members before their payloads are read, as well as unsafe paths, duplicates, special files, and non-canonical ZIP bytes.
 6. Reconstruct the prepared #119 descriptor from the two exact payloads and the embedded E1 attestation metadata. Run the public `verify_prepared_cloud_snapshot_bundle()` API and compare its report against the outer v2 ref.
-7. Recheck the catalogue binding, then materialize the verified source files, SQLite database, and exact raw `attestation.json` / `markdown-inventory.json` bytes into a newly created child directory under a caller-supplied disposable workspace.
-8. Recheck the exact catalogue identity after materialization. If it changed, became retired, or disappeared, delete the newly created child workspace and fail closed.
+7. Materialize the verified source files, SQLite database, and exact raw `attestation.json` / `markdown-inventory.json` bytes into a newly created child directory under a caller-supplied disposable workspace.
+
+STAGED, VERIFIED and ACTIVE catalogue entries can be materialized; absent or RETIRED entries fail closed at the single initial lookup. A STAGED entry remains STAGED after materialization. The handle is only the outer-bundle-verified input handoff for E1 deep verifier #240; it is not permission to query or activate that snapshot. This resolver never calls `mark_verified()`, `activate()`, or any catalogue mutation. The E1 verifier #240 and E3 binding #136 gates must complete before downstream query use.
 
 The returned frozen `MaterializedCloudSnapshot` is request-scoped. It retains the full `CloudSnapshotRefV2`, tagged source revision, exact paths, the exact raw E1 attestation and inventory bytes, the canonical manifest bytes, and the public #119 verification report. The raw E1 JSON is not reserialized. The additive E1 cloud-index verifier #240 consumes these files/bytes separately; #120 does not perform the deep E1 verification.
 
