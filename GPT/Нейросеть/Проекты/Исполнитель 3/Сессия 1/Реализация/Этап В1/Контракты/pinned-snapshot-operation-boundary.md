@@ -2,7 +2,7 @@
 
 `bind_pinned_snapshot()` constructs the SnapshotRef from the actual clean Git checkouts, exact manifest bytes and E1-verified SQLite state. It is the only production factory for `PinnedSnapshot`.
 
-`PinnedSnapshot` is a frozen, slots-based value object. Direct public construction is disabled; `bind_pinned_snapshot()` validates the clean checkouts and E1 state, then stores its operation-boundary verifier closure in the instance. There is no module-level verifier class or seal that production consumers can import to mint a replacement capability, and ordinary attribute assignment cannot replace the callback. Test-only synthetic snapshots are created by the explicit helper in `tests/fixtures/pinned_snapshot.py`; it is not part of the production package.
+`PinnedSnapshot` is a frozen, slots-based value object with direct public construction disabled. `bind_pinned_snapshot()` validates clean checkouts and E1 state, then registers the active operation-boundary verifier in a private weak registry keyed by the snapshot object. The callback function is not stored in an instance attribute and cannot be obtained through ordinary attribute access. Registry registration is one-shot: attempting to bind a second callback to an existing snapshot fails closed. No verifier class or seal is exported from the production module. Test-only synthetic snapshots use the explicit helper in `tests/fixtures/pinned_snapshot.py` and the private fixture registration seam; that helper is not part of the production package.
 
 `E1SourceReader` executes the verifier during construction and fails before accepting the reader if the pinned state is no longer valid. It also repeats verification at every operation boundary.
 
