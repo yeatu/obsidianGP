@@ -134,3 +134,25 @@ def test_handler_rejects_projection_with_unapproved_corpus_digest():
     bad["corpus_sha256"] = "sha256:" + "0" * 64
     with pytest.raises(ValueError, match="corpus identity mismatch"):
         _safe_synthetic_projection(bad, "search_vault")
+
+def test_handler_rejects_evidence_bound_to_a_different_operation():
+    from sfra_web_adapter.handler import _safe_synthetic_projection
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus
+    import pytest
+    corpus = SyntheticGoldCorpus.load_default()
+    case = corpus.case_for_query("обычный лимит шлюза и исключение для учений")
+    projection = corpus.evidence(case, operation="search_vault")
+    with pytest.raises(ValueError, match="corpus identity mismatch"):
+        _safe_synthetic_projection(projection, "read_source")
+
+
+def test_handler_rejects_unapproved_projection_fields():
+    from sfra_web_adapter.handler import _safe_synthetic_projection
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus
+    import pytest
+    corpus = SyntheticGoldCorpus.load_default()
+    case = corpus.case_for_query("обычный лимит шлюза и исключение для учений")
+    projection = corpus.evidence(case)
+    projection["raw_request"] = "must never be rendered"
+    with pytest.raises(ValueError, match="invalid envelope"):
+        _safe_synthetic_projection(projection, "search_vault")
