@@ -136,8 +136,8 @@ def test_bundle_builder_accepts_nfc_object_keys_within_v2_text_limit(tmp_path: P
         source_version_id="source-v1",
         index_version_id="index-v1",
     )
-    assert built.ref.source.key == bundle.source_object.key
-    assert built.ref.index.key == bundle.index_object.key
+    assert built.ref.source_bundle.key == bundle.source_object.key
+    assert built.ref.index_bundle.key == bundle.index_object.key
 
 
 def _zip_members(raw: bytes) -> dict[str, bytes]:
