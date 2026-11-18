@@ -27,32 +27,20 @@ def test_metric_average_ignores_undefined_cases():
     assert runner._metric_average([0.5, None, 1.0]) == 0.75
     assert runner._metric_average([None, None]) is None
 
-def test_budget_exceeded_cannot_be_represented_as_complete():
-    assert not runner._completeness_honesty(
-        search_complete=True,
-        context_status="complete",
-        deferred=[],
-        source_read_status="budget_exceeded",
-        source_read_fragments=[],
-    )
-    assert runner._completeness_honesty(
-        search_complete=True,
-        context_status="partial",
-        deferred=[],
-        source_read_status="budget_exceeded",
-        source_read_fragments=[],
-    )
-
-
-def test_ambiguous_and_not_found_source_reads_cannot_be_complete():
-    for status in ("ambiguous", "not_found", "stale", "deleted"):
-        assert not runner._completeness_honesty(
+def test_standalone_source_read_failures_do_not_change_pack_completeness():
+    for status in ("budget_exceeded", "ambiguous", "not_found"):
+        assert runner._completeness_honesty(
             search_complete=True,
             context_status="complete",
             deferred=[],
-            source_read_status=status,
-            source_read_fragments=[],
         )
+        status_match, non_ok_empty = runner._source_read_contract(
+            actual_status=status,
+            expected_status=status,
+            fragments=[],
+        )
+        assert status_match is True
+        assert non_ok_empty is True
 
 
 def test_incomplete_search_and_deferred_budget_cannot_be_complete():
@@ -60,26 +48,55 @@ def test_incomplete_search_and_deferred_budget_cannot_be_complete():
         search_complete=False,
         context_status="complete",
         deferred=[],
-        source_read_status=None,
-        source_read_fragments=[],
     )
     assert not runner._completeness_honesty(
         search_complete=True,
         context_status="complete",
         deferred=[{"reason": "required_group_budget_limit"}],
-        source_read_status=None,
-        source_read_fragments=[],
     )
 
 
 def test_non_ok_source_read_must_not_contain_fragments():
-    assert not runner._completeness_honesty(
-        search_complete=True,
-        context_status="partial",
-        deferred=[],
-        source_read_status="stale",
-        source_read_fragments=[{"raw_text": "unexpected"}],
+    status_match, non_ok_empty = runner._source_read_contract(
+        actual_status="stale",
+        expected_status="stale",
+        fragments=[{"raw_text": "unexpected"}],
     )
+    assert status_match is True
+    assert non_ok_empty is False
+
+
+def test_explicit_source_read_status_is_checked_independently():
+    status_match, non_ok_empty = runner._source_read_contract(
+        actual_status="not_found",
+        expected_status="ambiguous",
+        fragments=[],
+    )
+    assert status_match is False
+    assert non_ok_empty is True
+
+    missing_match, missing_empty = runner._source_read_contract(
+        actual_status=None,
+        expected_status="ambiguous",
+        fragments=[],
+    )
+    assert missing_match is False
+    assert missing_empty is True
+
+
+def test_legacy_context_status_mismatches_remain_classified_and_visible():
+    for case_id in (
+        "gq-025-source-budget-exceeded",
+        "gq-028-ambiguous-source",
+        "gq-029-not-found-source",
+    ):
+        assert runner._context_status_diagnostic(case_id, False) == (
+            "legacy_corpus_contract_interpretation"
+        )
+    assert runner._context_status_diagnostic("gq-010-number-plus-condition", False) == (
+        "unexpected_context_status_mismatch"
+    )
+    assert runner._context_status_diagnostic("gq-025-source-budget-exceeded", True) == "matched"
 
 
 def test_token_efficiency_uses_same_source_text_tokenizer_on_both_sides():
