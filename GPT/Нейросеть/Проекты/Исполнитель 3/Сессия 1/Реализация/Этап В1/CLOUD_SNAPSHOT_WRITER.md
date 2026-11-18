@@ -47,3 +47,11 @@ This writer branch consumes the refreshed bundle-builder dependency:
 - Writer branch sync commit: `c9b21be108ae7943b475838559b6bd2c163ba1bf`, with the refreshed bundle HEAD as first parent and the former writer HEAD `8c957c9e2554ebef8458978a4245b7a27bbe866e` as second parent.
 
 This records branch ancestry for the stacked implementation only. It does not change the writer contract or enable a provider, upload, catalogue activation or production operation.
+
+
+## Corrected bundle baseline after current-main refresh (2026-11-19)
+
+This writer parent now consumes the independently accepted and merged bundle/verifier stack:
+- Current main and accepted #162 merge: 8d1d3c937abf1e6f651d077c409d1b3dfad1a9cb (tree 7b516530ad2f10fd10967fb84087fdf6a3946042).
+- Writer refresh merge: 123de3771cc2aab1664bbecdfc5533df90696c6a, with current main as first parent and former writer HEAD b0bcf7ae587c3613b80ef811264bdd4437eedc93 as second.
+- This note records ancestry only; writer runtime behavior and test semantics are unchanged by the baseline refresh.
