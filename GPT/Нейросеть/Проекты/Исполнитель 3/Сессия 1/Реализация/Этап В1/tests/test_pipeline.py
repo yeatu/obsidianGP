@@ -6,13 +6,13 @@ import pytest
 
 from sfra_context_builder import ContextBuilder, TiktokenCounter, parse_search_request
 from sfra_context_builder.models import FocusAspect, SearchRequest
-from sfra_context_integrations.pipeline import (
-    ContextIntegrationPipeline,
-    SourceReadRequest,
+from sfra_context_integrations.pipeline import SourceReadRequest
+from tests.fixtures.consumer_seams import (
+    make_test_source_reader, make_test_search_adapter, make_test_pipeline,
 )
 from sfra_context_integrations.dependency_resolver import E1DependencyResolver
 from sfra_context_integrations.search_adapter import E2SearchAdapter
-from sfra_context_integrations.snapshot import PinnedSnapshot
+from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 from sfra_context_integrations.source_reader import E1SourceReader
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, sha, snapshot
 
@@ -26,7 +26,7 @@ def _pinned(tmp_path, ref):
     database.write_bytes(b"pinned fixture sidecar bytes")
     manifest = sidecar / "manifest.json"
     manifest.write_text("{}", encoding="utf-8")
-    return PinnedSnapshot(
+    return make_test_pinned_snapshot(
         ref=ref,
         sidecar_root=sidecar,
         database_path=database,
@@ -100,7 +100,7 @@ def _pipeline(tmp_path, *, metadata=None, dependency_resolver=None):
     api = FixtureE1ScopeAPI(ref)
     if metadata is not None:
         api.records["node_target"]["metadata"] = metadata
-    source_reader = E1SourceReader(api, pinned, TiktokenCounter("o200k_base"))
+    source_reader = make_test_source_reader(api, pinned, TiktokenCounter("o200k_base"))
     hit = _engine_hit(api)
 
     def search_call(database, query, *, entities, limit, entity_config):
@@ -112,13 +112,13 @@ def _pipeline(tmp_path, *, metadata=None, dependency_resolver=None):
             "search": {"status": "ok", "results": [hit]},
         }
 
-    adapter = E2SearchAdapter(
+    adapter = make_test_search_adapter(
         pinned,
         source_reader,
         search_call=search_call,
         search_limit=20,
     )
-    pipeline = ContextIntegrationPipeline(
+    pipeline = make_test_pipeline(
         pinned_snapshot=pinned,
         search_adapter=adapter,
         context_builder=ContextBuilder(TiktokenCounter("o200k_base")),
@@ -260,12 +260,12 @@ def test_pipeline_rejects_adapter_bound_to_different_snapshot(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     other_api = FixtureE1ScopeAPI(ref)
-    other_reader = E1SourceReader(other_api, pinned, TiktokenCounter("o200k_base"))
+    other_reader = make_test_source_reader(other_api, pinned, TiktokenCounter("o200k_base"))
     other_ref = type(ref)("d" * 40, "e" * 40, "sha256:" + "f" * 64)
     other_pinned = _pinned(tmp_path / "other", other_ref)
-    adapter = E2SearchAdapter(other_pinned, other_reader, search_call=lambda *a, **k: {})
+    adapter = make_test_search_adapter(other_pinned, other_reader, search_call=lambda *a, **k: {})
     with pytest.raises(ValueError, match="different SnapshotRef"):
-        ContextIntegrationPipeline(
+        make_test_pipeline(
             pinned_snapshot=pinned,
             search_adapter=adapter,
             context_builder=ContextBuilder(TiktokenCounter("o200k_base")),
@@ -277,13 +277,13 @@ def test_pipeline_does_not_read_after_e2_runtime_error(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     api = FixtureE1ScopeAPI(ref)
-    reader = E1SourceReader(api, pinned, TiktokenCounter("o200k_base"))
+    reader = make_test_source_reader(api, pinned, TiktokenCounter("o200k_base"))
 
     def fail(*args, **kwargs):
         raise OSError("fixture failure")
 
-    adapter = E2SearchAdapter(pinned, reader, search_call=fail)
-    pipeline = ContextIntegrationPipeline(
+    adapter = make_test_search_adapter(pinned, reader, search_call=fail)
+    pipeline = make_test_pipeline(
         pinned_snapshot=pinned,
         search_adapter=adapter,
         context_builder=ContextBuilder(TiktokenCounter("o200k_base")),

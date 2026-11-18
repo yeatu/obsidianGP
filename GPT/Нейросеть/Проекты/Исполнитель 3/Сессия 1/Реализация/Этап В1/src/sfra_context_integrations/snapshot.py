@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
 import hashlib
 import json
-from pathlib import Path
 import re
 import subprocess
+import weakref
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sfra_context_builder.models import SnapshotRef
@@ -21,32 +22,6 @@ _EXPECTED_DATABASE = "state/structure.sqlite3"
 
 class SnapshotBindingError(ValueError):
     """Raised when Vault, sidecar and manifest do not describe one snapshot."""
-
-
-@dataclass(frozen=True, slots=True)
-class PinnedSnapshot:
-    """Snapshot identity plus operation-boundary verification for mutable paths.
-
-    Paths are retained for compatibility with the existing E1/E2 ports, but
-    production instances created by bind_pinned_snapshot carry a verifier that
-    re-checks their Git and content identities before and after every read.
-    """
-
-    ref: SnapshotRef
-    sidecar_root: Path
-    database_path: Path
-    manifest_path: Path
-    vault_git_root: Path
-    vault_root: Path
-    manifest: Mapping[str, Any]
-    _verify_current: Callable[[], None] | None = field(
-        default=None, repr=False, compare=False
-    )
-
-    def verify_current(self) -> None:
-        """Fail closed if any bound checkout, manifest or database changed."""
-        if self._verify_current is not None:
-            self._verify_current()
 
 
 def _sha256_file(path: Path) -> str:
@@ -87,8 +62,10 @@ def _git_status(root: str | Path) -> str:
     return completed.stdout
 
 
-def bind_pinned_snapshot(
+def _bind_pinned_snapshot_impl(
     *,
+    _snapshot_type: type[Any],
+    _register_verifier: Callable[[Any, Callable[[], None]], None],
     sidecar_root: str | Path,
     vault_git_root: str | Path,
     vault_root: str | Path,
@@ -307,13 +284,126 @@ def bind_pinned_snapshot(
         except Exception as exc:
             raise SnapshotBindingError("Could not complete pinned checkout verification") from exc
 
-    return PinnedSnapshot(
-        ref=ref,
-        sidecar_root=sidecar,
-        database_path=database_file.resolve(),
-        manifest_path=manifest_file.resolve(),
-        vault_git_root=vault_git,
-        vault_root=vault,
-        manifest=manifest,
-        _verify_current=verify_current,
-    )
+    # Construct only after all snapshot identities and the active verifier
+    # closure have been established. Public direct construction is disabled.
+    pinned = object.__new__(_snapshot_type)
+    object.__setattr__(pinned, "ref", ref)
+    object.__setattr__(pinned, "sidecar_root", sidecar)
+    object.__setattr__(pinned, "database_path", database_file.resolve())
+    object.__setattr__(pinned, "manifest_path", manifest_file.resolve())
+    object.__setattr__(pinned, "vault_git_root", vault_git)
+    object.__setattr__(pinned, "vault_root", vault)
+    object.__setattr__(pinned, "manifest", manifest)
+    _register_verifier(pinned, verify_current)
+    return pinned
+
+
+
+def _create_pinned_snapshot_api():
+    """Create the public snapshot type and binder around a private verifier registry."""
+    entries: dict[
+        int,
+        tuple[weakref.ReferenceType[Any], Callable[[], None]],
+    ] = {}
+
+    def register(snapshot: Any, callback: Callable[[], None]) -> None:
+        if not callable(callback):
+            raise SnapshotBindingError("Pinned snapshot verifier must be callable")
+        key = id(snapshot)
+        current = entries.get(key)
+        if current is not None and current[0]() is snapshot:
+            raise SnapshotBindingError(
+                "Pinned snapshot already has an active verifier"
+            )
+
+        def discard(reference: weakref.ReferenceType[Any]) -> None:
+            registered = entries.get(key)
+            if registered is not None and registered[0] is reference:
+                entries.pop(key, None)
+
+        reference = weakref.ref(snapshot, discard)
+        entries[key] = (reference, callback)
+
+    def verify(snapshot: Any) -> None:
+        entry = entries.get(id(snapshot))
+        if entry is None or entry[0]() is not snapshot:
+            raise SnapshotBindingError(
+                "Pinned snapshot has no active verifier binding"
+            )
+        try:
+            entry[1]()
+        except SnapshotBindingError:
+            raise
+        except Exception as exc:
+            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
+
+    @dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+    class PinnedSnapshot:
+        """Verified snapshot identity; active verifier state is not instance data."""
+
+        ref: SnapshotRef
+        sidecar_root: Path
+        database_path: Path
+        manifest_path: Path
+        vault_git_root: Path
+        vault_root: Path
+        manifest: Mapping[str, Any]
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise SnapshotBindingError(
+                "PinnedSnapshot must be created by bind_pinned_snapshot()"
+            )
+
+        def verify_current(self) -> None:
+            """Fail closed unless this exact object has a factory-bound verifier."""
+            verify(self)
+
+    implementation = _bind_pinned_snapshot_impl
+
+    def bind_pinned_snapshot(
+        *,
+        sidecar_root: str | Path,
+        vault_git_root: str | Path,
+        vault_root: str | Path,
+        state_verifier: Callable[[str | Path], Mapping[str, Any]],
+        git_head_reader: Callable[[str | Path], str] = _git_head,
+        git_branch_reader: Callable[[str | Path], str] = _git_branch,
+        git_status_reader: Callable[[str | Path], str] = _git_status,
+        expected_repository: str = "yeatu/obsidianGP",
+        expected_sidecar_branch: str = "sfra-state",
+    ) -> PinnedSnapshot:
+        return implementation(
+            _snapshot_type=PinnedSnapshot,
+            _register_verifier=register,
+            sidecar_root=sidecar_root,
+            vault_git_root=vault_git_root,
+            vault_root=vault_root,
+            state_verifier=state_verifier,
+            git_head_reader=git_head_reader,
+            git_branch_reader=git_branch_reader,
+            git_status_reader=git_status_reader,
+            expected_repository=expected_repository,
+            expected_sidecar_branch=expected_sidecar_branch,
+        )
+
+    return PinnedSnapshot, bind_pinned_snapshot
+
+
+PinnedSnapshot, bind_pinned_snapshot = _create_pinned_snapshot_api()
+del _create_pinned_snapshot_api, _bind_pinned_snapshot_impl
+
+
+def require_pinned_snapshot(snapshot: object, *, consumer: str) -> PinnedSnapshot:
+    """Require the exact factory-created production type.
+
+    The caller verifies the active binding at its operation boundary. The
+    verifier is a trusted-process integrity check, not a sandbox against
+    hostile Python introspection in the same interpreter (decision #81).
+    Subclasses and test-only fixtures are rejected at production consumers.
+    """
+    if type(snapshot) is not PinnedSnapshot:
+        raise TypeError(
+            f"{consumer} requires the exact factory-created PinnedSnapshot type; "
+            "subclasses and test fixtures are not accepted"
+        )
+    return snapshot

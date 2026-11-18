@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from sfra_context_integrations.snapshot import PinnedSnapshot
-from sfra_context_integrations.source_reader import E1SourceReader, SourceReaderContractError
+from sfra_context_integrations.snapshot import SnapshotBindingError
+from sfra_context_integrations.source_reader import SourceReaderContractError
+from tests.fixtures.consumer_seams import make_test_source_reader
+from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, FixtureTokenCounter, snapshot
 
 
-def _pinned(tmp_path, ref):
+def _pinned(tmp_path, ref, *, verifier=None):
     sidecar = tmp_path / "sidecar"
     vault_git = tmp_path / "vault-git"
     vault = vault_git / "ГП"
@@ -18,7 +20,7 @@ def _pinned(tmp_path, ref):
     manifest = state / "manifest.json"
     database.write_bytes(b"fixture sidecar")
     manifest.write_bytes(b"{}")
-    return PinnedSnapshot(
+    return make_test_pinned_snapshot(
         ref=ref,
         sidecar_root=sidecar,
         database_path=database,
@@ -26,6 +28,7 @@ def _pinned(tmp_path, ref):
         vault_git_root=vault_git,
         vault_root=vault,
         manifest={"source_commit": ref.vault_commit_sha},
+        verifier=verifier,
     )
 
 
@@ -33,7 +36,27 @@ def _reader(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     api = FixtureE1ScopeAPI(ref)
-    return E1SourceReader(api, pinned, FixtureTokenCounter()), api, pinned
+    return make_test_source_reader(api, pinned, FixtureTokenCounter()), api, pinned
+
+
+def test_reader_runs_verifier_and_fails_before_any_e1_call(tmp_path):
+    ref = snapshot()
+    checks = []
+
+    def reject_snapshot():
+        checks.append("checked")
+        raise SnapshotBindingError("fixture verifier rejected the snapshot")
+
+    pinned = _pinned(tmp_path, ref, verifier=reject_snapshot)
+    api = FixtureE1ScopeAPI(ref)
+
+    with pytest.raises(SourceReaderContractError) as error:
+        make_test_source_reader(api, pinned, FixtureTokenCounter())
+
+    assert error.value.code == "snapshot_changed"
+    assert checks == ["checked"]
+    assert api.resolve_calls == []
+    assert api.scope_calls == []
 
 
 def _target_hash(api):
@@ -290,7 +313,7 @@ def test_source_reader_accepts_e1_public_result_dataclasses(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     fake = FixtureE1ScopeAPI(ref)
-    reader = E1SourceReader(
+    reader = make_test_source_reader(
         _DataclassReturningE1API(fake),
         pinned,
         FixtureTokenCounter(),

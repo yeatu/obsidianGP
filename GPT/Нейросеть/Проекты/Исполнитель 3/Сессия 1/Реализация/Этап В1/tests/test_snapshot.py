@@ -5,7 +5,13 @@ import json
 
 import pytest
 
-from sfra_context_integrations.snapshot import SnapshotBindingError, bind_pinned_snapshot
+import sfra_context_integrations.snapshot as snapshot_module
+
+from sfra_context_integrations.snapshot import (
+    PinnedSnapshot,
+    SnapshotBindingError,
+    bind_pinned_snapshot,
+)
 from sfra_context_integrations.search_adapter import E2SearchAdapter, SearchAdapterError
 from sfra_context_integrations.source_reader import E1SourceReader, SourceReaderContractError
 from sfra_context_builder.models import SearchRequest, SnapshotRef
@@ -64,6 +70,7 @@ def test_binds_snapshot_to_actual_git_heads_and_exact_manifest_bytes(tmp_path):
 
     pinned = _binder(sidecar, vault_git, vault_root, manifest)
 
+    assert type(pinned) is PinnedSnapshot
     assert pinned.ref.vault_commit_sha == manifest["source_commit"]
     assert pinned.ref.sidecar_commit_sha == "b" * 40
     assert pinned.ref.manifest_sha256 == _sha(raw)
@@ -117,6 +124,55 @@ def test_requires_e1_state_verifier(tmp_path):
             vault_root=vault_root,
             state_verifier=None,
         )
+
+
+def test_pinned_snapshot_rejects_public_direct_construction_with_noop(tmp_path):
+    root = tmp_path.resolve()
+    with pytest.raises(SnapshotBindingError, match="bind_pinned_snapshot"):
+        PinnedSnapshot(
+            ref=SnapshotRef("a" * 40, "b" * 40, "sha256:" + "c" * 64),
+            sidecar_root=root,
+            database_path=root / "state" / "structure.sqlite3",
+            manifest_path=root / "state" / "manifest.json",
+            vault_git_root=root,
+            vault_root=root / "ГП",
+            manifest={"source_commit": "a" * 40},
+            _verifier_callback=lambda: None,
+        )
+
+
+def test_bound_verifier_callback_is_not_exposed_or_rebindable(tmp_path):
+    sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
+    pinned = _binder(sidecar, vault_git, vault_root, manifest)
+
+    # No mutable function object is reachable through the snapshot instance.
+    assert not hasattr(pinned, "_verifier_callback")
+    with pytest.raises(AttributeError):
+        pinned._verifier_callback.__code__ = (lambda: None).__code__
+
+    database.write_bytes(b"replacement after attempted verifier mutation")
+    with pytest.raises(SnapshotBindingError, match="SQLite database digest changed"):
+        pinned.verify_current()
+
+
+def test_snapshot_module_exposes_no_verifier_minting_or_registration_symbols():
+    for name in (
+        "_SnapshotVerifier",
+        "_SNAPSHOT_VERIFIER_SEAL",
+        "_register_snapshot_verifier",
+        "_build_verifier_registry",
+        "_create_pinned_snapshot_api",
+        "_bind_pinned_snapshot_impl",
+    ):
+        assert not hasattr(snapshot_module, name)
+
+
+def test_unregistered_snapshot_fails_closed(tmp_path):
+    # Bypassing __init__ does not produce a trusted instance without registry binding.
+    unregistered = object.__new__(PinnedSnapshot)
+
+    with pytest.raises(SnapshotBindingError, match="no active verifier binding"):
+        unregistered.verify_current()
 
 
 def test_rejects_vault_root_outside_pinned_git_checkout(tmp_path):
