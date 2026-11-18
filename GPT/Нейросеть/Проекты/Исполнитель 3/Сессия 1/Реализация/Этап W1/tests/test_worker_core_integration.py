@@ -3,6 +3,8 @@ import json
 from types import SimpleNamespace
 
 from sfra_issue_core import InMemoryTransportStatusStore, IssueRecord, IssueWorkerCore
+from sfra_web_adapter import MarkerLedger, handle_opened_event
+from sfra_web_adapter.ports import GitHubCommentStatusStore
 from sfra_web_adapter.corpus import SyntheticGoldCorpus
 from sfra_web_adapter.runner import (
     CANONICAL_QUERY, SNAPSHOT, SyntheticReadSourceApplication, SyntheticSearchApplication,
@@ -81,3 +83,46 @@ def test_synthetic_applications_expose_bounded_gold_corpus_projection():
     assert result.status == "ok"
     assert read.last_projection["case_id"] == "gq-005-emergency-exception"
     assert read.last_projection["evidence"][0]["excerpt"] == node.raw_text
+
+class BotComments:
+    def __init__(self):
+        self.items = []
+    def list_comments(self, issue_number):
+        return list(self.items)
+    def create_comment(self, issue_number, body):
+        self.items.append({"body": body, "user": {"login": "github-actions[bot]"}})
+
+def test_event_body_digest_is_rechecked_against_api_reread_before_any_service_call():
+    event_body = request_body()
+    changed_body = request_body(payload={"query": "edited after webhook delivery"})
+    comments = BotComments()
+    started = MarkerLedger().inspect(29, event_body.encode("utf-8"), [])
+    comments.create_comment(29, started.marker)
+
+    class CurrentIssueReader:
+        def read_issue(self, issue_number):
+            return IssueRecord(29, "[SFRA] synthetic", "yeatu/obsidianGP",
+                               "yeatu", changed_body, False)
+
+    search_app = SyntheticSearchApplication()
+    read_app = SyntheticReadSourceApplication()
+    worker = IssueWorkerCore(
+        issue_reader=CurrentIssueReader(),
+        status_store=GitHubCommentStatusStore(comments),
+        search_application=search_app,
+        read_source_application=read_app,
+    )
+    event = {
+        "repository": {"full_name": "yeatu/obsidianGP"},
+        "sender": {"login": "yeatu"},
+        "issue": {"number": 29, "title": "[SFRA] synthetic", "body": event_body,
+                  "user": {"login": "yeatu"}},
+    }
+    outcome = handle_opened_event(
+        event, event_name="issues", action="opened", comments=comments,
+        worker=worker, snapshot=SNAPSHOT, worker_commit_sha=WORKER_SHA,
+    )
+    assert outcome == "REJECTED"
+    assert search_app.calls == 0
+    assert read_app.calls == 0
+    assert "request_body_changed" in comments.items[-1]["body"]
