@@ -22,7 +22,7 @@
 
 В main уже находятся E1 structural indexing/source API, E2 lexical retrieval, E3/B1 Context Builder/integration, V2.1 application services и V2.2 non-production Issue core.
 
-**Важное уточнение по A1-03:** regression на замену sidecar во время E1 read уже присутствует в текущем main (`test_snapshot.py`). Остаточный вопрос уже: публичный `PinnedSnapshot` допускает отсутствие активного verifier, а `verify_current()` тогда становится no-op. Это вынесено в [Issue #36](https://github.com/yeatu/obsidianGP/issues/36). [A1 follow-up](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653) и координаторская disposition остаются в истории #19; сама #19 не переоткрывается.
+**Важное уточнение по A1-03:** regression на замену sidecar во время E1 read уже присутствует в `test_snapshot.py`. Реализация guard и correction capability завершены на [PR #54](https://github.com/yeatu/obsidianGP/pull/54), точный HEAD `f234c5e2de0f8ed8684a8605bafc50d83abf5d74`; fixture-only C1/V2.1/V2.2 CI успешно прошёл. Исходная [Issue #36](https://github.com/yeatu/obsidianGP/issues/36) и correction [#51](https://github.com/yeatu/obsidianGP/issues/51) находятся в REVIEW через [запрос #55](https://github.com/yeatu/obsidianGP/issues/55). До независимой приёмки и C acceptance guard не считается завершённым для зависимых интеграций. [A1 follow-up](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653) остаётся в истории #19.
 
 ## 2. Активные задачи
 
@@ -31,7 +31,7 @@
 | Issue | Приоритет | Тип | Задача / следующий результат | Зависимости |
 |---|---:|---|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
-| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
+| [#55](https://github.com/yeatu/obsidianGP/issues/55) | P1 | REVIEW_REQUEST | Независимая повторная проверка PinnedSnapshot verifier guard (#36/#51) по точному HEAD | PR #54, HEAD `f234c5e2de0f8ed8684a8605bafc50d83abf5d74`; C acceptance перед подключением `read_source` |
 | [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
@@ -39,11 +39,11 @@
 | [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | 30–50 synthetic gold cases с обязательными Node IDs и критическими условиями | Нет; параллельно |
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
-| [#51](https://github.com/yeatu/obsidianGP/issues/51) | P1 | IMPLEMENTATION | Correction: сделать capability PinnedSnapshot verifier неизменяемым и исключить no-op bypass | #36, #46 |
+
 
 ## 3. Порядок параллельной работы
 
-**Можно начинать сразу и независимо:** #36, #37, #41, #34.  
+**Можно начинать сразу и независимо:** #37, #41, #34, #55 (independent review; #36/#51 are in REVIEW).  
 **Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
 **Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
 **Quality runner:** #42 после утверждения gold corpus #41.  
@@ -55,6 +55,7 @@
 
 | PR | Состояние | Трактовка |
 |---|---|---|
+| [#54 — PinnedSnapshot verifier correction](https://github.com/yeatu/obsidianGP/pull/54) | OPEN / READY | Correction PR for #36/#51; exact HEAD and fixture-only CI evidence are recorded in [review request #55](https://github.com/yeatu/obsidianGP/issues/55). Do not merge before independent review and Coordinator disposition where required. |
 | [#12 — GitHub Issue Worker and Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | OPEN / DRAFT | Отдельное предложение по GitHub transport/worker/recovery. Не входит в текущий milestone и не разрешает production worker, recovery, real Issue writes, event workflows или публикацию source content. |
 | [#1 — structural indexer v1](https://github.com/yeatu/obsidianGP/pull/1) | OPEN | Исторический PR раннего прототипа; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
 | [#2 — structural indexer pytest harness](https://github.com/yeatu/obsidianGP/pull/2) | OPEN | Исторический PR раннего тестового стенда; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
