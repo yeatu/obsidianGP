@@ -461,3 +461,81 @@ def test_race_failure_does_not_retain_raw_os_exception(tmp_path, monkeypatch):
     assert error.value.code == "filesystem_race"
     assert error.value.__cause__ is None
     assert str(root) not in str(error.value)
+
+
+def _refresh_attestation(root, db_path, attestation):
+    inventory = _inventory(root)
+    connection = sqlite3.connect(db_path)
+    try:
+        counts = {
+            "document_count": connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0],
+            "active_document_count": connection.execute(
+                "SELECT COUNT(*) FROM documents WHERE status='active'"
+            ).fetchone()[0],
+            "node_count": connection.execute("SELECT COUNT(*) FROM structural_nodes").fetchone()[0],
+            "active_node_count": connection.execute(
+                "SELECT COUNT(*) FROM structural_nodes "
+                "WHERE status IN ('active','ambiguous') AND stale_generation IS NULL"
+            ).fetchone()[0],
+            "passage_count": connection.execute("SELECT COUNT(*) FROM passages").fetchone()[0],
+        }
+        parsers = connection.execute(
+            "SELECT DISTINCT parser_name, parser_version FROM documents WHERE status='active'"
+        ).fetchall()
+    finally:
+        connection.close()
+    attestation["markdown_inventory"]["sha256"] = _sha(inventory)
+    attestation["markdown_inventory"]["document_count"] = len(json.loads(inventory)["documents"])
+    attestation["parser_identities"] = [
+        {"name": name, "version": version}
+        for name, version in sorted(
+            parsers, key=lambda pair: (pair[0].encode("utf-8"), pair[1].encode("utf-8"))
+        )
+    ]
+    attestation["counts"] = counts
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+    return inventory
+
+
+def test_verifies_deleted_document_and_retained_node_history(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text("# Revised\n\nA second indexed generation.\n", encoding="utf-8")
+    index_vault(root, tmp_path / "sidecar")
+    note.unlink()
+    index_vault(root, tmp_path / "sidecar")
+
+    inventory = _refresh_attestation(root, db_path, attestation)
+    report = _verify(root, db_path, inventory, attestation)
+
+    assert report.document_count == 2
+    assert report.active_document_count == 1
+    assert report.node_count > report.active_node_count
+    assert report.active_node_count > 0
+
+
+def test_rejects_corrupt_historical_node_version(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text("# Revised\n\nA second indexed generation.\n", encoding="utf-8")
+    index_vault(root, tmp_path / "sidecar")
+    inventory = _refresh_attestation(root, db_path, attestation)
+
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "UPDATE node_versions SET raw_text='tampered history' "
+            "WHERE node_version_pk=(SELECT MIN(node_version_pk) FROM node_versions)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code in {"node_content_mismatch", "node_version_mismatch"}
