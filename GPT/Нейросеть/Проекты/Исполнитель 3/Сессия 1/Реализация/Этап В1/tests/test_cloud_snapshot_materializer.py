@@ -4,6 +4,7 @@ from dataclasses import replace
 from io import BytesIO
 import hashlib
 from pathlib import Path
+import shutil
 import zipfile
 
 import pytest
