@@ -4,7 +4,7 @@
 > GitHub Issue — источник истины по задаче. Эта панель показывает только активные задачи и не дублирует CLAIM, review, CI или evidence.
 
 **Снимок:** 2026-11-18 (C3 coordination refresh)  
-**main base for this dashboard update:** `3388e0409a81b5f40c3155674fe33247ce5e044e`  
+**main base for this dashboard update:** `2051d0ce6cdbceab1fc825c617708f8255266476`  
 **Базовая версия кода:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
 ## 0. Начало работы
@@ -66,7 +66,7 @@
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / владелец |
 |---|---:|---|:---:|---|---|
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, повторить 42 synthetic cases и опубликовать exact-HEAD report | E1 CLAIM; PR #84 Draft; последний run #44237776930: 40/42 gates passed, 2 gates failed и один completeness invariant выявлен; не ослаблять checks |
-| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Завершить synthetic Issues → Actions → SFRA response worker и exact-head fixture CI | E2 CLAIM; PR #85 Draft; A1 preflight #80 incorporated; exact-head CI/review ещё не пройдены |
+| [#93](https://github.com/yeatu/obsidianGP/issues/93) | P1 | `REVIEW_REQUEST` | **A** | Независимый exact-head аудит synthetic Web adapter #77 / PR #92 | E2 завершил implementation; PR #92 Ready; HEAD `e78576f483c688aa01f633e9293257416bc0778f`; W1 fixture CI 44 passed; C acceptance/merge + post-merge marked synthetic round-trip после A verdict |
 | [#88](https://github.com/yeatu/obsidianGP/issues/88) | P1 | `REVIEW_REQUEST` | **A** | Независимо проверить exact PR #87 / #79 | A1 CLAIM; exact HEAD `162e4190b00c63c67ed1f7fb29871819315c4d92`; C acceptance после A verdict |
 | [#86](https://github.com/yeatu/obsidianGP/issues/86) | P1 | `ANALYSIS` | **A** | Спроектировать cloud data plane и компьютер-независимый import/sync; сравнить варианты хранилища и каналы публикации | A1 CLAIM; анализ-only, без реального Vault/data migration/provisioning |
 
@@ -83,7 +83,7 @@
 |---|---|---|
 | [#44 — governance / active panel](https://github.com/yeatu/obsidianGP/pull/44) | Открыт | C3 обновляет панель на текущем main base; после фиксации нового exact HEAD требуется независимый A review. Старый verdict #34 относится только к HEAD `9cd1da26376ed4d31f990fdc4439f35c822a4378`. |
 | [#87 — PinnedSnapshot exact-type correction](https://github.com/yeatu/obsidianGP/pull/87) | Открыт / Ready for review | HEAD `162e4190b00c63c67ed1f7fb29871819315c4d92`; combined fixture CI passed; review #88 active; no merge/read_source activation before A + C acceptance |
-| [#85 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/85) | Открыт / Draft | HEAD `7631af8a4a43d81d632eb4fb93df14fd96027b88`; no successful exact-head CI reported; W1 remains synthetic-only |
+| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / Ready for review | Exact HEAD `e78576f483c688aa01f633e9293257416bc0778f`; W1 fixture CI #44240799599 passed 44 tests on merge-ref `18f8e586f212a3caf6c99ccda2bf2fb08273195b`; A review #93; C acceptance/merge and post-merge marked synthetic round-trip required; no Issue write |
 | [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; run #44237776930 failed 2 gates plus completeness invariant; E1 correction in progress |
 | [#47 — historical Local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт / HOLD | Preserved, not a target, do not merge absent explicit owner re-scope |
 | [#57 — historical MCP search adapter](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft / HOLD | Preserved; do not continue or merge as product path |
@@ -99,7 +99,7 @@
 - **Durable source data:** cloud storage/index/snapshot/manifest/sidecar design is not yet approved. #86 is analysis-only. GitHub-hosted runner workspace is ephemeral, not durable Vault storage.
 - **Publication:** public publication of Vault content and source-derived metadata is acceptable to the owner. Do not impose blanket redaction on confidentiality grounds. Protect credentials/secrets and preserve integrity/provenance; choose Issues/comments/logs/artifacts based on practical fit, size, cost and retention.
 - **Production boundary:** permission to publish data does not authorize production reads, imports, indexing, workflow execution or mutation. The real-Vault workflow disabled under #53 remains disabled; do not rerun it. Any cloud-backed real-data path requires #86 design, independent review and explicit C/owner approval.
-- **W1 #77:** synthetic-only; marked owner-authored `issues.opened`; allowlisted comment projection; strict event/auth/body binding; at-least-once semantics and documented recovery. No real Vault/SQLite/sidecar, no synthetic Issue write/round-trip until the A review and C acceptance gates are satisfied.
+- **W1 #77:** implementation complete in PR #92 at exact HEAD `e78576f483c688aa01f633e9293257416bc0778f`; 44 fixture tests passed. Independent A review is requested in #93. Synthetic-only; marked owner-authored `issues.opened`; allowlisted canonical gold-corpus comment projection; strict event/auth/body binding; at-least-once semantics and documented recovery. No real Vault/SQLite/sidecar and no synthetic Issue write/round-trip until A review and C acceptance/merge.
 - **PinnedSnapshot:** no production `read_source` until #79 / PR #87 passes fresh independent A review #88 and C acceptance. Threat model #81 trusts code already executing inside the same Python process; no false tamper-proof claim.
 - **Local MCP legacy work:** assets and history are preserved, but MCP-specific Issues #38/#39/#40/#43/#72 and PR #47/#57/#66/#94 are on hold. Do not claim, continue, review or merge this lane unless the owner explicitly reactivates/re-scopes it.
 - **Benchmark #42:** synthetic-only; validate corpus schema, digest, references, exact spans and hashes. A failed quality gate remains a failure; do not weaken forbidden-node/completeness assertions to force a pass.
