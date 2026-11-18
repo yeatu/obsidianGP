@@ -31,7 +31,7 @@
 | [#193](https://github.com/yeatu/obsidianGP/issues/193) | E — свободная P1 INTEGRATION | Синхронизировать bundle PR #162 и correction PR #184 с current main | Parent #162 HEAD `c9ab808...`, child #184 HEAD `df37678...`; main `553392...`; four bundle-owned files; combined A review #190 идёт по старому точному target |
 | [#195](https://github.com/yeatu/obsidianGP/issues/195) | E — свободная P2 INTEGRATION | Синхронизировать benchmark PR #84 с current main и повторить два полных exact-head прогона | PR #84 HEAD `c05f622...`; base review #189 — `94bd689...`; main `553392...`; не менять corpus/метрики/quality gates |
 | [#196](https://github.com/yeatu/obsidianGP/issues/196) | E — заблокирована зависимостью | Синхронизировать writer PR #170 и correction PR #179 после bundle sync | **Только после RELEASE #193**; сохранить parent/child branch stack и четыре writer-owned files |
-| [#197](https://github.com/yeatu/obsidianGP/issues/197) | E — E2 CLAIMED | Исправить единственный indexer-name пример в CLOUD_SNAPSHOT_V2.md | Только docs; E2 CLAIM #6990…; не менять schema/runtime/builder |
+| [#197](https://github.com/yeatu/obsidianGP/issues/197) | E2 RELEASED / ждёт A #199 | Исправить пример indexer identity в CLOUD_SNAPSHOT_V2.md | PR #198, one-file docs-only diff; exact HEAD `fc9f1b3...` / base `553392...` |
 | [#190](https://github.com/yeatu/obsidianGP/issues/190) | A — A1 CLAIMED | Интегрированный audit полного bundle builder + key correction | Exact historical parent #162 `c9ab808...`, child #184 `df37678...`, base `bc36bf...`; verdict не переносится на synced HEAD |
 | [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 — W1 stack на A/C gate | #194 sync → fresh A review → отдельное C-решение | PR #92 остаётся open/unmerged; synthetic worker/round-trip не запускать до отдельного разрешения |
 | [#119](https://github.com/yeatu/obsidianGP/issues/119) | E3 RELEASED / parent review & C gate | Принять immutable bundle builder/verifier | PR #162 + correction #184; #193 — current-main sync; #190 — интегрированный review исторической версии |
@@ -63,7 +63,7 @@
 - [#156 / PR #84](https://github.com/yeatu/obsidianGP/pull/84): две независимые полные попытки дали byte-identical JSON/Markdown отчёты. Gold corpus v1.0.0 остаётся 42 cases / 32 docs / 69 nodes. Результат 40/42; gq-010 и gq-036 остаются реальными failed gates, 14 status diagnostics видимы, 0 explicit SourceRead mismatches. A1 принял handoff #189 только для HEAD `c05f622...` / base `94bd689...`; #195 обновляет базу.
 - [#132 / #142](https://github.com/yeatu/obsidianGP/issues/142): additive E1 verifier design accepted. E1 должен проверять внутреннюю consistency материализованного source/SQLite/index snapshot через read-only SQLite. Legacy manifest v1 и workflow не менять.
 - [#124](https://github.com/yeatu/obsidianGP/issues/124): trust-order addendum зафиксирован. Upload/read-back и `stage()` не доказывают E1 verification; без E1 verifier — no `mark_verified`, no activation.
-- [#197](https://github.com/yeatu/obsidianGP/issues/197): устранение документационной неоднозначности indexer identity; E2 CLAIMED.
+- [#197](https://github.com/yeatu/obsidianGP/issues/197): documentation correction завершена E2; PR #198 открыт, независимое A-review #199 ожидает CLAIM.
 - [#188](https://github.com/yeatu/obsidianGP/issues/188): закрыта после снятия ложной E1 CLAIM строки и path-filter correction; benchmark review handoff #189 принят.
 
 ## 4. PR state и merge boundaries
@@ -76,6 +76,7 @@
 | [#184 — bundle key correction](https://github.com/yeatu/obsidianGP/pull/184) | Open / Draft / unmerged | A1 accepted #185 для correction delta; parent + child integrated exact review #190 идёт на старой базе |
 | [#170 — writer](https://github.com/yeatu/obsidianGP/pull/170) | Open / unmerged / stacked | HEAD `8c957c9...`; child correction #179 |
 | [#179 — writer correction](https://github.com/yeatu/obsidianGP/pull/179) | Open / unmerged / stacked | A1 accepted #180 для correction delta; #196 ожидает #193 и должен обновить обе ветки |
+| [#198 — CloudSnapshotRef v2 documentation example](https://github.com/yeatu/obsidianGP/pull/198) | Open / unmerged | Exact HEAD `fc9f1b3...`; one documentation file; fresh A review #199 |
 | [#186 — W1 digest correction](https://github.com/yeatu/obsidianGP/pull/186) | Closed / merged into feature branch only | Merge commit `d57f576...` в PR #92 branch; не в main |
 | [#159 — catalogue](https://github.com/yeatu/obsidianGP/pull/159) | Merged | C3 accepted #118; merge commit `bc36bf...` |
 | [#127 — CloudSnapshotRef v2](https://github.com/yeatu/obsidianGP/pull/127) | Merged | Contract accepted |
