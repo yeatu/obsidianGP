@@ -29,7 +29,7 @@ python -m pip install -e "GPT/Нейросеть/Проекты/Исполнит
 PYTHONHASHSEED=0 python "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark/runner.py" --output-dir benchmark-output
 ```
 
-The runner requires Git and creates only temporary repositories below the operating-system temporary directory. Both the Vault and sidecar Git checkouts are destroyed automatically after the run. Set PYTHONHASHSEED=0 for cross-process repeatability; the report records the effective seed. Synthetic E1 Node IDs created for corpus spans use UUIDv5 derived from the corpus version and gold Node ID, never random UUIDv4.
+The runner requires Git and creates only temporary repositories below the operating-system temporary directory. Both the Vault and sidecar Git checkouts are destroyed automatically after the run. Set PYTHONHASHSEED=0 for cross-process repeatability; the report records the effective seed. After each E1 indexing pass, the benchmark canonicalizes every Node ID in the disposable SQLite fixture to UUIDv5 derived from corpus version + source_path + parser local_key, then rewrites references in node versions, match events and metadata. Extra gold-span IDs and the not-found case ID are also deterministic. The shared E1 indexer remains unchanged.
 
 ## Preflight
 
