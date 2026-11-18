@@ -75,7 +75,7 @@
 | Issue | Приоритет | Тип | Роль | Задача / следующий результат | Зависимости / условие начала |
 |---|---:|---|:---:|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | `REVIEW_REQUEST` | **A** | Независимая проверка протокола v2.2, трёх ролей и порядка самостоятельного захвата/обновления списка | Проверить PR #44 и Issue #20; после слияния PR сверить актуальную версию в main |
-| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | `IMPLEMENTATION` | **E** | Обязательная активная проверка verifier для PinnedSnapshot до любого чтения E1 | Нет |
+| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | `IMPLEMENTATION` | **E** | Обязательная проверка действующего средства верификации PinnedSnapshot до любого чтения E1 | Нет |
 | [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | `ANALYSIS` | **A** | Единые контракты MCP-инструментов и непрерывность SnapshotRef между вызовами без состояния | Нет |
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | `IMPLEMENTATION` | **E** | Локальный каркас MCP stdio-сервера, конфигурация и точка сборки сервисов | Можно начать базовый жизненный цикл сервера и конфигурацию; публичные сигнатуры не фиксировать до #37 |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | `IMPLEMENTATION` | **E** | Инструмент `search_vault` поверх SearchVaultService | После #37 и #38 |
