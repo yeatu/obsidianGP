@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 from sfra_context_integrations.snapshot import SnapshotBindingError
-from sfra_context_integrations.source_reader import E1SourceReader, SourceReaderContractError
+from sfra_context_integrations.source_reader import E1SourceReader
+from tests.fixtures.consumer_seams import make_test_source_reader, SourceReaderContractError
 from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, FixtureTokenCounter, snapshot
 
@@ -35,7 +36,7 @@ def _reader(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     api = FixtureE1ScopeAPI(ref)
-    return E1SourceReader(api, pinned, FixtureTokenCounter()), api, pinned
+    return make_test_source_reader(api, pinned, FixtureTokenCounter()), api, pinned
 
 
 def test_reader_runs_verifier_and_fails_before_any_e1_call(tmp_path):
@@ -50,7 +51,7 @@ def test_reader_runs_verifier_and_fails_before_any_e1_call(tmp_path):
     api = FixtureE1ScopeAPI(ref)
 
     with pytest.raises(SourceReaderContractError) as error:
-        E1SourceReader(api, pinned, FixtureTokenCounter())
+        make_test_source_reader(api, pinned, FixtureTokenCounter())
 
     assert error.value.code == "snapshot_changed"
     assert checks == ["checked"]
@@ -312,7 +313,7 @@ def test_source_reader_accepts_e1_public_result_dataclasses(tmp_path):
     ref = snapshot()
     pinned = _pinned(tmp_path, ref)
     fake = FixtureE1ScopeAPI(ref)
-    reader = E1SourceReader(
+    reader = make_test_source_reader(
         _DataclassReturningE1API(fake),
         pinned,
         FixtureTokenCounter(),
