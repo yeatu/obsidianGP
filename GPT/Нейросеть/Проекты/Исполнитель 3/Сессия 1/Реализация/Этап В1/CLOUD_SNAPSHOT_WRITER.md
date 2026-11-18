@@ -37,3 +37,13 @@ The dedicated fixture workflow installs E1, B1, E3 and E2 packages, creates temp
 ## Safety boundary
 
 No provider SDK, remote storage, network, credentials, OIDC/KMS, real Vault/SQLite/sidecar/manifest/sfra-state, workflow dispatch, production upload, catalogue activation, retention or delete operation is used. The read-only resolver/query port remains separate from this write-only seam.
+
+
+## Current stack integration baseline (2026-11-18)
+
+This writer branch consumes the refreshed bundle-builder dependency:
+- Bundle PR #162 exact HEAD: `c5f84cd64877167b9feef3140fe20adf39c616cd`.
+- Current main/base incorporated by that bundle HEAD: `553392dbbe9d3782683593bb92b88ac3ad6d9721`.
+- Writer branch sync commit: `c9b21be108ae7943b475838559b6bd2c163ba1bf`, with the refreshed bundle HEAD as first parent and the former writer HEAD `8c957c9e2554ebef8458978a4245b7a27bbe866e` as second parent.
+
+This records branch ancestry for the stacked implementation only. It does not change the writer contract or enable a provider, upload, catalogue activation or production operation.
