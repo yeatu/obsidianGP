@@ -8,6 +8,7 @@ from .cloud_index_verifier import (
     ImmutableImportSourceRevision,
     IndexerIdentity,
     ParserIdentity,
+    SourceRevision,
     parse_cloud_index_attestation,
     verify_materialized_cloud_index,
 )
@@ -55,6 +56,7 @@ __all__ = [
     "ImmutableImportSourceRevision",
     "IndexerIdentity",
     "ParserIdentity",
+    "SourceRevision",
     "parse_cloud_index_attestation",
     "verify_materialized_cloud_index",
     "IndexResult",
