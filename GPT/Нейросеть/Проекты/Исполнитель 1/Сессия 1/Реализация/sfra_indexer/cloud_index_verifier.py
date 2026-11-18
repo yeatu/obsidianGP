@@ -69,6 +69,13 @@ class CloudIndexVerificationError(ValueError):
         "document_mismatch": "The active E1 documents do not match the Markdown inventory.",
         "parser_identity_mismatch": "The active document parser identities do not match the attestation.",
         "node_integrity_failure": "The E1 nodes, versions, spans or matching history are inconsistent.",
+        "node_identity_mismatch": "The E1 node identifiers are missing, malformed or duplicated.",
+        "node_reference_mismatch": "An E1 node or parent reference is inconsistent.",
+        "node_content_mismatch": "An E1 node or historical content hash is inconsistent.",
+        "node_span_mismatch": "An E1 source coordinate or span is inconsistent.",
+        "node_generation_mismatch": "An E1 node or document generation is inconsistent.",
+        "node_history_mismatch": "The E1 node lifecycle or matching event history is inconsistent.",
+        "node_version_mismatch": "The E1 node version chain is inconsistent.",
         "attestation_counts_mismatch": "The SQLite counts do not match the attestation.",
         "indexer_identity_mismatch": "The E1 indexer identity does not match the installed implementation.",
         "verification_failed": "The materialized E1 cloud index could not be verified.",
@@ -491,9 +498,13 @@ def _verify_database_consistency(
             raise CloudIndexVerificationError("document_mismatch")
 
         active_docs: dict[str, dict[str, Any]] = {}
+        seen_document_paths: set[str] = set()
         parser_pairs: set[tuple[str, str]] = set()
         for doc in documents:
             path = _safe_path(doc.get("source_path"))
+            if path in seen_document_paths:
+                raise CloudIndexVerificationError("document_mismatch")
+            seen_document_paths.add(path)
             if (not _valid_hash(doc.get("source_sha256"))
                     or type(doc.get("source_size_bytes")) is not int or doc["source_size_bytes"] < 0
                     or type(doc.get("generation")) is not int or doc["generation"] < 1
@@ -612,6 +623,52 @@ def _verify_database_consistency(
             "schema_version_unsupported": "schema_mismatch",
             "db_path_invalid": "database_invalid",
             "sqlite_open_failed": "database_invalid",
+            "node_id_not_unique": "node_identity_mismatch",
+            "node_identity_invalid": "node_identity_mismatch",
+            "node_document_reference_invalid": "node_reference_mismatch",
+            "cross_document_relation": "node_reference_mismatch",
+            "parent_generation_mismatch": "node_reference_mismatch",
+            "parent_reference_invalid": "node_reference_mismatch",
+            "sibling_document_binding_mismatch": "node_reference_mismatch",
+            "raw_text_hash_mismatch": "node_content_mismatch",
+            "source_fragment_hash_mismatch": "node_content_mismatch",
+            "version_content_hash_mismatch": "node_content_mismatch",
+            "source_coordinates_invalid": "node_span_mismatch",
+            "char_span_mismatch": "node_span_mismatch",
+            "byte_span_mismatch": "node_span_mismatch",
+            "line_span_mismatch": "node_span_mismatch",
+            "document_generation_invalid": "node_generation_mismatch",
+            "node_match_event_generation_mismatch": "node_generation_mismatch",
+            "stale_event_generation_mismatch": "node_generation_mismatch",
+            "stale_generation_invalid": "node_generation_mismatch",
+            "version_generation_mismatch": "node_generation_mismatch",
+            "match_event_type_unknown": "node_history_mismatch",
+            "match_event_payload_invalid": "node_history_mismatch",
+            "match_event_read_failed": "node_history_mismatch",
+            "node_match_event_missing": "node_history_mismatch",
+            "ambiguous_event_missing": "node_history_mismatch",
+            "stale_event_missing": "node_history_mismatch",
+            "node_event_state_mismatch": "node_history_mismatch",
+            "active_state_mismatch": "node_history_mismatch",
+            "deleted_document_state_invalid": "node_history_mismatch",
+            "version_history_invalid": "node_version_mismatch",
+            "version_history_read_failed": "node_version_mismatch",
+            "version_snapshot_mismatch": "node_version_mismatch",
+            "version_snapshot_missing": "node_version_mismatch",
+            "source_hash_invalid": "document_mismatch",
+            "source_size_invalid": "document_mismatch",
+            "source_hash_mismatch": "document_mismatch",
+            "source_size_mismatch": "document_mismatch",
+            "source_encoding_invalid": "document_mismatch",
+            "source_file_missing": "inventory_mismatch",
+            "source_path_unsafe": "filesystem_unsafe",
+            "source_open_failed": "filesystem_unsafe",
+            "source_target_outside_root": "filesystem_unsafe",
+            "vault_root_open_failed": "filesystem_unsafe",
+            "secure_open_unavailable": "filesystem_unsafe",
+            "file_identity_changed": "filesystem_race",
+            "read_transaction_missing": "sqlite_integrity_failure",
+            "node_lookup_failed": "sqlite_integrity_failure",
         }.get(exc.code, "node_integrity_failure")
         raise CloudIndexVerificationError(code) from exc
     except sqlite3.Error as exc:
