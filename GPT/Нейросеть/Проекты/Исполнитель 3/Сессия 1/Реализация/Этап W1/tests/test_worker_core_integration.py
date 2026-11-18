@@ -3,7 +3,7 @@ import json
 
 from sfra_issue_core import InMemoryTransportStatusStore, IssueRecord, IssueWorkerCore
 from sfra_web_adapter.runner import (
-    SNAPSHOT, SyntheticReadSourceApplication, SyntheticSearchApplication,
+    GOLD_NODE, SNAPSHOT, SyntheticReadSourceApplication, SyntheticSearchApplication,
 )
 
 WORKER_SHA = "a" * 40
@@ -46,8 +46,8 @@ def test_v2_2_core_runs_search_through_injected_synthetic_application_port():
 
 def test_v2_2_core_keeps_read_source_on_synthetic_injected_port():
     body = request_body("read_source", {
-        "node_id": "synthetic-node-001",
-        "expected_hash": "sha256:" + "a" * 64,
+        "node_id": "manual_intro",
+        "expected_hash": "sha256:04b8c940ba7056617a1fc4d4e45eff787033888862cd291eb9770f3fe6ea0f77",
         "scope": "node",
     })
     status = make_worker(body).run(29, snapshot=SNAPSHOT, worker_commit_sha=WORKER_SHA)
@@ -56,3 +56,24 @@ def test_v2_2_core_keeps_read_source_on_synthetic_injected_port():
     assert result["result"]["operation"] == "read_source"
     assert result["result"]["counts"]["fragments"] == 1
     assert "synthetic://fixture" not in str(result)
+
+def test_synthetic_applications_expose_bounded_gold_corpus_projection():
+    search = SyntheticSearchApplication()
+    search.search({"query": "synthetic"})
+    projected = search.last_projection
+    assert projected["schema_version"] == 1
+    assert projected["operation"] == "search_vault"
+    assert projected["items"][0]["node_id"] == "manual_intro"
+    assert projected["items"][0]["source_path"] == "synthetic/operations/manual.md"
+    assert projected["items"][0]["content_hash"] == GOLD_NODE["content_hash"]
+    assert projected["items"][0]["excerpt"] == GOLD_NODE["raw_text"]
+
+    read = SyntheticReadSourceApplication()
+    request = type("Request", (), {
+        "node_id": "manual_intro",
+        "expected_hash": GOLD_NODE["content_hash"],
+    })()
+    result = read.read(request)
+    assert result.status == "ok"
+    assert read.last_projection["operation"] == "read_source"
+    assert read.last_projection["items"][0]["excerpt"] == GOLD_NODE["raw_text"]
