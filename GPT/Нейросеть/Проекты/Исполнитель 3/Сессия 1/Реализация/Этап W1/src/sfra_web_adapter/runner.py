@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from sfra_context_builder.models import SnapshotRef
 from sfra_context_integrations import ContextIntegrationResult, ReadSourceRequest, ReadSourceResult, SourceFragment
 from sfra_issue_core import IssueWorkerCore
-from .corpus import SyntheticCase, SyntheticGoldCorpus
+from .corpus import SyntheticGoldCorpus
 from .github_api import GitHubREST
 from .handler import handle_opened_event
 from .ports import GitHubCommentStatusStore, GitHubIssueReader
@@ -40,7 +40,7 @@ class SyntheticSearchApplication:
             content_hash=node.content_hash,
         ) for node in nodes)
         pack = {
-            "Status": "complete" if nodes else "not_found",
+            "Status": "complete",
             "Included": included,
             "Deferred": [],
             "Coverage": {"covered": len(nodes), "uncovered": 0},
