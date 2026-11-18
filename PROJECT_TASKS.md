@@ -1,60 +1,81 @@
 # SFRA — оперативная панель проекта
 
-> **Назначение:** краткая сводка текущего состояния и навигация по активной работе.
-> **Источник истины по каждой задаче:** соответствующая GitHub Issue и её последние действующие события.
-> **Нормативный протокол:** [Issue #20 — SFRA Governance Protocol v2](https://github.com/yeatu/obsidianGP/issues/20).
-> Этот файл не является журналом исполнения, не заменяет Issues и не хранит повторные копии CLAIM, review или CI evidence.
+> Краткая сводка текущего состояния и навигация по активной работе.  
+> **Источник истины по задаче:** соответствующая GitHub Issue и её последние действующие события.  
+> **Нормативный протокол:** [Issue #20 — Governance Protocol v2](https://github.com/yeatu/obsidianGP/issues/20).  
+> Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Исходный main HEAD перед этой миграцией:** `4b3e40a889a46c5bed2fce7825e210a58a857a9c`  
+**Main HEAD:** `6f655e77a8071445544f77ee4b8c75278649e100`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
-Шесть коммитов между последним кодовым baseline и проверенным main HEAD изменяли только `PROJECT_TASKS.md` и реестр сессии координатора; runtime-файлы не менялись ([compare](https://github.com/yeatu/obsidianGP/compare/bb2275ece19f3d7cf1aa655b89d8d037803976c6...4b3e40a889a46c5bed2fce7825e210a58a857a9c)).
+## 1. Текущий этап
 
-## 1. Текущее состояние
+**SFRA MVP — Local Retrieval Interface + Measured Quality.**
 
-- Основной контрактный контур E1/E2/E3 и согласованные исправления E1/E3 находятся в `main` на указанном кодовом baseline.
-- Поиск GitHub на момент снимка обнаружил две открытые управляющие Issues: [#20 — Governance](https://github.com/yeatu/obsidianGP/issues/20) и [#34 — независимая проверка Protocol v2 / PR #33](https://github.com/yeatu/obsidianGP/issues/34). Открытых implementation Issues не обнаружено.
-- [Issue #19 — A1 contract audit](https://github.com/yeatu/obsidianGP/issues/19) закрыта как completed. Координаторская disposition-запись [#6964076953](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964076953) считает A1-01…A1-05 закрытыми или локализованными в принятом scope.
-- Последующий read-only отчёт A1 [#6964082653](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653) отдельно отмечает остаточный P2-вопрос A1-03: публично создаваемый `PinnedSnapshot` без активного verifier и отсутствие отдельного regression на мутацию sidecar во время `E1SourceReader.read_scope()`. Issue #19 закрыта; этот реестр не переоткрывает её. До этапа, который зависит от данной гарантии, координатору следует явно решить, нужен ли отдельный узкий follow-up.
-- Следующий продуктовый этап не стартует автоматически из факта завершения контрактной стабилизации. Его scope и release gates должен отдельно определить координатор.
+Координаторское решение и декомпозиция зафиксированы в [Issue #35](https://github.com/yeatu/obsidianGP/issues/35), закрытой после создания дочерних задач.
 
-## 2. Активные управляющие задачи
+Цели этапа:
+- закрыть остаточную границу верификации PinnedSnapshot;
+- реализовать локальный stateless MCP stdio server с двумя read-only инструментами: `search_vault` и `read_source`;
+- подтвердить качество цепочки E2 → E3 → Context Pack на 30–50 synthetic gold cases.
 
-| Issue | Тип | Состояние | Следующее действие |
-|---|---|---|---|
-| [#20 — Governance](https://github.com/yeatu/obsidianGP/issues/20) | GOVERNANCE | OPEN | Нормативный Protocol v2: динамический захват, декомпозиция, REVIEW_REQUEST, COORDINATOR_DECISION, независимость и полномочия координатора. |
-| [#34 — Governance review](https://github.com/yeatu/obsidianGP/issues/34) | REVIEW_REQUEST | OPEN | Независимая проверка Protocol v2 и PR #33 на точном HEAD. Не закрывать до reviewer disposition. |
+В main уже находятся E1 structural indexing/source API, E2 lexical retrieval, E3/B1 Context Builder/integration, V2.1 application services и V2.2 non-production Issue core.
 
-На момент снимка нет открытых implementation Issues. Когда координатор утвердит следующий этап, он должен создать минимальные независимые задачи с критериями приёмки и зависимостями, достаточные для параллельной работы свободных участников.
+**Важное уточнение по A1-03:** regression на замену sidecar во время E1 read уже присутствует в текущем main (`test_snapshot.py`). Остаточный вопрос уже: публичный `PinnedSnapshot` допускает отсутствие активного verifier, а `verify_current()` тогда становится no-op. Это вынесено в [Issue #36](https://github.com/yeatu/obsidianGP/issues/36). [A1 follow-up](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653) и координаторская disposition остаются в истории #19; сама #19 не переоткрывается.
 
-## 3. Открытые PR, требующие контекстного учёта
+## 2. Активные задачи
+
+Все задачи ниже открыты и доступны для самостоятельного CLAIM подходящим свободным участником. E/A-префикс не ограничивает захват. Фактический владелец определяется последним действующим CLAIM в соответствующей Issue.
+
+| Issue | Приоритет | Тип | Задача / следующий результат | Зависимости |
+|---|---:|---|---|---|
+| [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
+| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
+| [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
+| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
+| [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
+| [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
+| [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | 30–50 synthetic gold cases с обязательными Node IDs и критическими условиями | Нет; параллельно |
+| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
+| [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
+
+## 3. Порядок параллельной работы
+
+**Можно начинать сразу и независимо:** #36, #37, #41, #34.  
+**Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
+**Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
+**Quality runner:** #42 после утверждения gold corpus #41.  
+**Финальная интеграция:** #43 после двух handlers и snapshot guard.
+
+Родительская запись #35 закрыта как завершённое координаторское решение. Это не означает завершение milestone: дочерние Issues остаются активными.
+
+## 4. Открытые PR, требующие контекстного учёта
 
 | PR | Состояние | Трактовка |
 |---|---|---|
-| [#12 — GitHub Issue Worker and Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | OPEN / DRAFT | Только архитектурное предложение. Не является реализацией и не разрешает production worker, recovery, real Issue writes, event workflows, MCP или публикацию source content. Перед дальнейшим рассмотрением требуется сверить ветку с актуальным `main` и получить отдельное решение координатора. |
-| [#1 — structural indexer v1](https://github.com/yeatu/obsidianGP/pull/1) | OPEN | Исторический PR раннего прототипа; не является активной задачей текущего этапа. Не объединять без повторного координаторского решения. |
-| [#2 — structural indexer pytest harness](https://github.com/yeatu/obsidianGP/pull/2) | OPEN | Исторический PR раннего тестового стенда; не является активной задачей текущего этапа. Не объединять без повторного координаторского решения. |
+| [#12 — GitHub Issue Worker and Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | OPEN / DRAFT | Отдельное предложение по GitHub transport/worker/recovery. Не входит в текущий milestone и не разрешает production worker, recovery, real Issue writes, event workflows или публикацию source content. |
+| [#1 — structural indexer v1](https://github.com/yeatu/obsidianGP/pull/1) | OPEN | Исторический PR раннего прототипа; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
+| [#2 — structural indexer pytest harness](https://github.com/yeatu/obsidianGP/pull/2) | OPEN | Исторический PR раннего тестового стенда; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
 
-## 4. Действующие границы и решения
+## 5. Действующие ограничения
 
-- [Issue #20](https://github.com/yeatu/obsidianGP/issues/20) — единственный нормативный протокол CLAIM, ролей-функций, создания подзадач, REVIEW_REQUEST, COORDINATOR_DECISION, приоритетов и интеграции.
-- Метки E1/E2/E3/A1/A2/A3 идентифицируют участника/сессию, но не ограничивают типы задач. Любой свободный подходящий участник может захватить любую свободную задачу в пределах её требований и ограничений.
-- Любой участник может создать техническую подзадачу в пределах утверждённого scope, запрос на независимую проверку или запрос решения координатора.
-- Координатор сохраняет полные полномочия, управляет P0-кризисами, приоритетами, архитектурными решениями, интеграцией и merge. Предварительное разрешение координатора для обычного CLAIM не требуется.
-- Production GitHub transport/worker/recovery и публикация содержимого Vault в публичные Issues/comments не разрешены автоматически. Для них нужны отдельные scope, security/readiness review и явное решение координатора.
-- Production indexing/persistence нельзя запускать по умолчанию из обычного PR/push CI. Для routine E1 verification используется fixture-only контур; исторический incident остаётся в истории и не является разрешением на повтор.
+- [Issue #20](https://github.com/yeatu/obsidianGP/issues/20) — нормативный протокол CLAIM, динамических функций, декомпозиции, review, эскалации и полномочий координатора.
+- [Issue #34](https://github.com/yeatu/obsidianGP/issues/34) — независимая проверка Governance v2. Она продолжается параллельно и не блокирует независимые инженерные задачи, если reviewer не обнаружит затрагивающий их governance defect.
+- GitHub Issue Worker/Recovery, GitHub API writes, remote MCP HTTP/SSE/WebSocket, production indexing/persistence и публикация содержимого Vault в публичные Issues/comments не разрешаются этим milestone.
+- MCP MVP ограничен локальным stdio и двумя read-only tools. Не добавлять произвольный доступ к файловой системе или write tools.
+- E1 routine CI должен оставаться fixture-only. Не индексировать реальный Vault ради проверки задач.
+- Не включать embeddings/vector search или ranking changes до появления benchmark evidence.
+- Бюджет контекста остаётся под контролем E3. Нельзя обрезать source text и представлять неполный результат как complete.
 
-## 5. Правила ведения этой панели
+## 6. Правила ведения панели
 
 1. Координатор поддерживает этот файл как короткий снимок активной работы, а не как хронику.
-2. Включаются только открытые задачи, действующие блокировки, решения, которые действительно ожидают координатора, и PR, влияющие на текущий план.
-3. Для каждой активной задачи указываются ссылка на Issue, тип, актуальное состояние, фактический владелец по последнему действующему CLAIM и ближайшее действие. Не копировать сюда полный текст CLAIM/RELEASE/PROGRESS.
-4. Подробные findings, отчёты, review, CI runs, артефакты и HEAD-specific evidence остаются в соответствующей Issue, PR, commit или Actions run. В панели сохраняются ссылки, а не дублирующие пересказы.
-5. Завершённые задачи удаляются из активной таблицы. Их история остаётся в GitHub и Git. Старые снимки статусов не сохраняются ниже текущей сводки.
-6. Если панель расходится с GitHub, правильным считается текущее состояние GitHub Issue/PR/commit/Actions. Панель исправляется; она не переопределяет первичный источник.
-7. После изменения структуры или правил обновляется ссылка на нормативный протокол. Новые собственные наборы статусов в этом файле не вводятся.
+2. Для каждой активной задачи указываются Issue, приоритет, тип, следующий результат и зависимости. Фактический владелец берётся из последнего действующего CLAIM в Issue.
+3. Подробные findings, отчёты, review, CI runs, артефакты и HEAD-specific evidence остаются в соответствующей Issue, PR, commit или Actions run.
+4. Завершённые задачи удаляются из активной таблицы. История остаётся в GitHub и Git.
+5. Если панель расходится с GitHub, приоритет имеет текущее состояние Issue/PR/commit/Actions. Панель исправляется, но не переопределяет источник истины.
 
 ---
 
-**Рабочее правило:** этот документ должен отвечать на три вопроса — что сейчас активно, что мешает продвижению и какое ближайшее действие требуется. Всё остальное должно жить в профильных Issues, PR и истории Git.
+**Рабочее правило:** открой эту панель, чтобы понять, что активно, какие зависимости существуют и какой этап развивается. Точный статус и права на CLAIM всегда проверяй в самой Issue.
