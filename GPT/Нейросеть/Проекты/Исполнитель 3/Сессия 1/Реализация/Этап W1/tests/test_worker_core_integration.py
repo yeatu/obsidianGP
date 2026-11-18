@@ -90,7 +90,7 @@ class BotComments:
     def list_comments(self, issue_number):
         return list(self.items)
     def create_comment(self, issue_number, body):
-        self.items.append({"body": body, "user": {"login": "github-actions[bot]", "type": "Bot"}})
+        self.items.append({"body": body, "user": {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"}})
 
 def test_event_body_digest_is_rechecked_against_api_reread_before_any_service_call():
     event_body = request_body()
