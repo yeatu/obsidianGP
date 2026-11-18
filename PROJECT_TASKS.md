@@ -5,7 +5,7 @@
 
 **Снимок:** 2026-11-18 (C3 refresh after PR #87 / W1 handoff)  
 **main base for this dashboard update:** `9ba9d0403de0683c97938d0d323d96799157fc57`  
-**Базовая версия кода:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
+**Базовая версия кода:** `9ba9d0403de0683c97938d0d323d96799157fc57`
 
 ## 0. Начало работы
 
@@ -66,13 +66,12 @@
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / владелец |
 |---|---:|---|:---:|---|---|
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, повторить 42 synthetic cases, выпустить exact-head report | E1 CLAIM; PR #84 Draft; текущий report: 40/42 gates passed, два gate failures и отдельный completeness invariant; не ослаблять assertions |
-| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Завершить synthetic Issues → Actions → SFRA response worker; после A и C gates провести один marked synthetic `issues.opened` round-trip | E2 CLAIM; PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; fixture CI #44240799599: 44 passed, worker job skipped as intended for pull_request; A review #97 |
-| [#97](https://github.com/yeatu/obsidianGP/issues/97) | P1 | `REVIEW_REQUEST` | **A** | Независимо проверить PR #92 / W1 implementation на exact HEAD | Свободна для подходящего независимого A; verify merge-ref `18f8e586f212a3caf6c99ccda2bf2fb08273195b`; no Issue write/round-trip yet |
+| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Обновить W1 branch к текущему main, повторить exact-head fixture CI, затем передать на новый A review; позже отдельно провести один marked synthetic `issues.opened` round-trip | E2 CLAIM; PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; прежний run #44240799599: 44 passed на старой base `2051d0…`; review #97 закрыт как stale после merge PR #87; текущий main `9ba9d040…` |
 | [#86](https://github.com/yeatu/obsidianGP/issues/86) | P1 | `ANALYSIS` | **A** | Спроектировать cloud data plane и computer-independent import/sync; сравнить durable storage и каналы публикации | A1 CLAIM; analysis-only; не читать/экспортировать/переносить production Vault |
 
-**На HOLD по решению владельца:** Local MCP-only Issues #38/#39/#40/#43/#72. Все ранее созданные code/tests/docs/branches/PRs сохранены; не продолжать и не merge без explicit owner re-scope. PR #47/#57/#66/#94 остаются Draft/HOLD. #53 закрыта после owner waiver на удаление старого публичного run/artifact; сам real-Vault workflow остаётся выключенным.
+**На HOLD по решению владельца:** Local MCP-only Issues #38/#39/#40/#43/#72. Все ранее созданные code/tests/docs/branches/PRs сохранены; не продолжать и не merge без explicit owner re-scope. PR #47/#57/#66/#94 остаются Draft/HOLD. Review #95 закрыт как not planned для MCP-only кода. #53 закрыта после owner waiver на удаление старого публичного run/artifact; сам real-Vault workflow остаётся выключенным.
 
-**Завершено / принято:** #36/#51/#67/#79 — cumulative verifier chain merged and accepted; #88 A review accepted; #96 C1 decision; #91 C2 decision по W1 exact-head CI path; #75 cloud-only Web direction; #80 W1 preflight findings incorporated into #77; #81 threat model; #53 retention/removal waiver. #35 — исторический Local MCP milestone, его история не переписывается.
+**Завершено / принято:** #36/#51/#67/#79 — cumulative verifier chain merged and accepted; #88 A review accepted; #96 C1 decision; #91 C2 decision по W1 exact-head CI path; #97 closed as stale because PR #92 base moved; #75 cloud-only Web direction; #80 W1 preflight findings incorporated into #77; #81 threat model; #53 retention/removal waiver. #35 — исторический Local MCP milestone, его история не переписывается.
 ## 2.1. Новое правило декомпозиции: parallel-first
 
 По Governance Protocol v2.4 (§5) каждую новую крупную задачу сначала разбиваем на минимальные самостоятельно полезные и проверяемые результаты. Для каждого пакета фиксируются один владелец, целевая роль, deliverable, затрагиваемые компоненты/файлы, прямые блокирующие зависимости, конфликты и интеграционная граница. Родительская связь не считается зависимостью автоматически. Независимые анализ, контракты, компоненты, тестовые наборы, fixtures, документация и conformance-проверки открываются отдельными Issues, когда их можно завершать параллельно. Не создаём микрозадачи без собственного результата и не расширяем scope ради занятости.
@@ -81,7 +80,7 @@
 
 | PR | Состояние | Трактовка |
 |---|---|---|
-| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / Ready for review | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; base `2051d0ce6cdbceab1fc825c617708f8255266476`; fixture CI #44240799599: 44 passed on merge-ref; review #97 pending; no Issue write/round-trip yet |
+| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / awaiting rebase | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; base `2051d0ce6cdbceab1fc825c617708f8255266476` устарела после PR #87 merge; run #44240799599: 44 passed на прежней merge-ref; rebase на `9ba9d040…` и новый exact-head CI обязательны до нового A review |
 | [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; prior fixture report 40/42 with unresolved failures; E1 correction continues |
 | [#47 — historical Local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт / Draft / HOLD | Preserved, not a target, do not merge |
 | [#57 — historical MCP search adapter](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft / HOLD | Preserved; no further MCP-only work or merge |
@@ -100,7 +99,7 @@
 - **Publication:** publication of Vault content and source-derived metadata is allowed by owner preference; do not impose blanket confidentiality redaction. Protect credentials/secrets and preserve provenance/integrity. Select delivery channels based on size, cost, retention and usefulness.
 - **Production boundary:** permission to publish content does not authorize real Vault reads, import, indexing, production Actions execution, write or mutation. The #53 real-Vault workflow remains disabled. Any new cloud-backed real-data path needs #86 design, independent review and explicit C/owner activation decision.
 - **W1 #77 / PR #92:** synthetic-only. The fixture CI event proves 44 tests, not a live Issue round-trip; worker job is skipped for pull_request event. Keep the worker dormant until A review #97 and C acceptance. Then authorize one marked synthetic `issues.opened` round-trip separately.
-- **PinnedSnapshot:** shared verifier guard is accepted/merged. This does **not** enable production `read_source`. A future Web composition needs its own reviewed source/data-plane path and C/owner decision after #86.
+- **PinnedSnapshot:** shared verifier guard is accepted/merged at #87. This does **not** enable production `read_source`. A future Web composition needs its own reviewed source/data-plane path and C/owner decision after #86.
 - **Local MCP legacy work:** Issues #38/#39/#40/#43/#72 and PRs #47/#57/#66/#94 are preserved on HOLD; no new CLAIM, review, implementation or merge without explicit owner re-scope.
 - **Benchmark #42:** synthetic-only. Keep exact corpus schema/digest/reference/span/hash checks. A failed quality gate remains failed; don't weaken forbidden-node or completeness assertions.
 - Do not add embeddings/vector search, alter retrieval ranking or change E3 token budget before benchmark evidence. Never report truncated source text as complete.
