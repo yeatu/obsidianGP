@@ -1,5 +1,6 @@
 """Serialized Issue event orchestration around an injected V2.2 worker."""
 from __future__ import annotations
+import hashlib
 import json
 import re
 from typing import Callable, Mapping, Protocol
@@ -7,6 +8,24 @@ from sfra_issue_core import validate_transport_status_v2
 from .event import OpenedIssueRequest, parse_opened_issue_event
 from .ledger import MarkerLedger
 from .corpus import CORPUS_ID, CORPUS_SHA256, CORPUS_VERSION
+
+CANONICAL_CASE_ID = "gq-004-exception-pair"
+CANONICAL_QUERY = "обычный лимит шлюза и исключение для учений"
+CANONICAL_SEARCH_NODE_IDS = ("gate_rule", "gate_exception")
+APPROVED_EVIDENCE_BY_NODE = {
+    "gate_rule": {
+        "source_path": "synthetic/policies/limits.md",
+        "content_hash": "sha256:3083f2441d11dcec16760ea8bf667cec23f2bf161829ae59a257e4b13edd700c",
+        "line_start": 2,
+        "line_end": 2,
+    },
+    "gate_exception": {
+        "source_path": "synthetic/policies/limits.md",
+        "content_hash": "sha256:91677acb7f96a2becf66a12572459e4cac2a966b6a08e399fa831f1c19d4bbf5",
+        "line_start": 3,
+        "line_end": 3,
+    },
+}
 
 class CommentPort(Protocol):
     def list_comments(self, issue_number: int) -> list[dict[str, object]]: ...
@@ -43,6 +62,7 @@ def _safe_status_mapping(status: object) -> dict[str, object]:
     }
 
 def _safe_synthetic_projection(value: object, operation: str) -> dict[str, object]:
+    """Validate and copy only the single approved W1 evidence projection."""
     if not isinstance(value, Mapping) or set(value.keys()) != {
         "schema_version", "corpus_id", "corpus_version", "corpus_sha256", "case_id", "operation", "evidence"
     }:
@@ -51,12 +71,24 @@ def _safe_synthetic_projection(value: object, operation: str) -> dict[str, objec
             value["corpus_id"] != CORPUS_ID or value["corpus_version"] != CORPUS_VERSION or
             value["corpus_sha256"] != CORPUS_SHA256 or value["operation"] != operation):
         raise ValueError("synthetic response corpus identity mismatch")
-    case_id = value["case_id"]
-    if not isinstance(case_id, str) or not re.fullmatch(r"gq-[0-9]{3}-[a-z0-9-]+", case_id):
-        raise ValueError("synthetic response case ID is invalid")
+    if value["case_id"] != CANONICAL_CASE_ID:
+        raise ValueError("synthetic response case is not approved")
+
     evidence = value["evidence"]
-    if not isinstance(evidence, list) or not 1 <= len(evidence) <= 8:
-        raise ValueError("synthetic response evidence count is invalid")
+    if not isinstance(evidence, list):
+        raise ValueError("synthetic response evidence is invalid")
+    if operation == "search_vault":
+        expected_node_ids = CANONICAL_SEARCH_NODE_IDS
+        if tuple(item.get("node_id") if isinstance(item, Mapping) else None for item in evidence) != expected_node_ids:
+            raise ValueError("synthetic search evidence is not the canonical node set")
+    elif operation == "read_source":
+        if len(evidence) != 1 or not isinstance(evidence[0], Mapping):
+            raise ValueError("synthetic read evidence must contain exactly one approved node")
+        if evidence[0].get("node_id") not in APPROVED_EVIDENCE_BY_NODE:
+            raise ValueError("synthetic read node is not approved")
+    else:
+        raise ValueError("synthetic response operation is not approved")
+
     safe_items = []
     for item in evidence:
         if not isinstance(item, Mapping) or set(item.keys()) != {
@@ -67,14 +99,19 @@ def _safe_synthetic_projection(value: object, operation: str) -> dict[str, objec
             "node_id", "source_path", "content_hash", "excerpt"
         )):
             raise ValueError("synthetic response evidence text fields are invalid")
-        if (not re.fullmatch(r"[a-z0-9_]{1,80}", item["node_id"]) or
-                not item["source_path"].startswith("synthetic/") or
-                ".." in item["source_path"].split("/") or len(item["source_path"]) > 240):
-            raise ValueError("synthetic response provenance is not synthetic")
-        if not re.fullmatch(r"sha256:[0-9a-f]{64}", item["content_hash"]):
-            raise ValueError("synthetic response content hash is invalid")
-        if (isinstance(item["line_start"], bool) or not isinstance(item["line_start"], int)
-                or isinstance(item["line_end"], bool) or not isinstance(item["line_end"], int)
+        expected = APPROVED_EVIDENCE_BY_NODE.get(item["node_id"])
+        if expected is None:
+            raise ValueError("synthetic response node is not approved")
+        if any(item[field] != expected[field] for field in (
+            "source_path", "content_hash", "line_start", "line_end"
+        )):
+            raise ValueError("synthetic response provenance does not match the approved node")
+        if (not re.fullmatch(r"sha256:[0-9a-f]{64}", item["content_hash"]) or
+                hashlib.sha256(item["excerpt"].encode("utf-8", errors="strict")).hexdigest()
+                != item["content_hash"].removeprefix("sha256:")):
+            raise ValueError("synthetic response excerpt does not match the approved content hash")
+        if (isinstance(item["line_start"], bool) or type(item["line_start"]) is not int
+                or isinstance(item["line_end"], bool) or type(item["line_end"]) is not int
                 or item["line_start"] < 1 or item["line_end"] < item["line_start"]):
             raise ValueError("synthetic response line span is invalid")
         if len(item["excerpt"].encode("utf-8")) > 1200 or "```" in item["excerpt"]:
@@ -87,7 +124,7 @@ def _safe_synthetic_projection(value: object, operation: str) -> dict[str, objec
         "corpus_id": CORPUS_ID,
         "corpus_version": CORPUS_VERSION,
         "corpus_sha256": CORPUS_SHA256,
-        "case_id": case_id,
+        "case_id": CANONICAL_CASE_ID,
         "operation": operation,
         "evidence": safe_items,
     }
