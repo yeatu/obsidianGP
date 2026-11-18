@@ -37,7 +37,9 @@
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
 | [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | Корпус v1: 42 cases, 32 synthetic docs, 69 nodes; [PR #58](https://github.com/yeatu/obsidianGP/pull/58), ждёт решения #61 | Координаторская приёмка #61 |
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
+| [#109](https://github.com/yeatu/obsidianGP/issues/109) | P1 | REVIEW_REQUEST | **A** Независимая проверка PR #84 после benchmark corrections | A3 CLAIM; точный review HEAD будет обновлён после #113/#114 |
+| [#113](https://github.com/yeatu/obsidianGP/issues/113) | P2 | IMPLEMENTATION | **E** Исправить Token Efficiency baseline: required + allowed-additional unique source documents | E1 CLAIM; correction к #42 |
+| [#114](https://github.com/yeatu/obsidianGP/issues/114) | P2 | IMPLEMENTATION | **E** Считать фактические dependency read_source_scope fallback calls; отделить E2/explicit reads | E1 CLAIM; последовательно после #113 из-за общих файлов |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
 | [#51](https://github.com/yeatu/obsidianGP/issues/51) | P1 | IMPLEMENTATION | Correction: сделать capability PinnedSnapshot verifier неизменяемым и исключить no-op bypass | #36, #46 |
 | [#61](https://github.com/yeatu/obsidianGP/issues/61) | P1 | COORDINATOR_DECISION | Принять либо вернуть #41 / [PR #58](https://github.com/yeatu/obsidianGP/pull/58) | Нет; координатор |
