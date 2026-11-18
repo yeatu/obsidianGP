@@ -296,7 +296,10 @@ def test_distinguishes_foreign_key_failure(tmp_path):
     root, db_path, inventory, attestation = _fixture(tmp_path)
     connection = sqlite3.connect(db_path)
     try:
-        connection.execute("UPDATE passages SET owner_node_pk=999999")
+        connection.execute(
+            "UPDATE structural_nodes SET document_pk=999999 "
+            "WHERE node_pk=(SELECT MIN(node_pk) FROM structural_nodes)"
+        )
         connection.commit()
     finally:
         connection.close()
