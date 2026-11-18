@@ -426,6 +426,7 @@ def test_schemas_reject_mutable_aliases_and_surrounding_whitespace(identifier):
     [
         "latest", "LATEST", "current", "CURRENT", "head", "HEAD", "*",
         " latest ", "CURRENT ", " Head ", " * ", "\tversion", "version\n",
+        "\u0085version", "version\u0085", "\u00a0version", "version\u3000",
     ],
 )
 def test_runtime_rejects_mutable_aliases_and_surrounding_whitespace(identifier):
