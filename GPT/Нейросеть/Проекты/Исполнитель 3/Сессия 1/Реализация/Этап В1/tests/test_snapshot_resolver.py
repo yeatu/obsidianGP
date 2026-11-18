@@ -41,7 +41,11 @@ def _sha256(raw: bytes) -> str:
 
 
 def _fixture(tmp_path: Path, label: str = "a", *, import_revision: bool = False):
-    from sfra_indexer import index_vault
+    indexer = pytest.importorskip(
+        "sfra_indexer",
+        reason="the full resolver fixture suite runs in the dedicated E1-installed workflow",
+    )
+    index_vault = indexer.index_vault
 
     source_root = tmp_path / f"source-{label}"
     source_root.mkdir()
