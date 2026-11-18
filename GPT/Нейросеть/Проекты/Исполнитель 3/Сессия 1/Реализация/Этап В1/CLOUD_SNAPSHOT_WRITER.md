@@ -63,3 +63,11 @@ This writer stack consumes the independently accepted and merged bundle/verifier
 - Correction propagation merge: f4f8e78f4ce8714b9f12247041563474cdf61aec, refreshed parent writer HEAD 123de3771cc2aab1664bbecdfc5533df90696c6a first and former correction HEAD 035a79d652fb4015c1b7a258a092143319ae0ae4 second.
 - This branch is subsequently reconciled with the parent writer documentation baseline 5612a70520c91efcb9d4ccdd955f207c63bef641 while preserving the original correction branch as a merge parent.
 - No provider integration or runtime behavior change is introduced by this ancestry note.
+
+
+## Final integrated writer review baseline (2026-11-19)
+
+- Current main / accepted bundle parent: 8d1d3c937abf1e6f651d077c409d1b3dfad1a9cb.
+- Parent writer branch after its final baseline note: 5612a70520c91efcb9d4ccdd955f207c63bef641.
+- Correction integration merge: 19c0a01dea140eb5bc9bb3096fa17b0bfb50c505, parent writer first and previous correction HEAD f4f8e78f4ce8714b9f12247041563474cdf61aec second.
+- The complete stacked writer tree is reviewed against main. This note records ancestry only and changes no writer runtime behavior or test semantics.
