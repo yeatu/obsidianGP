@@ -25,6 +25,7 @@ from sfra_context_integrations.cloud_snapshot_bundle import (
     INVENTORY_PATH,
     MARKDOWN_INVENTORY_FORMAT,
     BundleIntegrityError,
+    CloudSnapshotBundleError,
     PreparedBundleObject,
     UnsafeSourceTreeError,
     build_markdown_inventory,
@@ -65,16 +66,78 @@ def _build(
     database_path: Path,
     *,
     source_revision=None,
+    source_object_key="prepared/source-bundle.zip",
+    index_object_key="prepared/index-bundle.zip",
 ):
     return build_prepared_cloud_snapshot_bundle(
         source_root,
         database_path,
         source_revision=source_revision or GitCommitSourceRevision("a" * 40),
-        source_object_key="prepared/source-bundle.zip",
-        index_object_key="prepared/index-bundle.zip",
+        source_object_key=source_object_key,
+        index_object_key=index_object_key,
         indexer_identity=INDEXER,
         sqlite_schema_identity=SQLITE_SCHEMA,
     )
+
+
+_INVALID_V2_OBJECT_KEYS = [
+    pytest.param(" \\t ", id="whitespace-only"),
+    pytest.param("prepared/bad\\nkey.zip", id="control-character"),
+    pytest.param("prepared/cafe\\u0301.zip", id="non-nfc"),
+    pytest.param("prepared/" + ("x" * 4090), id="over-4096-characters"),
+    pytest.param("prepared/\\ud800.zip", id="surrogate"),
+]
+
+
+@pytest.mark.parametrize("object_key", _INVALID_V2_OBJECT_KEYS)
+@pytest.mark.parametrize("key_field", ["source_object_key", "index_object_key"])
+def test_bundle_builder_rejects_object_keys_outside_v2_text_contract(
+    tmp_path: Path, object_key: str, key_field: str
+):
+    source_root, database_path = _indexed_fixture(tmp_path)
+
+    with pytest.raises(CloudSnapshotBundleError):
+        _build(source_root, database_path, **{key_field: object_key})
+
+
+@pytest.mark.parametrize("object_key", _INVALID_V2_OBJECT_KEYS)
+@pytest.mark.parametrize("object_name", ["source_object", "index_object"])
+def test_prepared_bundle_verifier_rejects_object_keys_outside_v2_text_contract(
+    tmp_path: Path, object_key: str, object_name: str
+):
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(source_root, database_path)
+    prepared_object = getattr(bundle, object_name)
+    tampered_object = replace(prepared_object, key=object_key)
+    tampered_bundle = replace(bundle, **{object_name: tampered_object})
+
+    with pytest.raises(BundleIntegrityError, match="invalid CloudSnapshotRef v2 object key"):
+        verify_prepared_cloud_snapshot_bundle(tampered_bundle)
+
+    with pytest.raises(BundleIntegrityError, match="invalid CloudSnapshotRef v2 object key"):
+        tampered_bundle.build_cloud_snapshot_v2(
+            source_version_id="source-v1",
+            index_version_id="index-v1",
+        )
+
+
+def test_bundle_builder_accepts_nfc_object_keys_within_v2_text_limit(tmp_path: Path):
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(
+        source_root,
+        database_path,
+        source_object_key="prepared/café/source.zip",
+        index_object_key="prepared/индекс/index.zip",
+    )
+
+    assert bundle.source_object.key == "prepared/café/source.zip"
+    assert bundle.index_object.key == "prepared/индекс/index.zip"
+    built = bundle.build_cloud_snapshot_v2(
+        source_version_id="source-v1",
+        index_version_id="index-v1",
+    )
+    assert built.ref.source.key == bundle.source_object.key
+    assert built.ref.index.key == bundle.index_object.key
 
 
 def _zip_members(raw: bytes) -> dict[str, bytes]:

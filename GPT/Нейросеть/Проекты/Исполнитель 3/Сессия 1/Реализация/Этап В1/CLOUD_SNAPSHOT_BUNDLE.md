@@ -4,6 +4,8 @@
 
 This module creates a prepared, provider-neutral immutable source/index bundle candidate from a synthetic source tree and a disposable E1 SQLite index. It does not upload objects, assign object-store version IDs, stage catalogue entries, or activate a snapshot. The prepared descriptor is the input boundary for the later write port.
 
+Object keys are validated against the accepted CloudSnapshotRef v2 text contract both when the bundle is built and whenever a prepared descriptor is re-verified: non-empty/non-whitespace, at most 4096 Unicode characters, NFC-normalized, and free of Unicode control (`Cc`) and surrogate (`Cs`) characters. The existing relative POSIX path checks remain in force. Invalid keys therefore fail before a prepared descriptor can be handed to the immutable writer, rather than being discovered only when the final v2 reference is constructed.
+
 ## Bundle layout
 
 `sfra.cloud-snapshot-bundle.v1` is represented by two deterministic ZIP payloads:
