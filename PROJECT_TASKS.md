@@ -27,10 +27,10 @@
 
 | Issue | Статус / роль | Следующий результат | Приоритет / зависимость |
 |---|---|---|---|
-| [#228](https://github.com/yeatu/obsidianGP/issues/228) | E2 RELEASED / A1 review CLAIMED #236 | SQLite BLOB + NULL `content_hash` bypass corrected in PR #235 | **P1**; exact child `96984f3...`, parent #209 `4839d21...`; four exact workflows SUCCESS |
+| [#228](https://github.com/yeatu/obsidianGP/issues/228) | **CLOSED / correction accepted** | Non-text SQLite `raw_text` + NULL/invalid `content_hash` bypass corrected; A1 accepted exact bundle stack in #236 | Completed; correction is now on PR #209 feature branch at `96984f3...` |
 | [#229](https://github.com/yeatu/obsidianGP/issues/229) | E — GATED / unclaimed | Sync benchmark PR #84 only after panel PR #223 is reviewed, C-accepted and merged | **P1**; #234 single-writer rule; preserve main `PROJECT_TASKS.md`, leave four benchmark technical paths only |
-| [#232](https://github.com/yeatu/obsidianGP/issues/232) | E — GATED / integration handoff | After A #236 acceptance and C branch propagation, finish #184/#162 integration and exact parent handoff | **P1**; controlling order in #208; no ref mutation before A/C gates |
-| [#208](https://github.com/yeatu/obsidianGP/issues/208) | C3 controlling decision | After A #236: guarded FF #209→`c5b32e0...`→#184→#162; final exact A/C gates | **P1**; non-force + expected-old-HEAD; writer remains blocked |
+| [#232](https://github.com/yeatu/obsidianGP/issues/232) | **E — READY TO CLAIM** | Fast-forward PR #209 to the accepted current-main merge-ref `c5b32e0...`, run bundle/C1/V2.1/V2.2 workflows on the exact tree, then hand off one fresh integrated A review | **P1**; expected old #209 HEAD `96984f3...`, current main `8f1e427...`; non-force + expected-old-HEAD. #184/#162 remain untouched until fresh A + C gate |
+| [#208](https://github.com/yeatu/obsidianGP/issues/208) | C3 controlling decision | #235→#209 branch-only fast-forward is complete; #232 performs current-main sync and fresh A review; then C rechecks refs before #209→#184→#162 propagation | **P1**; no #184/#162 propagation before integrated A review + fresh C guard; writer remains blocked |
 | [#196](https://github.com/yeatu/obsidianGP/issues/196) | BLOCKED / E INTEGRATION | Refresh writer PR #170/#179 only on final accepted bundle parent | **P1**; after exact #162 A acceptance and separate C gate |
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | E1 benchmark / review gate | Preserve reproducible baseline and two visible E2 quality failures | **P1**; PR #84; do not weaken gq-010/gq-036; sync waits #223/#234 |
 | [#120](https://github.com/yeatu/obsidianGP/issues/120) | E — dependency-gated | Read-only exact-version resolver/materializer для эфемерного runner | После принятия #119/#162 bundle chain, #118 уже merged |
@@ -40,26 +40,27 @@
 | [#137](https://github.com/yeatu/obsidianGP/issues/137) | E — gated | Additive V2.2 `sfra.issue.v2` protocol | После #136; v1/TransportStatusV2 сохранить |
 | [#138](https://github.com/yeatu/obsidianGP/issues/138) | E — gated | Synthetic V2.2 → V2.1 → E3/E1/E2 → B1 query conformance | После #134/#136/#137 |
 | [#224](https://github.com/yeatu/obsidianGP/issues/224) | A2 RELEASED / no verdict | Старый panel review #223 target superseded | Fresh review будет привязан к новому panel HEAD |
-| [#233](https://github.com/yeatu/obsidianGP/issues/233) | A1 RELEASED / CHANGES_REQUESTED | Old panel HEAD `e88eeeb...` superseded by this refresh | F-1 #229 gating, F-2 bundle order and F-3 #139 status corrected; new exact review follows |
-| [#236](https://github.com/yeatu/obsidianGP/issues/236) | A1 CLAIMED | Independent exact-head review of PR #235 correction + integrated bundle tree | Parent #209 `4839d218...`; child `96984f3...`; merge-ref `c5b32e0...`; all 4 workflows SUCCESS |
-| [#139](https://github.com/yeatu/obsidianGP/issues/139) | Covered by A2 #218 / closure pending | gq-004-only search/read projection correction is in merged W1 HEAD | A2 #218 checked all criteria; A2 closure disposition still pending; no new E task |
+| [#233](https://github.com/yeatu/obsidianGP/issues/233) | A1 RELEASED / CHANGES_REQUESTED | Old panel HEAD `e88eeeb...` superseded by later panel revisions | Historical findings were reconciled; no verdict transfers to new panel HEAD |
+| [#238](https://github.com/yeatu/obsidianGP/issues/238) | A1 RELEASED / CHANGES_REQUESTED | Panel HEAD `77cd365...` corrected F-1 (#236 status) and F-2 (#139 status) in this revision | New independent review required for this exact panel HEAD; do not reuse #238 verdict |
+| [#236](https://github.com/yeatu/obsidianGP/issues/236) | **CLOSED / A1 REVIEW_ACCEPTED + RELEASED** | Independent review accepted non-text node/hash correction and complete five-path bundle tree | Exact parent #209 `4839d218...`; child `96984f3...`; main `8f1e427...`; merge-ref `c5b32e0...`; four workflows SUCCESS. Verdict remains exact-target-bound |
+| [#139](https://github.com/yeatu/obsidianGP/issues/139) | **CLOSED / COMPLETED by A2** | Canonical gq-004-only search/read evidence projection correction is covered by accepted W1 review #218 | A2 closed under #20 §8.6 in comment #6993605180; no new E task |
 
 ### Bundle stack — текущая точка остановки
 
-- Parent PR [#209](https://github.com/yeatu/obsidianGP/pull/209) остаётся на HEAD `4839d21815d30455355e2c2358262a93474489cb`; current main — `8f1e427fe0e356eafb449c073c34923eb07dda71`.
-- Correction PR [#235](https://github.com/yeatu/obsidianGP/pull/235) имеет HEAD `96984f30c3a5f4ea3e9a8aa415151dad7842d35f` и фактический `base.ref=main`. Child является потомком exact #209 HEAD: 2 commits / 0 behind, ровно два correction-owned файла (verifier + tests).
+- Parent PR [#209](https://github.com/yeatu/obsidianGP/pull/209) now has feature HEAD `96984f30c3a5f4ea3e9a8aa415151dad7842d35f`, after guarded branch-only fast-forward from old parent `4839d218...` to accepted #235 child. Current main is `8f1e427fe0e356eafb449c073c34923eb07dda71`.
+- Correction PR [#235](https://github.com/yeatu/obsidianGP/pull/235) HEAD `96984f30...` is now identical to parent feature PR #209 HEAD after C3's guarded non-force fast-forward. Its source PR still targets `main`; the two correction-owned files are preserved inside the #209 feature branch.
 - Исправление требует `raw_text` быть str, `content_hash` быть непустой строкой и сверяет SHA-256 exact strict UTF-8 bytes. Public verifier tests закрывают SQLite BLOB raw_text + NULL hash и NULL/empty/BLOB content_hash.
 - Фактический PR merge-ref: `c5b32e0de96570f38dd72aca42bbdc49d339dfea`, parents: current main `8f1e427...` первым, child HEAD `96984f3...` вторым. Main→merge-ref: 27 ahead / 0 behind, merge base = main, ровно пять bundle-owned paths; W1 subtree остаётся обычной main history и не входит в bundle diff.
 - Exact merge-ref CI — все SUCCESS: bundle #44409547815 (62 passed, E1 installed); C1 #44409547750 (45 B1 + 183 C1 passed, 46 E1-dependent skips); V2.1 #44409547820 (+19 passed); V2.2 #44409547791 (+55 passed). Partial cross-layer skips не считаются bundle coverage.
-- Независимый review [#236](https://github.com/yeatu/obsidianGP/issues/236) CLAIMED у A1. Он проверяет parent #209 + child #235 и integrated tree на exact merge-ref `c5b32e0...`. До A verdict и C live-ref gate ветки #209/#184/#162 не менять.
-- После A acceptance C3 выполняет guarded non-force fast-forward #209 feature ref к exact `c5b32e0...` (expected old HEAD `4839d218...`). Затем, после новой ref-проверки, #184 и #162 fast-forward к тому же exact commit, сохраняя истории. Это branch-only propagation, не merge в main. Любое изменение дерева/HEAD требует нового A review.
+- Независимый review [#236](https://github.com/yeatu/obsidianGP/issues/236) is CLOSED with A1 `REVIEW_ACCEPTED` + `RELEASED` for parent #209 + child #235 on exact merge-ref `c5b32e0...`. C3 completed the #235→#209 branch fast-forward. Next is E-owned #232: sync #209 to current main, run four exact workflows and open a fresh integrated A request. Until that fresh A verdict and new C guard, do not propagate to #184/#162.
+- C3 has completed the guarded non-force fast-forward of #209 from `4839d218...` to accepted child HEAD `96984f3...`. E handoff #232 is ready to fast-forward #209 from expected old HEAD `96984f3...` to the current-main-first integration commit `c5b32e0...`, then run four exact workflows and obtain a fresh independent A review. Only after that review and a new C live-ref guard may #209 propagate to #184 and #162. This is feature-branch-only work, not a main merge.
 - Только после final #162 exact-head A acceptance и отдельного C merge gate разрешено возобновить writer #196. PRs #170/#179 пока frozen.
 ## 3. PRs и точные evidence targets
 
 | PR | Текущее состояние | Достоверная трактовка |
 |---|---|---|
 | [#92 — W1 Web adapter](https://github.com/yeatu/obsidianGP/pull/92) | **Merged** в main `8f1e427...` | A2 #218 принял HEAD `42cecfef...` / base `f665ae...`; 14 W1 files; PR fixture run #44393224276: 65 passed, worker skipped. Историческая A-приёмка относится только к этому exact HEAD |
-| [#209 — integrated bundle parent](https://github.com/yeatu/obsidianGP/pull/209) | Open / Draft / unmerged | Parent HEAD `4839d218...`; correction child #235 HEAD `96984f3...`; A1 review #236 CLAIMED; integrated merge-ref `c5b32e0...`, four workflows SUCCESS. A2 #221 historical CHANGES_REQUESTED |
+| [#209 — integrated bundle parent](https://github.com/yeatu/obsidianGP/pull/209) | Open / Draft / unmerged | Feature HEAD `96984f3...` now includes accepted #228 correction by guarded fast-forward; current-main sync / four fresh workflows / fresh integrated A review are next under #232. #236 accepted only its exact pre-sync tree; #221 remains historical CHANGES_REQUESTED |
 | [#84 — gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Open / Draft / unmerged | HEAD `64924c...`; #229 GATED until PR #223 A/C/merge under #234. Preserve main panel verbatim, leave only four benchmark technical paths |
 | [#170 — immutable writer](https://github.com/yeatu/obsidianGP/pull/170) | Open / stacked / unmerged | HEAD `b0bcf7...`, base #162 HEAD `c5f84...`; four writer files. Не содержит #184/#204/#228 |
 | [#179 — writer correction](https://github.com/yeatu/obsidianGP/pull/179) | Open / stacked / unmerged | HEAD `035a79...`, base #170 HEAD `b0bcf7...`; четыре writer-owned files; A1 #180 accepted только historical correction target; #196 blocked |
@@ -104,9 +105,9 @@ PR #84 HEAD `64924c...` / base `f665ae...` был проверен двумя н
 
 ## 6. Parallelism and coordination rules
 
-- #228 implementation is E2 RELEASED; A1 owns exact review #236. Do not duplicate or overlap its verifier files/tests.
+- #228 is closed after E2 RELEASE and A1 `REVIEW_ACCEPTED` in #236; its accepted correction is now present on the #209 feature branch. Do not duplicate the verifier correction.
 - #229 is the sole canonical benchmark sync task, but BLOCKED by panel PR #223 A/C/merge gates under #234; do not create a parallel PR #84 sync.
-- #232 is gated behind A #236 acceptance and C branch propagation; exact current-main merge-ref `c5b32e0...` already contains child+main and four successful workflow runs.
+- #232 is now READY for E execution: C3 completed the accepted child fast-forward into #209; #232 must advance that branch to the verified main-first merge-ref `c5b32e0...`, record four exact workflows and open one fresh A request.
 - #196 writer refresh is BLOCKED until final #162 bundle parent is accepted and exact refs are authorized under #208.
 - #120/#124/#134/#136/#137/#138 are dependency-gated; no placeholder implementation before upstream acceptance.
 - #233 is closed after CHANGES_REQUESTED on superseded panel HEAD; #221 remains historical CHANGES_REQUESTED; #224/#226 are stale/closed. No verdict transfers to a new HEAD/base.
