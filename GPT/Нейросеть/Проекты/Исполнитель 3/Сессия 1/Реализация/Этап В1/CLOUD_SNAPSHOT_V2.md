@@ -45,7 +45,7 @@ The canonical UTF-8 JSON manifest has exactly these fields:
     "byte_size": 67890
   },
   "indexer_identity": {
-    "name": "sfra-indexer",
+    "name": "sfra-structural-indexer",
     "version": "4.2.0"
   },
   "sqlite_schema_identity": {
@@ -54,6 +54,8 @@ The canonical UTF-8 JSON manifest has exactly these fields:
   }
 }
 \`\`\`
+
+The `indexer_identity` name and version in an emitted manifest must match the exact E1 indexer identity attested for that source snapshot. The accepted synthetic bundle builder requires the distribution name `sfra-structural-indexer`; the example version is illustrative and must match the producing E1 build's attested version.
 
 The import variant replaces \`commit_sha\` with \`import_id\`. Both object identities are required and each includes key, immutable version ID, full-payload SHA-256 and positive byte size. Mutable aliases such as \`latest\`, \`current\`, \`head\` and \`*\` are rejected.
 
