@@ -208,6 +208,9 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
     A benchmark fixture is different: equal-rank B1 candidates use Node ID as
     a deterministic tie-breaker, so random fixture IDs would perturb metrics.
     This helper is benchmark-only and runs against the temporary SQLite copy.
+    When E1 archives a deleted row by replacing local_key with
+    "__archived__{node_pk}", the already-assigned UUIDv5 is preserved because
+    the original parser local_key is no longer available.
     """
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
@@ -218,13 +221,38 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
                JOIN documents AS d ON d.document_pk = n.document_pk
                ORDER BY d.source_path, n.local_key, n.node_pk"""
         ).fetchall()
-        id_map = {
-            str(row["node_id"]): _stable_synthetic_node_id(
-                "indexed-node",
-                str(row["source_path"]) + "\\n" + str(row["local_key"]),
-            )
-            for row in rows
-        }
+        id_map: dict[str, str] = {}
+        for row in rows:
+            node_pk = int(row["node_pk"])
+            old_id = str(row["node_id"])
+            local_key = str(row["local_key"])
+            if local_key == f"__archived__{node_pk}":
+                # E1 archives a removed row by replacing its local_key after
+                # the first index pass. That original key is no longer present,
+                # so preserve the UUIDv5 already assigned to this tombstone.
+                # Fail closed if an archived row was not canonicalized before
+                # E1 changed its key; never silently bless a random UUIDv4.
+                try:
+                    parsed_id = uuid.UUID(old_id.removeprefix("node_"))
+                except (ValueError, AttributeError) as exc:
+                    raise BenchmarkError(
+                        "An archived synthetic tombstone has no canonical UUIDv5 ID"
+                    ) from exc
+                if (
+                    not old_id.startswith("node_")
+                    or parsed_id.version != 5
+                    or str(parsed_id) != old_id.removeprefix("node_")
+                ):
+                    raise BenchmarkError(
+                        "An archived synthetic tombstone has no canonical UUIDv5 ID"
+                    )
+                stable_id = old_id
+            else:
+                stable_id = _stable_synthetic_node_id(
+                    "indexed-node",
+                    str(row["source_path"]) + "\\n" + local_key,
+                )
+            id_map[old_id] = stable_id
         if len(set(id_map.values())) != len(id_map):
             raise BenchmarkError("Synthetic fixture Node ID normalization produced a collision")
 

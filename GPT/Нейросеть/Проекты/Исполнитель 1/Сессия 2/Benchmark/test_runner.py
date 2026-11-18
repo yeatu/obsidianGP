@@ -40,11 +40,15 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
     connection = sqlite3.connect(database_path)
     connection.executescript(
         """
-        CREATE TABLE documents(document_pk INTEGER PRIMARY KEY, source_path TEXT NOT NULL);
+        CREATE TABLE documents(
+            document_pk INTEGER PRIMARY KEY, source_path TEXT NOT NULL,
+            status TEXT NOT NULL
+        );
         CREATE TABLE structural_nodes(
             node_pk INTEGER PRIMARY KEY, document_pk INTEGER NOT NULL,
             local_key TEXT NOT NULL, node_id TEXT NOT NULL,
-            metadata_json TEXT NOT NULL, warnings_json TEXT NOT NULL
+            metadata_json TEXT NOT NULL, warnings_json TEXT NOT NULL,
+            status TEXT NOT NULL
         );
         CREATE TABLE node_versions(
             node_version_pk INTEGER PRIMARY KEY, parent_node_id TEXT,
@@ -54,13 +58,13 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
             event_pk INTEGER PRIMARY KEY, node_id TEXT,
             candidate_node_ids_json TEXT NOT NULL, details_json TEXT NOT NULL
         );
-        INSERT INTO documents VALUES (1, 'synthetic/a.md');
-        INSERT INTO documents VALUES (2, 'synthetic/b.md');
+        INSERT INTO documents VALUES (1, 'synthetic/a.md', 'active');
+        INSERT INTO documents VALUES (2, 'synthetic/b.md', 'active');
         INSERT INTO structural_nodes VALUES
             (1, 1, 'root', 'node_00000000-0000-4000-8000-000000000001',
-             '{"required_with":["node_00000000-0000-4000-8000-000000000002"]}', '[]');
+             '{"required_with":["node_00000000-0000-4000-8000-000000000002"]}', '[]', 'active');
         INSERT INTO structural_nodes VALUES
-            (2, 2, 'child', 'node_00000000-0000-4000-8000-000000000002', '{}', '[]');
+            (2, 2, 'child', 'node_00000000-0000-4000-8000-000000000002', '{}', '[]', 'active');
         INSERT INTO node_versions VALUES
             (1, 'node_00000000-0000-4000-8000-000000000002',
              '{"parent":"node_00000000-0000-4000-8000-000000000001"}', '[]');
@@ -73,20 +77,48 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
     connection.close()
 
     mapping = runner._canonicalize_synthetic_node_ids(database_path)
-    second_mapping = runner._canonicalize_synthetic_node_ids(database_path)
-
-    # The old-ID keys naturally change after the first pass; the canonical
-    # destination sequence must remain identical on a repeated pass.
-    assert list(mapping.values()) == list(second_mapping.values())
     connection = sqlite3.connect(database_path)
     try:
-        ids = [row[0] for row in connection.execute(
-            "SELECT node_id FROM structural_nodes ORDER BY node_pk"
-        )]
+        canonical_before_archive = {
+            int(pk): node_id for pk, node_id in connection.execute(
+                "SELECT node_pk, node_id FROM structural_nodes ORDER BY node_pk"
+            )
+        }
+        assert set(canonical_before_archive) == {1, 2}
+        # Model E1's second-pass tombstone archival: the parser local_key is
+        # replaced after the source document disappears, but the existing
+        # canonical Node ID and source-state markers must remain stable.
+        connection.execute(
+            "UPDATE structural_nodes SET local_key = ?, status = ? WHERE node_pk = 1",
+            ("__archived__1", "stale"),
+        )
+        connection.execute(
+            "UPDATE documents SET status = ? WHERE document_pk = 1",
+            ("deleted",),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    second_mapping = runner._canonicalize_synthetic_node_ids(database_path)
+    third_mapping = runner._canonicalize_synthetic_node_ids(database_path)
+    connection = sqlite3.connect(database_path)
+    try:
+        rows = connection.execute(
+            """SELECT n.node_pk, n.node_id, n.local_key, n.status, d.status
+               FROM structural_nodes AS n
+               JOIN documents AS d ON d.document_pk = n.document_pk
+               ORDER BY n.node_pk"""
+        ).fetchall()
+        ids = [row[1] for row in rows]
         assert ids == [
-            runner._stable_synthetic_node_id("indexed-node", "synthetic/a.md\\nroot"),
+            canonical_before_archive[1],
             runner._stable_synthetic_node_id("indexed-node", "synthetic/b.md\\nchild"),
         ]
+        assert rows[0][2:] == ("__archived__1", "stale", "deleted")
+        assert second_mapping[canonical_before_archive[1]] == canonical_before_archive[1]
+        assert third_mapping[canonical_before_archive[1]] == canonical_before_archive[1]
+        assert list(second_mapping.values()) == list(third_mapping.values())
         parent = connection.execute(
             "SELECT parent_node_id, metadata_json FROM node_versions WHERE node_version_pk = 1"
         ).fetchone()
