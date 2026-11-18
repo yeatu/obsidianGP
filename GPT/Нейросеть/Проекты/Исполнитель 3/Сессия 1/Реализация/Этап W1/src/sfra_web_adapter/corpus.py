@@ -52,7 +52,8 @@ class SyntheticGoldCorpus:
                 if (not all(isinstance(x, str) for x in (node_id, raw_text, content_hash)) or
                         isinstance(line_start, bool) or not isinstance(line_start, int) or
                         isinstance(line_end, bool) or not isinstance(line_end, int) or
-                        line_start < 1 or line_end < line_start):
+                        not ((line_start >= 1 and line_end >= line_start) or
+                             (raw_text == "" and line_start == 0 and line_end == 0))):
                     raise ValueError("gold corpus node is malformed")
                 actual_node_hash = "sha256:" + hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
                 if actual_node_hash != content_hash:
