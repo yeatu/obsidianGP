@@ -7,6 +7,7 @@ The earlier Local Retrieval Interface section below is retained as historical pr
 | Issue | Priority | Type | Next action | Exact target / dependency |
 |---|---:|---|---|---|
 | [#219](https://github.com/yeatu/obsidianGP/issues/219) | P1 | REVIEW_REQUEST | Independent Role A review of the completed W1 current-main integration; after acceptance, C makes the separate acceptance/merge/round-trip decision | PR [#92](https://github.com/yeatu/obsidianGP/pull/92), HEAD `42cecfef0eaa74bc32a98d9e3063b30a28270fc4`, current main `f665ae7251387ee86b3f5adb48662b79406f392b`; compare 99 ahead / 0 behind, 14 W1-owned files; exact fixture run [#44393224276](https://github.com/yeatu/obsidianGP/actions/runs/44393224276), 65 passed, worker skipped |
+| [#226](https://github.com/yeatu/obsidianGP/issues/226) | — | REVIEW_REQUEST | Independent Role A review of the synchronized benchmark implementation and two-attempt reproducibility evidence; then separate C disposition of preserved quality failures | PR [#84](https://github.com/yeatu/obsidianGP/pull/84), HEAD `64924c204f006bf9d41a42ca0724d8e026325014`, current main `f665ae7251387ee86b3f5adb48662b79406f392b`; two identical 42-case reports, 40 pass / 2 required E2 failures (gq-010, gq-036) |
 
 PR #92 remains open/unmerged. The previous A1 acceptance #203 applies only to its historical pre-sync HEAD and is not transferable to #219's exact target. The W1 worker remains dormant; no synthetic Issue round-trip or production operation is authorized by this handoff.
 
