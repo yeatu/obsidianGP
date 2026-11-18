@@ -11,7 +11,7 @@ from sfra_context_builder.models import DependencyResolver, SearchRequest, Snaps
 
 from .dependency_resolver import E1DependencyResolver
 from .search_adapter import E2SearchAdapter, SearchAdapterResult
-from .snapshot import PinnedSnapshot
+from .snapshot import PinnedSnapshot, require_pinned_snapshot
 from .source_reader import E1SourceReader, SourceReaderContractError, SCOPES
 
 
@@ -43,8 +43,8 @@ class ContextIntegrationPipeline:
         source_reader: E1SourceReader,
         dependency_resolver: DependencyResolver | None = None,
     ) -> None:
-        if not isinstance(pinned_snapshot, PinnedSnapshot):
-            raise TypeError("pinned_snapshot must be a PinnedSnapshot")
+        require_pinned_snapshot(pinned_snapshot, consumer="ContextIntegrationPipeline")
+        pinned_snapshot.verify_current()
         if search_adapter.pinned_snapshot.ref != pinned_snapshot.ref:
             raise ValueError("SearchAdapter and pipeline use different SnapshotRef values")
         if source_reader.pinned_snapshot.ref != pinned_snapshot.ref:

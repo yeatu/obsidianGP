@@ -14,7 +14,7 @@ from sfra_context_builder.models import (
     SearchRequest,
 )
 
-from .snapshot import PinnedSnapshot, SnapshotBindingError
+from .snapshot import PinnedSnapshot, SnapshotBindingError, require_pinned_snapshot
 from .source_protocol import E1NodeReader
 
 
@@ -124,13 +124,13 @@ class E2SearchAdapter:
     ) -> None:
         if isinstance(search_limit, bool) or not isinstance(search_limit, int) or not 1 <= search_limit <= 500:
             raise ValueError("search_limit must be between 1 and 500")
-        if not isinstance(pinned_snapshot, PinnedSnapshot):
-            raise TypeError("pinned_snapshot must be a PinnedSnapshot")
+        require_pinned_snapshot(pinned_snapshot, consumer="E2SearchAdapter")
         self._snapshot = pinned_snapshot
         self._source_reader = source_reader
         self._search_call = search_call or _default_search
         self._search_limit = search_limit
         self._entity_config = entity_config
+        self._verify_pinned_snapshot()
 
     @property
     def pinned_snapshot(self) -> PinnedSnapshot:
