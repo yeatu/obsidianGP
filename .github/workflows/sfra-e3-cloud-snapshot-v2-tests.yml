@@ -1,0 +1,38 @@
+name: SFRA E3 cloud SnapshotRef v2 contract tests
+
+on:
+  push:
+    branches:
+      - "executor-3/issue-117-cloud-snapshot-v2-contract"
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+      - ".github/workflows/sfra-e3-cloud-snapshot-v2-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cloud-snapshot-v2-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/pyproject.toml"
+      - name: Install B1 core and E3 integrations
+        shell: bash
+        run: |
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$E3_DIR[test]"
+          python -m pip install -e "$E2_DIR"
+      - name: Run fixture-only E3 contract suite
+        run: |
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pytest -q "$E3_DIR/tests"

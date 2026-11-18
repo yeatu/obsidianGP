@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sfra:cloud-snapshot-manifest:1",
+  "title": "SFRA Cloud Snapshot Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_schema_version",
+    "source_revision",
+    "source_bundle",
+    "index_bundle",
+    "indexer_identity",
+    "sqlite_schema_identity"
+  ],
+  "properties": {
+    "manifest_schema_version": {
+      "const": 1
+    },
+    "source_revision": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "commit_sha"
+          ],
+          "properties": {
+            "kind": {
+              "const": "git_commit"
+            },
+            "commit_sha": {
+              "$ref": "#/$defs/gitCommitSha"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "import_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "immutable_import"
+            },
+            "import_id": {
+              "$ref": "#/$defs/immutableIdentifier"
+            }
+          }
+        }
+      ]
+    },
+    "source_bundle": {
+      "$ref": "#/$defs/immutableObjectVersion"
+    },
+    "index_bundle": {
+      "$ref": "#/$defs/immutableObjectVersion"
+    },
+    "indexer_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyIdentifier"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyIdentifier"
+        }
+      }
+    },
+    "sqlite_schema_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "schema_info_version"
+      ],
+      "properties": {
+        "engine": {
+          "const": "sqlite"
+        },
+        "schema_info_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "gitCommitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "immutableVersionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!(?:[Ll][Aa][Tt][Ee][Ss][Tt]|[Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Hh][Ee][Aa][Dd]|\\*)$).+$"
+    },
+    "immutableObjectVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "version_id",
+        "sha256",
+        "byte_size"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/nonEmptyIdentifier"
+        },
+        "version_id": {
+          "$ref": "#/$defs/immutableIdentifier"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "immutableIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?![Ll][Aa][Tt][Ee][Ss][Tt]$)(?![Cc][Uu][Rr][Rr][Ee][Nn][Tt]$)(?![Hh][Ee][Aa][Dd]$)(?!\\*$)(?![\\u0009-\\u000D\\u001C-\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028-\\u2029\\u202F\\u205F\\u3000])[\\s\\S]*[^\\u0009-\\u000D\\u001C-\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028-\\u2029\\u202F\\u205F\\u3000](?![\\s\\S])"
+    }
+  }
+}
