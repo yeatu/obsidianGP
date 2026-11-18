@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Mapping
 from sfra_issue_core import IssueRecord, TransportStatusV2
 from .github_api import GitHubREST
-from .ledger import MARKER_AUTHOR, MarkerLedger
+from .ledger import MarkerLedger, authenticated_markers
 
 class GitHubIssueReader:
     def __init__(self, client: GitHubREST):
@@ -12,10 +12,7 @@ class GitHubIssueReader:
     def read_issue(self, issue_number: int) -> IssueRecord:
         raw = self._client.get_issue(issue_number)
         user = raw.get("user")
-        if not isinstance(user, Mapping):
-            author = ""
-        else:
-            author = user.get("login", "")
+        author = user.get("login", "") if isinstance(user, Mapping) else ""
         return IssueRecord(
             number=raw.get("number"),
             title=raw.get("title"),
@@ -33,29 +30,15 @@ class GitHubCommentStatusStore:
 
     def bind_request_body_sha256(self, issue_number: int, digest: str) -> str:
         comments = self._client.list_comments(issue_number)
-        observed: list[str] = []
-        for comment in comments:
-            user = comment.get("user")
-            if not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR:
-                continue
-            body = comment.get("body")
-            if not isinstance(body, str):
-                continue
-            for line in body.splitlines():
-                import re
-                match = re.fullmatch(
-                    r"<!-- sfra-web-v1 issue=([1-9][0-9]*) body_sha256=([0-9a-f]{64}) state=(STARTED|COMPLETED|REJECTED|FAILED) -->",
-                    line.strip(),
-                )
-                if match and int(match.group(1)) == issue_number:
-                    observed.append(match.group(2))
+        observed = authenticated_markers(issue_number, comments)
         if not observed:
             marker = MarkerLedger._marker(issue_number, digest, "STARTED")
             self._client.create_comment(issue_number, marker)
             return digest
-        if any(item != observed[0] for item in observed):
+        first_digest = observed[0].body_sha256
+        if any(item.body_sha256 != first_digest for item in observed):
             return "0" * 64
-        return observed[0]
+        return first_digest
 
     def put_status(self, status: TransportStatusV2) -> None:
         if not isinstance(status, TransportStatusV2):
