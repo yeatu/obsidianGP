@@ -12,11 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from sfra_context_builder.models import SnapshotRef
-from sfra_context_integrations.snapshot import (
-    PinnedSnapshot,
-    _SNAPSHOT_VERIFIER_SEAL,
-    _SnapshotVerifier,
-)
+from sfra_context_integrations.snapshot import PinnedSnapshot
 
 
 def make_test_pinned_snapshot(
@@ -32,13 +28,16 @@ def make_test_pinned_snapshot(
 ) -> PinnedSnapshot:
     """Build an explicitly test-only snapshot with a controllable verifier."""
     callback = verifier if verifier is not None else (lambda: None)
-    return PinnedSnapshot(
-        ref=ref,
-        sidecar_root=sidecar_root,
-        database_path=database_path,
-        manifest_path=manifest_path,
-        vault_git_root=vault_git_root,
-        vault_root=vault_root,
-        manifest=manifest,
-        _verifier=_SnapshotVerifier(callback, _seal=_SNAPSHOT_VERIFIER_SEAL),
-    )
+    # This constructor bypass is intentionally confined to the test fixture.
+    # Production code has no importable verifier minting class/token and must
+    # use bind_pinned_snapshot(), which creates its own verified closure.
+    pinned = object.__new__(PinnedSnapshot)
+    object.__setattr__(pinned, "ref", ref)
+    object.__setattr__(pinned, "sidecar_root", sidecar_root)
+    object.__setattr__(pinned, "database_path", database_path)
+    object.__setattr__(pinned, "manifest_path", manifest_path)
+    object.__setattr__(pinned, "vault_git_root", vault_git_root)
+    object.__setattr__(pinned, "vault_root", vault_root)
+    object.__setattr__(pinned, "manifest", manifest)
+    object.__setattr__(pinned, "_verifier_callback", callback)
+    return pinned
