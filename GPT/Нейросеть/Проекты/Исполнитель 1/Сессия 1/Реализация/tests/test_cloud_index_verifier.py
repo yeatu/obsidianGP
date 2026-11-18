@@ -239,7 +239,7 @@ def test_rejects_symlink_in_materialized_tree(tmp_path):
 
 
 def test_rejects_ambiguous_or_mutable_import_identifiers(tmp_path):
-    for import_id in ("", "latest", " current ", "../import"):
+    for import_id in ("", "latest", " current ", "\x00import"):
         with pytest.raises(CloudIndexVerificationError):
             parse_cloud_index_attestation(_canonical({
                 "attestation_version": 1,
