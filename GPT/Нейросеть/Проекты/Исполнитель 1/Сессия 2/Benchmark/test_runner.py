@@ -44,6 +44,17 @@ def test_budget_exceeded_cannot_be_represented_as_complete():
     )
 
 
+def test_ambiguous_and_not_found_source_reads_cannot_be_complete():
+    for status in ("ambiguous", "not_found", "stale", "deleted"):
+        assert not runner._completeness_honesty(
+            search_complete=True,
+            context_status="complete",
+            deferred=[],
+            source_read_status=status,
+            source_read_fragments=[],
+        )
+
+
 def test_incomplete_search_and_deferred_budget_cannot_be_complete():
     assert not runner._completeness_honesty(
         search_complete=False,
