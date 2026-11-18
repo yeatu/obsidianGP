@@ -47,6 +47,7 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
         CREATE TABLE structural_nodes(
             node_pk INTEGER PRIMARY KEY, document_pk INTEGER NOT NULL,
             local_key TEXT NOT NULL, node_id TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
             metadata_json TEXT NOT NULL, warnings_json TEXT NOT NULL,
             status TEXT NOT NULL
         );
@@ -62,9 +63,12 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
         INSERT INTO documents VALUES (2, 'synthetic/b.md', 'active');
         INSERT INTO structural_nodes VALUES
             (1, 1, 'root', 'node_00000000-0000-4000-8000-000000000001',
+             'sha256:1111111111111111111111111111111111111111111111111111111111111111',
              '{"required_with":["node_00000000-0000-4000-8000-000000000002"]}', '[]', 'active');
         INSERT INTO structural_nodes VALUES
-            (2, 2, 'child', 'node_00000000-0000-4000-8000-000000000002', '{}', '[]', 'active');
+            (2, 2, 'child', 'node_00000000-0000-4000-8000-000000000002',
+             'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+             '{}', '[]', 'active');
         INSERT INTO node_versions VALUES
             (1, 'node_00000000-0000-4000-8000-000000000002',
              '{"parent":"node_00000000-0000-4000-8000-000000000001"}', '[]');
@@ -119,7 +123,10 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
         ids = [row[1] for row in rows]
         assert ids == [
             canonical_before_archive[1],
-            runner._stable_synthetic_node_id("indexed-node", "synthetic/b.md\\nchild"),
+            runner._stable_synthetic_node_id(
+                "indexed-node",
+                "synthetic/b.md\\nchild\\nsha256:2222222222222222222222222222222222222222222222222222222222222222",
+            ),
         ]
         assert rows[0][2:] == ("__deleted__1", "stale", "deleted")
         assert rows[1][2:4] == ("__archived__2", "stale")
@@ -145,6 +152,17 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
     finally:
         connection.close()
 
+
+
+def test_synthetic_node_identity_separates_reused_parser_key_by_content_hash():
+    old_version = runner._stable_synthetic_node_id(
+        "indexed-node", "synthetic/states/ambiguous-source.md\\nn000001\\nsha256:old"
+    )
+    new_version = runner._stable_synthetic_node_id(
+        "indexed-node", "synthetic/states/ambiguous-source.md\\nn000001\\nsha256:new"
+    )
+
+    assert old_version != new_version
 
 def test_metric_average_ignores_undefined_cases():
     assert runner._metric_average([0.5, None, 1.0]) == 0.75

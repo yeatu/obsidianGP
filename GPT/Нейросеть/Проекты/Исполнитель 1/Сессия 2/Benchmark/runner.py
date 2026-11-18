@@ -216,7 +216,7 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
     connection.row_factory = sqlite3.Row
     try:
         rows = connection.execute(
-            """SELECT n.node_pk, n.node_id, n.local_key, d.source_path
+            """SELECT n.node_pk, n.node_id, n.local_key, n.content_hash, d.source_path
                FROM structural_nodes AS n
                JOIN documents AS d ON d.document_pk = n.document_pk
                ORDER BY d.source_path, n.local_key, n.node_pk"""
@@ -253,9 +253,14 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
                     )
                 stable_id = old_id
             else:
+                content_hash = str(row["content_hash"] or "")
+                if not content_hash:
+                    raise BenchmarkError(
+                        "A synthetic indexed node has no content hash for stable identity"
+                    )
                 stable_id = _stable_synthetic_node_id(
                     "indexed-node",
-                    str(row["source_path"]) + "\\n" + local_key,
+                    str(row["source_path"]) + "\\n" + local_key + "\\n" + content_hash,
                 )
             id_map[old_id] = stable_id
             mapping_records.append({
@@ -1560,7 +1565,7 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
         "environment": {
             "python": platform.python_version(),
             "python_hash_seed": os.environ.get("PYTHONHASHSEED", "unset"),
-            "synthetic_fixture_id_strategy": "uuid5:NAMESPACE_URL:sfra-gold-benchmark:<corpus_version>:<purpose>:<stable_identity>",
+            "synthetic_fixture_id_strategy": "uuid5:NAMESPACE_URL:sfra-gold-benchmark:<corpus_version>:<purpose>:<source_path>:<parser_local_key>:<content_sha256>",
             "jsonschema": __import__("jsonschema").__version__,
             "tiktoken": counter.metadata()["version"],
             "e2_package": "sfra-search",
