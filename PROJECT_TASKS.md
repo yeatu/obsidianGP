@@ -14,7 +14,7 @@
 ## 1. Текущее состояние
 
 - Основной контрактный контур E1/E2/E3 и согласованные исправления E1/E3 находятся в `main` на указанном кодовом baseline.
-- Поиск GitHub на момент снимка обнаружил одну открытую Issue: [#20 — Governance](https://github.com/yeatu/obsidianGP/issues/20). Открытых implementation Issues не обнаружено.
+- Поиск GitHub на момент снимка обнаружил две открытые управляющие Issues: [#20 — Governance](https://github.com/yeatu/obsidianGP/issues/20) и [#34 — независимая проверка Protocol v2 / PR #33](https://github.com/yeatu/obsidianGP/issues/34). Открытых implementation Issues не обнаружено.
 - [Issue #19 — A1 contract audit](https://github.com/yeatu/obsidianGP/issues/19) закрыта как completed. Координаторская disposition-запись [#6964076953](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964076953) считает A1-01…A1-05 закрытыми или локализованными в принятом scope.
 - Последующий read-only отчёт A1 [#6964082653](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653) отдельно отмечает остаточный P2-вопрос A1-03: публично создаваемый `PinnedSnapshot` без активного verifier и отсутствие отдельного regression на мутацию sidecar во время `E1SourceReader.read_scope()`. Issue #19 закрыта; этот реестр не переоткрывает её. До этапа, который зависит от данной гарантии, координатору следует явно решить, нужен ли отдельный узкий follow-up.
 - Следующий продуктовый этап не стартует автоматически из факта завершения контрактной стабилизации. Его scope и release gates должен отдельно определить координатор.
@@ -23,7 +23,8 @@
 
 | Issue | Тип | Состояние | Следующее действие |
 |---|---|---|---|
-| [#20 — Governance](https://github.com/yeatu/obsidianGP/issues/20) | GOVERNANCE | OPEN | Действующий протокол обновлён до версии 2: динамический захват задач, декомпозиция, review requests и эскалации координатору. Этот PR приводит оперативную панель в соответствие с протоколом. |
+| [#20 — Governance](https://github.com/yeatu/obsidianGP/issues/20) | GOVERNANCE | OPEN | Нормативный Protocol v2: динамический захват, декомпозиция, REVIEW_REQUEST, COORDINATOR_DECISION, независимость и полномочия координатора. |
+| [#34 — Governance review](https://github.com/yeatu/obsidianGP/issues/34) | REVIEW_REQUEST | OPEN | Независимая проверка Protocol v2 и PR #33 на точном HEAD. Не закрывать до reviewer disposition. |
 
 На момент снимка нет открытых implementation Issues. Когда координатор утвердит следующий этап, он должен создать минимальные независимые задачи с критериями приёмки и зависимостями, достаточные для параллельной работы свободных участников.
 
