@@ -3,9 +3,9 @@
 > Точка входа для AI-участников и снимок активной работы. Нормативные правила — [Issue #20, Governance Protocol v2.4](https://github.com/yeatu/obsidianGP/issues/20).
 > GitHub Issue — источник истины по задаче. Эта панель показывает только активные задачи и не дублирует CLAIM, review, CI или evidence.
 
-**Снимок:** 2026-11-18 (C3 refresh after PR #87 / W1 handoff)  
-**main base for this dashboard update:** `9ba9d0403de0683c97938d0d323d96799157fc57`  
-**Базовая версия кода:** `9ba9d0403de0683c97938d0d323d96799157fc57`
+**Снимок:** 2026-11-18 (C3 refresh after cloud-data decision #112 and PR #107 merge)  
+**main base for this dashboard update:** `8e853783b8ccd47571e7402c57b9e935684a0b25`  
+**Базовая версия кода:** `8e853783b8ccd47571e7402c57b9e935684a0b25`
 
 ## 0. Начало работы
 
@@ -47,7 +47,7 @@
 
 - Система должна работать, когда личный компьютер владельца выключен. Personal computer, self-hosted runner, local daemon/tunnel and MCP are not runtime dependencies.
 - GitHub-hosted runners — эфемерная среда исполнения, а не постоянное хранилище Vault/index/manifest/sidecar.
-- Облачная доступность исходных данных и компьютер-независимый import/sync остаются отдельным нерешённым этапом [#86](https://github.com/yeatu/obsidianGP/issues/86). До его анализа и отдельного C/owner approval реальный Vault не подключать.
+- Cloud data-plane direction принята по [C decision #112](https://github.com/yeatu/obsidianGP/issues/112) на основе анализа [#86](https://github.com/yeatu/obsidianGP/issues/86), report PR #107 merged at `8e853783b8ccd47571e7402c57b9e935684a0b25`: provider-neutral immutable snapshot bundles + versioned catalogue + read-only resolver/materializer. Провайдер и source authority пока не выбраны; реальный Vault не подключён.
 - Web adapter W1 [#77](https://github.com/yeatu/obsidianGP/issues/77) строится только на synthetic fixtures и не зависит от будущего data plane.
 
 **Shared SFRA Core already in main:** E1 structural indexer / Node identity / source API; E2 SQLite/FTS retrieval; E3/B1 Context Builder; V2.1 SearchVaultService / ReadSourceService; V2.2 non-production Issue Worker Core. Не дублировать существующую business logic в transport/application adapters.
@@ -65,13 +65,13 @@
 
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / владелец |
 |---|---:|---|:---:|---|---|
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, обновить PR к current main, повторить 42 synthetic cases и выпустить exact-head report | E1 CLAIM; PR #84 Draft на старой base `3388e040…`; report: 40/42 gates passed, два gate failures и отдельный completeness invariant; rebase на `9ba9d040…` и rerun обязательны; не ослаблять assertions |
-| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Обновить W1 branch к текущему main, повторить exact-head fixture CI, затем передать на новый A review; позже отдельно провести один marked synthetic `issues.opened` round-trip | E2 CLAIM; PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; прежний run #44240799599: 44 passed на старой base `2051d0…`; review #97 закрыт как stale после merge PR #87; текущий main `9ba9d040…` |
-| [#86](https://github.com/yeatu/obsidianGP/issues/86) | P1 | `ANALYSIS` | **A** | Спроектировать cloud data plane и computer-independent import/sync; сравнить durable storage и каналы публикации | A1 CLAIM; analysis-only; не читать/экспортировать/переносить production Vault |
+| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, обновить PR к current main, повторить 42 synthetic cases и выпустить exact-head report | E1 CLAIM; PR #84 Draft на старой base `3388e040…`; report: 40/42 gates passed, два gate failures и отдельный completeness invariant; rebase на current main `8e853783…` и rerun обязательны; не ослаблять assertions |
+| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Обновить W1 branch к текущему main, повторить exact-head fixture CI, затем передать на новый A review; позже отдельно провести один marked synthetic `issues.opened` round-trip | E2 CLAIM; PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; прежний run #44240799599: 44 passed на старой base `2051d0…`; review #97 закрыт как stale после merge PR #87; текущий main `8e853783…` |
+| [#112](https://github.com/yeatu/obsidianGP/issues/112) | P1 | `COORDINATOR_DECISION` | **C** | Получить решение владельца по статусу существующего E1 persistence workflow: оставить действующим или поставить на HOLD | C3 CLAIM; выбор A/B владельца требуется до дальнейшего использования workflow |
 
 **На HOLD по решению владельца:** Local MCP-only Issues #38/#39/#40/#43/#72. Все ранее созданные code/tests/docs/branches/PRs сохранены; не продолжать и не merge без explicit owner re-scope. PR #47/#57/#66/#94 остаются Draft/HOLD. Review #95 закрыт как not planned для MCP-only кода. #53 закрыта после owner waiver на удаление старого публичного run/artifact; сам real-Vault workflow остаётся выключенным.
 
-**Завершено / принято:** #36/#51/#67/#79 — cumulative verifier chain merged and accepted; #88 A review accepted; #96 C1 decision; #91 C2 decision по W1 exact-head CI path; #97 closed as stale because PR #92 base moved; #75 cloud-only Web direction; #80 W1 preflight findings incorporated into #77; #81 threat model; #53 retention/removal waiver. #35 — исторический Local MCP milestone, его история не переписывается.
+**Завершено / принято:** #36/#51/#67/#79 — cumulative verifier chain merged and accepted; #88 A review accepted; #96 C1 decision; #91 C2 decision по W1 exact-head CI path; #97 closed as stale because PR #92 base moved; #75 cloud-only Web direction; #80 W1 preflight findings incorporated into #77; #81 threat model; #53 retention/removal waiver; #86 cloud data-plane analysis accepted by C3 in #112, report PR #107 merged (commit `8e853783b8ccd47571e7402c57b9e935684a0b25`). #35 — исторический milestone, его история не переписывается.
 ## 2.1. Новое правило декомпозиции: parallel-first
 
 По Governance Protocol v2.4 (§5) каждую новую крупную задачу сначала разбиваем на минимальные самостоятельно полезные и проверяемые результаты. Для каждого пакета фиксируются один владелец, целевая роль, deliverable, затрагиваемые компоненты/файлы, прямые блокирующие зависимости, конфликты и интеграционная граница. Родительская связь не считается зависимостью автоматически. Независимые анализ, контракты, компоненты, тестовые наборы, fixtures, документация и conformance-проверки открываются отдельными Issues, когда их можно завершать параллельно. Не создаём микрозадачи без собственного результата и не расширяем scope ради занятости.
@@ -80,12 +80,14 @@
 
 | PR | Состояние | Трактовка |
 |---|---|---|
-| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / awaiting rebase | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; base `2051d0ce6cdbceab1fc825c617708f8255266476` устарела после PR #87 merge; run #44240799599: 44 passed на прежней merge-ref; rebase на `9ba9d040…` и новый exact-head CI обязательны до нового A review |
-| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft / stale base | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; base `3388e040…` predates PR #87 merge; prior fixture report 40/42 with unresolved failures; E1 must rebase to `9ba9d040…` and rerun before final review |
+| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / awaiting rebase | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; base `2051d0ce6cdbceab1fc825c617708f8255266476` устарела после PR #87 merge; run #44240799599: 44 passed на прежней merge-ref; rebase на current main `8e853783…` и новый exact-head CI обязательны до нового A review |
+| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft / stale base | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; base `3388e040…` predates PR #87 merge; prior fixture report 40/42 with unresolved failures; E1 must rebase to current main `8e853783…` and rerun before final review |
 | [#47 — historical Local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт / Draft / HOLD | Preserved, not a target, do not merge |
 | [#57 — historical MCP search adapter](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft / HOLD | Preserved; no further MCP-only work or merge |
 | [#66 — historical read_source parser preparation](https://github.com/yeatu/obsidianGP/pull/66) | Открыт / Draft / HOLD | Accepted parser-only slice preserved for possible adaptation |
 | [#94 — historical MCP schema correction](https://github.com/yeatu/obsidianGP/pull/94) | Открыт / Draft / HOLD | E3 completed exact-head work and CI; do not spend A review or merge while MCP is off target |
+| [#103 — cloud-only governance panel refresh](https://github.com/yeatu/obsidianGP/pull/103) | Открыт / awaiting independent A review #104 | C3 panel refresh; review target and exact HEAD are maintained in #104; do not merge before A acceptance and C decision |
+| [#107 — cloud data-plane analysis](https://github.com/yeatu/obsidianGP/pull/107) | **Merged** | C3 accepted report under #112; merge commit `8e853783b8ccd47571e7402c57b9e935684a0b25` |
 | [#87 — PinnedSnapshot exact-type correction](https://github.com/yeatu/obsidianGP/pull/87) | **Merged** | Main merge `9ba9d0403de0683c97938d0d323d96799157fc57`; A1 and C1 accepted |
 | [#54 / #70 — prior verifier attempts](https://github.com/yeatu/obsidianGP/pulls) | **Closed / superseded** | Their accepted cumulative correction is in merged PR #87; branch/commit/review history preserved |
 | [#85 — earlier W1 implementation branch](https://github.com/yeatu/obsidianGP/pull/85) | **Closed / superseded** | Current W1 delivery is PR #92 |
@@ -95,15 +97,15 @@
 ## 4. Действующие ограничения и решения
 
 - **Cloud-only runtime:** ChatGPT Web/mobile → GitHub Issues → Actions → GitHub-hosted runners → SFRA. No personal computer, self-hosted runner, local daemon/tunnel or MCP transport.
-- **Durable source data:** cloud storage/index/snapshot/manifest/sidecar design remains unapproved and is analyzed only in #86. GitHub-hosted runner workspace is ephemeral, not the data store.
+- **Durable source data:** provider-neutral immutable snapshot bundles + versioned catalogue + read-only resolver/materializer are the accepted target direction in #112. Provider, region, source authority and retention are not selected; hosted runner workspace remains ephemeral, not the data store.
 - **Publication:** publication of Vault content and source-derived metadata is allowed by owner preference; do not impose blanket confidentiality redaction. Protect credentials/secrets and preserve provenance/integrity. Select delivery channels based on size, cost, retention and usefulness.
-- **Production boundary:** permission to publish content does not authorize real Vault reads, import, indexing, production Actions execution, write or mutation. The #53 real-Vault workflow remains disabled. Any new cloud-backed real-data path needs #86 design, independent review and explicit C/owner activation decision.
+- **Production boundary:** permission to publish content does not authorize real Vault reads, import, indexing, production Actions execution, write or mutation. The E3 integration workflow remains fail-closed. Separately, the current `.github/workflows/sfra-state-persistence.yml` has a push trigger + workflow_dispatch + `contents:write` and publishes SQLite/manifest to `sfra-state`; #112 does not authorize invoking it for the new data plane. The file is unchanged, and its Actions enablement/run history is not verified. Owner choice A/B in #112 is required before further use.
 - **W1 #77 / PR #92:** synthetic-only. The fixture CI event proves 44 tests, not a live Issue round-trip; worker job is skipped for pull_request event. Keep the worker dormant until E2 rebases PR #92 to current main, exact-head fixture CI passes, a fresh independent A review of that HEAD is accepted, and C separately accepts/merges the synthetic-only workflow. Review #97 is closed as stale and must not be reused. Only then authorize one marked synthetic `issues.opened` round-trip.
-- **PinnedSnapshot:** shared verifier guard is accepted/merged at #87. This does **not** enable production `read_source`. A future Web composition needs its own reviewed source/data-plane path and C/owner decision after #86.
+- **PinnedSnapshot:** shared verifier guard is accepted/merged at #87. This does **not** enable production `read_source`. A future Web composition needs its own reviewed cloud SnapshotRef provider/materializer and response-worker path, then a separate C/owner activation decision under #112.
 - **Local MCP legacy work:** Issues #38/#39/#40/#43/#72 and PRs #47/#57/#66/#94 are preserved on HOLD; no new CLAIM, review, implementation or merge without explicit owner re-scope.
 - **Benchmark #42:** synthetic-only. Keep exact corpus schema/digest/reference/span/hash checks. A failed quality gate remains failed; don't weaken forbidden-node or completeness assertions.
 - Do not add embeddings/vector search, alter retrieval ranking or change E3 token budget before benchmark evidence. Never report truncated source text as complete.
-- Governance protocol: [#20](https://github.com/yeatu/obsidianGP/issues/20); cloud-only Web decision: [#75](https://github.com/yeatu/obsidianGP/issues/75); cloud data-plane analysis: [#86](https://github.com/yeatu/obsidianGP/issues/86); verifier threat model: [#81](https://github.com/yeatu/obsidianGP/issues/81).
+- Governance protocol: [#20](https://github.com/yeatu/obsidianGP/issues/20); cloud-only Web decision: [#75](https://github.com/yeatu/obsidianGP/issues/75); cloud data-plane analysis: [#86](https://github.com/yeatu/obsidianGP/issues/86); cloud architecture decision: [#112](https://github.com/yeatu/obsidianGP/issues/112); verifier threat model: [#81](https://github.com/yeatu/obsidianGP/issues/81).
 
 
 ## 5. Передача E → A → E и обновление панели
