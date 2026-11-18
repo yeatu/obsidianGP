@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -74,6 +75,10 @@ def test_builds_deterministic_snapshot_id_and_round_trips_reference() -> None:
         lambda m: _manifest(
             source_revision=ImmutableImportSourceRevision("vault-import-2026-001")
         ),
+        lambda m: replace(
+            m,
+            source_bundle=replace(m.source_bundle, key="snapshots/source-v2.tar"),
+        ),
         lambda m: CloudSnapshotManifestV1(
             source_revision=m.source_revision,
             source_bundle=_object("snapshots/source.tar", "src-ver-02", b"synthetic source archive"),
@@ -88,12 +93,31 @@ def test_builds_deterministic_snapshot_id_and_round_trips_reference() -> None:
             indexer_identity=m.indexer_identity,
             sqlite_schema_identity=m.sqlite_schema_identity,
         ),
+        lambda m: replace(
+            m,
+            source_bundle=replace(m.source_bundle, byte_size=m.source_bundle.byte_size + 1),
+        ),
+        lambda m: replace(
+            m,
+            index_bundle=replace(m.index_bundle, key="snapshots/index-v2.sqlite3"),
+        ),
         lambda m: CloudSnapshotManifestV1(
             source_revision=m.source_revision,
             source_bundle=m.source_bundle,
             index_bundle=_object("snapshots/index.sqlite3", "idx-ver-02", b"synthetic sqlite bundle"),
             indexer_identity=m.indexer_identity,
             sqlite_schema_identity=m.sqlite_schema_identity,
+        ),
+        lambda m: CloudSnapshotManifestV1(
+            source_revision=m.source_revision,
+            source_bundle=m.source_bundle,
+            index_bundle=_object("snapshots/index.sqlite3", "idx-ver-01", b"different sqlite bytes"),
+            indexer_identity=m.indexer_identity,
+            sqlite_schema_identity=m.sqlite_schema_identity,
+        ),
+        lambda m: replace(
+            m,
+            index_bundle=replace(m.index_bundle, byte_size=m.index_bundle.byte_size + 1),
         ),
         lambda m: CloudSnapshotManifestV1(
             source_revision=m.source_revision,
@@ -127,16 +151,27 @@ def test_manifest_sha256_binds_exact_canonical_bytes() -> None:
 
 def test_manifest_identity_must_match_reference_even_with_valid_new_digest() -> None:
     built = build_cloud_snapshot_v2(_manifest())
-    different = serialize_cloud_snapshot_manifest(
-        _manifest(index_version="idx-v5")
-    )
+    different = serialize_cloud_snapshot_manifest(_manifest(index_version="idx-v5"))
 
-    ref_with_different_digest = build_cloud_snapshot_v2(
-        _manifest(index_version="idx-v5")
-    ).ref
+    # Forge an internally self-consistent v2 identity tuple while retaining the
+    # original manifest digest. The ref parser accepts its recomputed ID, but
+    # manifest verification must detect the mismatch between tuple and bytes.
+    mapping = built.ref.to_dict()
+    mapping["indexer_identity"]["version"] = "idx-v5"
+    identity_payload = dict(mapping)
+    identity_payload.pop("snapshot_id")
+    encoded = json.dumps(
+        identity_payload,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    mapping["snapshot_id"] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    forged_ref = cloud_snapshot_ref_v2_from_dict(mapping)
 
     with pytest.raises(CloudSnapshotContractError, match="identity does not match"):
-        verify_cloud_snapshot_manifest(ref_with_different_digest, built.manifest_bytes)
+        verify_cloud_snapshot_manifest(forged_ref, built.manifest_bytes)
 
     with pytest.raises(CloudSnapshotContractError, match="SHA-256"):
         verify_cloud_snapshot_manifest(built.ref, different)
