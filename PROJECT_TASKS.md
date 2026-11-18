@@ -66,7 +66,7 @@
 
 | Issue | Приоритет | Тип | Роль | Задача / следующий результат | Зависимости / условие старта |
 |---|---:|---|:---:|---|---|
-| [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | **A** | Независимый аудит Governance Protocol v2.1 и этой панели | Нет; только независимый reviewer, не участвовавший в изменениях |
+| [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | **A** | Независимый аудит Governance Protocol v2.1 и этой панели | Проверить PR #44 и Issue #20; после merge сверить актуальный main HEAD |
 | [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | **E** | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
 | [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | **A** | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | **E** | Локальный MCP stdio scaffold, конфигурация и composition root | Можно начать bootstrap/lifecycle; public signatures не фиксировать до #37 |
