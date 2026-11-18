@@ -274,10 +274,10 @@ def test_writer_accepts_only_the_exact_prepared_bundle_type():
 @pytest.mark.parametrize(
     "version_id",
     [
-        "\\x00",
-        "control\\x1fcharacter",
-        "decomposed-e\\u0301",
-        "surrogate-\\ud800",
+        "\x00",
+        "control\x1fcharacter",
+        "decomposed-e\u0301",
+        "surrogate-\ud800",
         "v" * 4097,
         " leading-space",
         "trailing-space ",
@@ -306,7 +306,7 @@ def test_invalid_source_receipt_stops_before_the_index_object_write(tmp_path: Pa
             # rejects this non-NFC ID before the writer can attempt the second object.
             return ObjectWriteReceipt(
                 key=key,
-                version_id="decomposed-e\\u0301",
+                version_id="decomposed-e\u0301",
                 sha256=expected_sha256,
                 byte_size=expected_byte_size,
             )
