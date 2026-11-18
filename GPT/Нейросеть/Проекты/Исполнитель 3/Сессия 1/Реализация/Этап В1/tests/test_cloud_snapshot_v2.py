@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -304,3 +305,33 @@ def test_manifest_parser_rejects_invalid_utf8_and_json_constants() -> None:
 def test_manifest_size_bound_is_enforced() -> None:
     with pytest.raises(CloudSnapshotContractError, match="byte length"):
         parse_canonical_cloud_snapshot_manifest(b" " * (2 * 1024 * 1024 + 1))
+
+def test_published_json_schemas_are_versioned_and_closed() -> None:
+    schema_dir = Path(__file__).resolve().parents[1] / "schemas"
+    manifest_schema = json.loads(
+        (schema_dir / "cloud-snapshot-manifest-v1.schema.json").read_text(encoding="utf-8")
+    )
+    ref_schema = json.loads(
+        (schema_dir / "cloud-snapshot-ref-v2.schema.json").read_text(encoding="utf-8")
+    )
+
+    assert manifest_schema["$schema"].endswith("/2020-12/schema")
+    assert manifest_schema["properties"]["manifest_schema_version"]["const"] == 1
+    assert manifest_schema["additionalProperties"] is False
+    assert set(manifest_schema["required"]) == {
+        "manifest_schema_version", "source_revision", "source_bundle",
+        "index_bundle", "indexer_identity", "sqlite_schema_identity",
+    }
+    assert manifest_schema["properties"]["source_revision"]["oneOf"]
+    for name in ("source_bundle", "index_bundle"):
+        object_schema = manifest_schema["$defs"]["immutableObjectVersion"]
+        assert object_schema["additionalProperties"] is False
+        assert set(object_schema["required"]) == {"key", "version_id", "sha256", "byte_size"}
+        assert object_schema["properties"]["byte_size"]["minimum"] == 1
+    assert manifest_schema["properties"]["sqlite_schema_identity"]["properties"]["engine"]["const"] == "sqlite"
+
+    assert ref_schema["$schema"].endswith("/2020-12/schema")
+    assert ref_schema["properties"]["snapshot_schema_version"]["const"] == 2
+    assert ref_schema["additionalProperties"] is False
+    assert "manifest_sha256" in ref_schema["required"]
+    assert ref_schema["properties"]["snapshot_id"]["$ref"] == "#/$defs/sha256"
