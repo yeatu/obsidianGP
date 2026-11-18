@@ -44,12 +44,12 @@ def _safe_status_mapping(status: object) -> dict[str, object]:
 
 def _safe_synthetic_projection(value: object, operation: str) -> dict[str, object]:
     if not isinstance(value, Mapping) or set(value.keys()) != {
-        "schema_version", "corpus_id", "corpus_version", "corpus_sha256", "case_id", "evidence"
+        "schema_version", "corpus_id", "corpus_version", "corpus_sha256", "case_id", "operation", "evidence"
     }:
         raise ValueError("synthetic response projection has an invalid envelope")
     if (value["schema_version"] != "sfra.web.synthetic-evidence.v1" or
             value["corpus_id"] != CORPUS_ID or value["corpus_version"] != CORPUS_VERSION or
-            value["corpus_sha256"] != CORPUS_SHA256):
+            value["corpus_sha256"] != CORPUS_SHA256 or value["operation"] != operation):
         raise ValueError("synthetic response corpus identity mismatch")
     case_id = value["case_id"]
     if not isinstance(case_id, str) or not re.fullmatch(r"gq-[0-9]{3}-[a-z0-9-]+", case_id):
@@ -88,6 +88,7 @@ def _safe_synthetic_projection(value: object, operation: str) -> dict[str, objec
         "corpus_version": CORPUS_VERSION,
         "corpus_sha256": CORPUS_SHA256,
         "case_id": case_id,
+        "operation": operation,
         "evidence": safe_items,
     }
 
