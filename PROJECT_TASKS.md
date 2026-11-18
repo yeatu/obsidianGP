@@ -6,7 +6,7 @@
 > Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Main HEAD before this dashboard update:** `6f655e77a8071445544f77ee4b8c75278649e100`  
+**Main HEAD before this dashboard update:** `3388e0409a81b5f40c3155674fe33247ce5e044e`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
 ## 1. Текущий этап
@@ -31,22 +31,22 @@
 | Issue | Приоритет | Тип | Задача / следующий результат | Зависимости |
 |---|---:|---|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
-| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
+| [#96](https://github.com/yeatu/obsidianGP/issues/96) | P1 | COORDINATOR_DECISION | Принять cumulative PinnedSnapshot verifier correction chain #36/#51/#67/#79 на PR #87; отдельно решить merge gate | A1 REVIEW_ACCEPTED #88; exact HEAD `162e4190b00c63c67ed1f7fb29871819315c4d92`; combined fixture CI passed; C acceptance по §8.7 |
 | [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
-| [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | Корпус v1: 42 cases, 32 synthetic docs, 69 nodes; [PR #58](https://github.com/yeatu/obsidianGP/pull/58), ждёт решения #61 | Координаторская приёмка #61 |
+
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
-| [#51](https://github.com/yeatu/obsidianGP/issues/51) | P1 | IMPLEMENTATION | Correction: сделать capability PinnedSnapshot verifier неизменяемым и исключить no-op bypass | #36, #46 |
+
 | [#61](https://github.com/yeatu/obsidianGP/issues/61) | P1 | COORDINATOR_DECISION | Принять либо вернуть #41 / [PR #58](https://github.com/yeatu/obsidianGP/pull/58) | Нет; координатор |
 
 ## 3. Порядок параллельной работы
 
-**Можно начинать сразу и независимо:** #36 и #34 (если соблюдены их владельцы/зависимости). #37 закрыта и принята координатором. #41 ожидает решения #61; #42 может начинаться после приёмки корпуса.  
+**Можно начинать сразу и независимо:** #34 (с учётом действующего CLAIM). #37 закрыта и принята координатором. Corpus #41 принят координатором через #61; #42 может продолжать benchmark по принятому корпусу. Verifier chain #36/#51/#67/#79 прошла A review на PR #87 и ожидает C acceptance по #96.  
 **Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
-**Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
+**Tool handlers:** #39 после #37/#38; #40 после принятия verifier chain #36/#51/#67/#79 по #96, а также #37/#38. До C acceptance source reads не подключать.  
 **Quality runner:** #42 после утверждения gold corpus #41.  
 **Финальная интеграция:** #43 после двух handlers и snapshot guard.
 
