@@ -5,6 +5,7 @@ import hashlib
 import re
 from typing import Iterable, Mapping
 
+MARKER_AUTHOR = "github-actions[bot]"
 _MARKER = re.compile(r"^<!-- sfra-web-v1 issue=(?P<issue>[1-9][0-9]*) body_sha256=(?P<digest>[0-9a-f]{64}) state=(?P<state>STARTED|COMPLETED|REJECTED|FAILED) -->$")
 _STATES = frozenset({"STARTED", "COMPLETED", "REJECTED", "FAILED"})
 
@@ -21,7 +22,7 @@ class LedgerDecision:
     reason: str
 
 class MarkerLedger:
-    """Interpret durable Issue comments; serialize each Issue in the caller."""
+    """Interpret only bot-authored durable markers; serialize each Issue in caller."""
     def inspect(self, issue_number: int, body: bytes,
                 comments: Iterable[Mapping[str, object]]) -> LedgerDecision:
         if isinstance(issue_number, bool) or not isinstance(issue_number, int) or issue_number < 1:
@@ -29,6 +30,9 @@ class MarkerLedger:
         digest = body_sha256(body)
         observed: list[tuple[str, str]] = []
         for comment in comments:
+            user = comment.get("user")
+            if not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR:
+                continue
             text = comment.get("body")
             if not isinstance(text, str):
                 continue
