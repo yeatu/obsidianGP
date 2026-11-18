@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sqlite3
 import zipfile
 
 import pytest
@@ -168,6 +169,32 @@ def _prepared_object(key: str, payload: bytes) -> PreparedBundleObject:
         payload=payload,
         sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
         byte_size=len(payload),
+    )
+
+
+def _bundle_with_active_node_update(
+    tmp_path: Path,
+    bundle,
+    statement: str,
+    values: tuple[object, ...],
+):
+    members = _zip_members(bundle.index_object.payload)
+    database_path = tmp_path / "mutated-structure.sqlite3"
+    database_path.write_bytes(members[E1_DATABASE_PATH])
+    with sqlite3.connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT node_id FROM structural_nodes "
+            "WHERE status IN ('active', 'ambiguous') AND stale_generation IS NULL "
+            "ORDER BY node_id LIMIT 1"
+        ).fetchone()
+        assert row is not None
+        connection.execute(statement, (*values, row[0]))
+        connection.commit()
+    members[E1_DATABASE_PATH] = database_path.read_bytes()
+    payload = _zip_bytes(members)
+    return replace(
+        bundle,
+        index_object=_prepared_object(bundle.index_object.key, payload),
     )
 
 
@@ -386,6 +413,45 @@ def test_missing_index_member_fails_closed(tmp_path: Path):
     tampered = replace(bundle, index_object=_prepared_object(bundle.index_object.key, changed_archive))
 
     with pytest.raises(BundleIntegrityError, match="missing or unexpected"):
+        verify_prepared_cloud_snapshot_bundle(tampered)
+
+
+def test_bundle_verifier_rejects_blob_raw_text_with_null_content_hash(tmp_path: Path):
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(source_root, database_path)
+    tampered = _bundle_with_active_node_update(
+        tmp_path,
+        bundle,
+        "UPDATE structural_nodes SET raw_text = ?, content_hash = NULL WHERE node_id = ?",
+        (sqlite3.Binary(b"not UTF-8 text"),),
+    )
+
+    with pytest.raises(BundleIntegrityError, match="raw_text must be a UTF-8 text string"):
+        verify_prepared_cloud_snapshot_bundle(tampered)
+
+
+@pytest.mark.parametrize(
+    "bad_hash",
+    [
+        pytest.param(None, id="null-hash"),
+        pytest.param("", id="empty-hash"),
+        pytest.param(b"not-a-text-hash", id="blob-hash"),
+    ],
+)
+def test_bundle_verifier_rejects_missing_or_non_text_node_content_hash(
+    tmp_path: Path,
+    bad_hash: object,
+):
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(source_root, database_path)
+    tampered = _bundle_with_active_node_update(
+        tmp_path,
+        bundle,
+        "UPDATE structural_nodes SET content_hash = ? WHERE node_id = ?",
+        (bad_hash,),
+    )
+
+    with pytest.raises(BundleIntegrityError, match="Content Hash must be a non-empty string"):
         verify_prepared_cloud_snapshot_bundle(tampered)
 
 
