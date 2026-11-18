@@ -6,7 +6,7 @@ from sfra_web_adapter import EventRejection, MarkerLedger, parse_opened_issue_ev
 BOT = {"login": "github-actions[bot]", "type": "Bot"}
 
 def event(**kwargs):
-    issue = {"number": 17, "title": "[SFRA] request", "body": '{"protocol_version":"sfra.issue.v1}', "user": {"login": "yeatu"}}
+    issue = {"number": 17, "title": "[SFRA] request", "body": '{"protocol_version":"sfra.issue.v1"}', "user": {"login": "yeatu"}}
     repository, sender = "yeatu/obsidianGP", {"login": "yeatu"}
     for key, value in kwargs.items():
         if key == "repository":
