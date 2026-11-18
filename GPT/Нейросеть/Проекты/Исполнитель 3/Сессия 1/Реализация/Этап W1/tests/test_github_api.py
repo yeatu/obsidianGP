@@ -66,7 +66,7 @@ class FakeComments:
     def list_comments(self, issue_number):
         return list(self.comments)
     def create_comment(self, issue_number, body):
-        self.comments.append({"body": body, "user": {"login": "github-actions[bot]"}})
+        self.comments.append({"body": body, "user": {"login": "github-actions[bot]", "type": "Bot"}})
 
 
 def test_comment_status_store_preserves_first_digest_on_retry_or_changed_body():
