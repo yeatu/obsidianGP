@@ -99,8 +99,8 @@ def parse_read_source_request(value: Mapping[str, object]) -> ReadSourceRequest:
         sidecar_commit_sha=sidecar_sha,
         manifest_sha256=manifest_sha,
     )
-    supplied_snapshot_id = snapshot_value.get("snapshot_id")
-    if supplied_snapshot_id is not None:
+    if "snapshot_id" in snapshot_value:
+        supplied_snapshot_id = snapshot_value["snapshot_id"]
         if (
             not isinstance(supplied_snapshot_id, str)
             or supplied_snapshot_id != snapshot.snapshot_id

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError, is_dataclass
-
 import pytest
 
 from sfra_context_builder.models import SnapshotRef
@@ -10,17 +8,14 @@ from sfra_mcp_server.read_source_contract import parse_read_source_request
 
 
 def valid_payload() -> dict[str, object]:
-    vault = "a" * 40
-    sidecar = "b" * 40
-    manifest = "sha256:" + "c" * 64
     return {
         "node_id": "node_00000000-0000-4000-8000-000000000001",
         "expected_hash": "sha256:" + "d" * 64,
         "scope": "node",
         "snapshot": {
-            "vault_commit_sha": vault,
-            "sidecar_commit_sha": sidecar,
-            "manifest_sha256": manifest,
+            "vault_commit_sha": "a" * 40,
+            "sidecar_commit_sha": "b" * 40,
+            "manifest_sha256": "sha256:" + "c" * 64,
         },
     }
 
@@ -139,6 +134,18 @@ def test_rejects_snapshot_id_that_does_not_match_tuple() -> None:
     payload = valid_payload()
     snapshot = dict(payload["snapshot"])
     snapshot["snapshot_id"] = "not-the-derived-identity"
+    payload["snapshot"] = snapshot
+
+    with pytest.raises(ApplicationServiceError) as raised:
+        parse_read_source_request(payload)
+
+    assert raised.value.code == "snapshot_mismatch"
+
+
+def test_rejects_explicit_null_snapshot_id_assertion() -> None:
+    payload = valid_payload()
+    snapshot = dict(payload["snapshot"])
+    snapshot["snapshot_id"] = None
     payload["snapshot"] = snapshot
 
     with pytest.raises(ApplicationServiceError) as raised:
