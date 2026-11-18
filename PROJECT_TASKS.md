@@ -6,7 +6,7 @@
 > Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Main HEAD:** `6f655e77a8071445544f77ee4b8c75278649e100`  
+**Main HEAD before this dashboard update:** `6f655e77a8071445544f77ee4b8c75278649e100`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
 ## 1. Текущий этап
