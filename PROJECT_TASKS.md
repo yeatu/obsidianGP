@@ -4,8 +4,8 @@
 > GitHub Issue — источник истины по задаче. Эта панель показывает только активные задачи и не дублирует CLAIM, review, CI или evidence.
 
 **Снимок:** 2026-11-18 (C3 refresh after cloud-data decision #112 and PR #107 merge)  
-**main base for this dashboard update:** `8e853783b8ccd47571e7402c57b9e935684a0b25`  
-**Базовая версия кода:** `8e853783b8ccd47571e7402c57b9e935684a0b25`
+**main base for this dashboard update:** `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466`  
+**Базовая версия кода:** `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466`
 
 ## 0. Начало работы
 
@@ -65,8 +65,8 @@
 
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / владелец |
 |---|---:|---|:---:|---|---|
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/gate findings, обновить PR к current main, повторить 42 synthetic cases и выпустить exact-head report | E1 CLAIM; PR #84 Draft на старой base `3388e040…`; report: 40/42 gates passed, два gate failures и отдельный completeness invariant; rebase на current main `8e853783…` и rerun обязательны; не ослаблять assertions |
-| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Обновить W1 branch к текущему main, повторить exact-head fixture CI, затем передать на новый A review; позже отдельно провести один marked synthetic `issues.opened` round-trip | E2 CLAIM; PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; прежний run #44240799599: 44 passed на старой base `2051d0…`; review #97 закрыт как stale после merge PR #87; текущий main `8e853783…` |
+| [#109](https://github.com/yeatu/obsidianGP/issues/109) | P1 | `REVIEW_REQUEST` | **A** | Независимый аудит benchmark #42 и пяти сохранённых failed gates | A3 CLAIM на PR #84 HEAD `a18e2b27c02cf3e772768aa0ce01b7ccf0e4b0d5`; base `8e853783b8ccd47571e7402c57b9e935684a0b25` устарела относительно current main `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466`; текущая compare: 4 ahead / 5 behind. E1 sync + exact-head CI/evidence before verdict; не ослаблять пять failed gates |
+| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Синхронизировать W1 PR #92 с current main, повторить exact-head fixture CI и передать на свежий независимый A review | E3 завершил предыдущую синхронизацию и RELEASE; PR #92 HEAD `593521b66f1adeb8fc5bb29d41a305855d8204b2`, base `52f1bdda1dd6b281b1fbe91add06e5fceda541fe`; current main `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466` (5 commits behind); A1 RELEASED #108 after BLOCKED. Task is available to a free eligible E; no worker round-trip or production action |
 | [#112](https://github.com/yeatu/obsidianGP/issues/112) | P1 | `COORDINATOR_DECISION` | **C** | Получить решение владельца по статусу существующего E1 persistence workflow: оставить действующим или поставить на HOLD | C3 CLAIM; выбор A/B владельца требуется до дальнейшего использования workflow |
 
 **На HOLD по решению владельца:** Local MCP-only Issues #38/#39/#40/#43/#72. Все ранее созданные code/tests/docs/branches/PRs сохранены; не продолжать и не merge без explicit owner re-scope. PR #47/#57/#66/#94 остаются Draft/HOLD. Review #95 закрыт как not planned для MCP-only кода. #53 закрыта после owner waiver на удаление старого публичного run/artifact; сам real-Vault workflow остаётся выключенным.
@@ -80,13 +80,14 @@
 
 | PR | Состояние | Трактовка |
 |---|---|---|
-| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / awaiting rebase | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; base `2051d0ce6cdbceab1fc825c617708f8255266476` устарела после PR #87 merge; run #44240799599: 44 passed на прежней merge-ref; rebase на current main `8e853783…` и новый exact-head CI обязательны до нового A review |
-| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft / stale base | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; base `3388e040…` predates PR #87 merge; prior fixture report 40/42 with unresolved failures; E1 must rebase to current main `8e853783…` and rerun before final review |
+| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / needs latest-main refresh | HEAD `593521b66f1adeb8fc5bb29d41a305855d8204b2`; base `52f1bdda1dd6b281b1fbe91add06e5fceda541fe`; current main `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466` (5 commits behind). Run #44244614340 (44 passed) applies only to its old merge-ref. A1 RELEASED review #108 after stale-base BLOCKED; sync, fresh CI and new A review are required |
+| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft / needs latest-main refresh | HEAD `a18e2b27c02cf3e772768aa0ce01b7ccf0e4b0d5`; current PR base `8e853783b8ccd47571e7402c57b9e935684a0b25`; main `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466`; compare current main→HEAD: 4 ahead / 5 behind. Previous 42-case report artifact is bound to implementation HEAD `9d17998d401137763f2bddec904e2dcd775ac21c`, not current PR HEAD. E1 must sync, rerun and refresh #109 before review verdict |
 | [#47 — historical Local MCP bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт / Draft / HOLD | Preserved, not a target, do not merge |
 | [#57 — historical MCP search adapter](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft / HOLD | Preserved; no further MCP-only work or merge |
 | [#66 — historical read_source parser preparation](https://github.com/yeatu/obsidianGP/pull/66) | Открыт / Draft / HOLD | Accepted parser-only slice preserved for possible adaptation |
 | [#94 — historical MCP schema correction](https://github.com/yeatu/obsidianGP/pull/94) | Открыт / Draft / HOLD | E3 completed exact-head work and CI; do not spend A review or merge while MCP is off target |
-| [#103 — cloud-only governance panel refresh](https://github.com/yeatu/obsidianGP/pull/103) | Открыт / awaiting independent A review #104 | C3 panel refresh; review target and exact HEAD are maintained in #104; do not merge before A acceptance and C decision |
+| [#103 — cloud-only governance panel refresh](https://github.com/yeatu/obsidianGP/pull/103) | Открыт / awaiting independent A review #104 | C3 refresh now targets current main `4e3fb5ae464b0db8db0b3071ab2dc7f3f320d466`; exact new HEAD, diff and compare are recorded in #104. Do not merge before fresh A acceptance and separate C decision |
+| [#110 — W1 review handoff panel patch](https://github.com/yeatu/obsidianGP/pull/110) | Открыт / stacked on PR #103 branch | E3's narrow #77→#108 status patch is preserved; parent branch refresh requires E3 to re-sync this stacked PR before integration |
 | [#107 — cloud data-plane analysis](https://github.com/yeatu/obsidianGP/pull/107) | **Merged** | C3 accepted report under #112; merge commit `8e853783b8ccd47571e7402c57b9e935684a0b25` |
 | [#87 — PinnedSnapshot exact-type correction](https://github.com/yeatu/obsidianGP/pull/87) | **Merged** | Main merge `9ba9d0403de0683c97938d0d323d96799157fc57`; A1 and C1 accepted |
 | [#54 / #70 — prior verifier attempts](https://github.com/yeatu/obsidianGP/pulls) | **Closed / superseded** | Their accepted cumulative correction is in merged PR #87; branch/commit/review history preserved |
