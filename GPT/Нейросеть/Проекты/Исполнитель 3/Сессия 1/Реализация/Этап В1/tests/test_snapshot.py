@@ -149,18 +149,21 @@ def test_bound_verifier_callback_is_not_exposed_or_rebindable(tmp_path):
     with pytest.raises(AttributeError):
         pinned._verifier_callback.__code__ = (lambda: None).__code__
 
-    # Even the private, one-shot registrar cannot replace an existing binding.
-    with pytest.raises(SnapshotBindingError, match="already has an active verifier"):
-        snapshot_module._register_snapshot_verifier(pinned, lambda: None)
-
     database.write_bytes(b"replacement after attempted verifier mutation")
     with pytest.raises(SnapshotBindingError, match="SQLite database digest changed"):
         pinned.verify_current()
 
 
-def test_snapshot_module_exposes_no_verifier_minting_symbols():
-    assert not hasattr(snapshot_module, "_SnapshotVerifier")
-    assert not hasattr(snapshot_module, "_SNAPSHOT_VERIFIER_SEAL")
+def test_snapshot_module_exposes_no_verifier_minting_or_registration_symbols():
+    for name in (
+        "_SnapshotVerifier",
+        "_SNAPSHOT_VERIFIER_SEAL",
+        "_register_snapshot_verifier",
+        "_build_verifier_registry",
+        "_create_pinned_snapshot_api",
+        "_bind_pinned_snapshot_impl",
+    ):
+        assert not hasattr(snapshot_module, name)
 
 
 def test_unregistered_snapshot_fails_closed(tmp_path):
