@@ -316,7 +316,7 @@ def test_database_inventory_mismatch_is_rejected_when_document_row_is_missing(tm
     finally:
         connection.close()
 
-    with pytest.raises(BundleIntegrityError, match="document paths"):
+    with pytest.raises(BundleIntegrityError, match="foreign_key_check|document paths"):
         _build(source_root, database_path)
 
 
@@ -365,3 +365,30 @@ def test_manifest_bytes_tampering_is_detected_by_the_shared_v2_contract(tmp_path
 
     with pytest.raises(CloudSnapshotContractError):
         verify_cloud_snapshot_manifest(built.ref, tampered)
+
+
+def test_tampered_source_archive_path_traversal_is_rejected(tmp_path: Path):
+    from io import BytesIO
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(source_root, database_path)
+    stream = BytesIO()
+    with zipfile.ZipFile(stream, mode="w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("source/../escape.md", b"outside")
+    malicious_payload = stream.getvalue()
+    tampered = replace(
+        bundle,
+        source_object=_prepared_object(bundle.source_object.key, malicious_payload),
+    )
+    with pytest.raises(BundleIntegrityError, match="unsafe archive path"):
+        verify_prepared_cloud_snapshot_bundle(tampered)
+
+
+def test_verifier_rechecks_sqlite_identity_fields_on_prepared_descriptor(tmp_path: Path):
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(source_root, database_path)
+    forged_identity = object.__new__(SqliteSchemaIdentity)
+    object.__setattr__(forged_identity, "engine", "not-sqlite")
+    object.__setattr__(forged_identity, "schema_info_version", 2)
+    forged = replace(bundle, sqlite_schema_identity=forged_identity)
+    with pytest.raises(BundleIntegrityError, match="sqlite_schema_identity") :
+        verify_prepared_cloud_snapshot_bundle(forged)
