@@ -667,7 +667,7 @@ def _completeness_honesty(
         and context_status == "complete"
     ):
         return False
-    if source_read_status == "budget_exceeded" and context_status == "complete":
+    if source_read_status not in (None, "ok") and context_status == "complete":
         return False
     if source_read_status not in (None, "ok") and source_read_fragments != []:
         return False
@@ -1042,14 +1042,15 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
                     actual_read_status = "stale"
                 source_read_status_match = actual_read_status == expected_read_status
 
-            conflict_probe = (
-                case_id == "gq-036-conflicting-versions"
-                and first_pack["status"] == "integrity_warning"
-                and any(
-                    item.get("code") == "version_conflict"
-                    for item in first_pack.get("Diagnostics", [])
+            conflict_probe = None
+            if case_id == "gq-036-conflicting-versions":
+                conflict_probe = (
+                    first_pack["status"] == "integrity_warning"
+                    and any(
+                        item.get("code") == "version_conflict"
+                        for item in first_pack.get("Diagnostics", [])
+                    )
                 )
-            )
 
             fallback_rate = round(
                 first_resolve_calls / max(1, first.search.engine_result_count), 4
