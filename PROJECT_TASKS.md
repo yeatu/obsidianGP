@@ -40,6 +40,7 @@
 | [#137](https://github.com/yeatu/obsidianGP/issues/137) | E — gated | Additive V2.2 `sfra.issue.v2` protocol | После #136; v1/TransportStatusV2 сохранить |
 | [#138](https://github.com/yeatu/obsidianGP/issues/138) | E — gated | Synthetic V2.2 → V2.1 → E3/E1/E2 → B1 query conformance | После #134/#136/#137 |
 | [#224](https://github.com/yeatu/obsidianGP/issues/224) | A2 RELEASED / no verdict | Старый panel review #223 target superseded | Fresh review будет привязан к новому panel HEAD |
+| [#233](https://github.com/yeatu/obsidianGP/issues/233) | A — свежий REVIEW_REQUEST / OPEN | Независимая проверка обновлённой панели PR #223 | Exact HEAD/base/merge-ref зафиксированы в #233; #224 закрыта как stale target без verdict |
 
 ### Bundle stack — текущая точка остановки
 
@@ -59,7 +60,7 @@
 | [#84 — gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Open / Draft / unmerged | HEAD `64924c...`, base `f665ae...`; five benchmark paths; #229 владеет current-main sync |
 | [#170 — immutable writer](https://github.com/yeatu/obsidianGP/pull/170) | Open / stacked / unmerged | HEAD `b0bcf7...`, base #162 HEAD `c5f84...`; four writer files. Не содержит #184/#204/#228 |
 | [#179 — writer correction](https://github.com/yeatu/obsidianGP/pull/179) | Open / stacked / unmerged | HEAD `035a79...`, base #170 HEAD `b0bcf7...`; четыре writer-owned files; A1 #180 accepted только historical correction target; #196 blocked |
-| [#223 — panel refresh](https://github.com/yeatu/obsidianGP/pull/223) | Open / unmerged | Branch уже содержит current main `8f1e427...` как first parent; panel file сейчас обновляется этим PR, exact review #224 RELEASED without verdict |
+| [#223 — panel refresh](https://github.com/yeatu/obsidianGP/pull/223) | Open / unmerged | Current-main diff — only `PROJECT_TASKS.md`; exact A review request #233 targets the latest panel HEAD; #224 is stale/released |
 
 ### Benchmark quality evidence
 
