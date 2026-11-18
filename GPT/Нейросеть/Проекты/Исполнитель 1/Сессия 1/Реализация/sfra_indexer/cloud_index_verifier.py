@@ -339,6 +339,12 @@ def _read_regular(path: Path) -> bytes:
         raw = b"".join(chunks)
         if signature_before != signature_after or len(raw) != after.st_size:
             raise CloudIndexVerificationError("filesystem_race")
+        try:
+            path_after = path.lstat()
+        except OSError as exc:
+            raise CloudIndexVerificationError("filesystem_race") from exc
+        if (path_after.st_dev, path_after.st_ino) != (opened.st_dev, opened.st_ino):
+            raise CloudIndexVerificationError("filesystem_race")
         return raw
     finally:
         os.close(fd)
