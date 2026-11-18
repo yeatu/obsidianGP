@@ -253,7 +253,7 @@ the Git-backed v1 state manifest and restore workflow:
 
 The verifier opens SQLite read-only, enables query-only mode, checks the exact
 schema_info.schema_version value (currently 2), and never calls the mutating
-database connection or migration path. Git revisions and opaque immutable-import
-IDs remain separate tagged variants. The report establishes consistency of the
+database connection or migration path. The public SourceRevision union keeps Git revisions and opaque immutable-import
+IDs as separate tagged variants. The report establishes consistency of the
 materialized snapshot; it does not authenticate source origin or provider
 immutability. All tests use temporary synthetic fixtures only.
