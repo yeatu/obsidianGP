@@ -57,3 +57,9 @@ python -m sfra_mcp_server
 ~~~
 
 CLI строит verified search service graph до запуска stdio server. Ошибка конфигурации или composition завершает процесс с кодом 2; удалённый transport API не предоставляется.
+
+## Передача на независимую проверку
+
+Issue #38 реализована в пределах утверждённого scope и передана независимой роли A через [Review Request #65](https://github.com/yeatu/obsidianGP/issues/65). Проверяемый code baseline: `6f356763abe9b6d55dd1fc66839c6b01a7023f2d`; dedicated fixture CI run [44228442072](https://github.com/yeatu/obsidianGP/actions/runs/44228442072) завершился success, 24 tests passed, SDK `mcp==2.3.0`.
+
+PR #47 не слит. После A review требуется C acceptance, так как изменение затрагивает межмодульную composition и публичную security boundary. `read_source` не включён в runtime composition до принятия #36/#51 и C acceptance.
