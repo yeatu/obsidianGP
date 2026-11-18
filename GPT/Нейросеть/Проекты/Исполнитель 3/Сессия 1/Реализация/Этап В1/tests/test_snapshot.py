@@ -70,6 +70,7 @@ def test_binds_snapshot_to_actual_git_heads_and_exact_manifest_bytes(tmp_path):
 
     pinned = _binder(sidecar, vault_git, vault_root, manifest)
 
+    assert type(pinned) is PinnedSnapshot
     assert pinned.ref.vault_commit_sha == manifest["source_commit"]
     assert pinned.ref.sidecar_commit_sha == "b" * 40
     assert pinned.ref.manifest_sha256 == _sha(raw)
