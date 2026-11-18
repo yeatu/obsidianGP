@@ -187,3 +187,54 @@ def test_status_store_ignores_markers_with_missing_or_wrong_bot_id():
         assert store.bind_request_body_sha256(21, digest) == digest
         assert len(client.created) == 1
         assert "state=STARTED" in client.created[0]
+
+
+def test_handler_rejects_noncanonical_gold_case_projection():
+    from sfra_web_adapter.handler import _safe_synthetic_projection
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus
+    import pytest
+    corpus = SyntheticGoldCorpus.load_default()
+    case = corpus.case_for_query("режимы установки Факел и ограничение переключения")
+    assert case is not None and case.case_id == "gq-001-large-heading-scope"
+    projection = corpus.evidence(case)
+    with pytest.raises(ValueError, match="case is not approved"):
+        _safe_synthetic_projection(projection, "search_vault")
+
+
+def test_handler_rejects_noncanonical_node_even_with_valid_corpus_hash_and_path():
+    from sfra_web_adapter.handler import _safe_synthetic_projection, CANONICAL_CASE_ID
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus, CORPUS_ID, CORPUS_SHA256, CORPUS_VERSION
+    import pytest
+    corpus = SyntheticGoldCorpus.load_default()
+    node = corpus.node("torch_modes")
+    assert node is not None
+    forged = {
+        "schema_version": "sfra.web.synthetic-evidence.v1",
+        "corpus_id": CORPUS_ID,
+        "corpus_version": CORPUS_VERSION,
+        "corpus_sha256": CORPUS_SHA256,
+        "case_id": CANONICAL_CASE_ID,
+        "operation": "read_source",
+        "evidence": [{
+            "node_id": node.node_id,
+            "source_path": node.source_path,
+            "content_hash": node.content_hash,
+            "line_start": node.line_start,
+            "line_end": node.line_end,
+            "excerpt": node.raw_text,
+        }],
+    }
+    with pytest.raises(ValueError, match="node is not approved"):
+        _safe_synthetic_projection(forged, "read_source")
+
+
+def test_handler_rejects_canonical_node_with_tampered_excerpt_even_when_hash_field_is_pinned():
+    from sfra_web_adapter.handler import _safe_synthetic_projection
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus
+    import pytest
+    corpus = SyntheticGoldCorpus.load_default()
+    case = corpus.case_for_query("обычный лимит шлюза и исключение для учений")
+    projection = corpus.evidence(case)
+    projection["evidence"][0]["excerpt"] += "forged"
+    with pytest.raises(ValueError, match="excerpt does not match"):
+        _safe_synthetic_projection(projection, "search_vault")
