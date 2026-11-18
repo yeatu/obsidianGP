@@ -75,7 +75,9 @@ def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
     mapping = runner._canonicalize_synthetic_node_ids(database_path)
     second_mapping = runner._canonicalize_synthetic_node_ids(database_path)
 
-    assert mapping == second_mapping
+    # The old-ID keys naturally change after the first pass; the canonical
+    # destination sequence must remain identical on a repeated pass.
+    assert list(mapping.values()) == list(second_mapping.values())
     connection = sqlite3.connect(database_path)
     try:
         ids = [row[0] for row in connection.execute(
