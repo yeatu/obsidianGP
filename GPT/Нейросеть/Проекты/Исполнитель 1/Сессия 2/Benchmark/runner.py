@@ -498,6 +498,10 @@ class CountingSourceAPI:
         self.read_calls = 0
         self.resolve_calls = 0
 
+    def reset(self) -> None:
+        self.read_calls = 0
+        self.resolve_calls = 0
+
     def read_source_scope(self, *args: Any, **kwargs: Any):
         self.read_calls += 1
         return self._source_api.read_source_scope(*args, **kwargs)
@@ -507,10 +511,47 @@ class CountingSourceAPI:
         return self._source_api.resolve_current_node(*args, **kwargs)
 
 
+class CountingSourceReader:
+    """Count source reads by origin at the existing E3 reader boundary."""
+
+    def __init__(self, source_reader: Any):
+        self._source_reader = source_reader
+        self.mode = "normal"
+        self.reset()
+
+    @property
+    def pinned_snapshot(self):
+        return self._source_reader.pinned_snapshot
+
+    def reset(self) -> None:
+        self.mode = "normal"
+        self.e2_exact_source_reads = 0
+        self.dependency_resolutions = 0
+        self.dependency_source_reads = 0
+        self.explicit_source_reads = 0
+
+    def read_node(self, *args: Any, **kwargs: Any):
+        self.e2_exact_source_reads += 1
+        return self._source_reader.read_node(*args, **kwargs)
+
+    def resolve_current_node(self, *args: Any, **kwargs: Any):
+        if self.mode == "dependency":
+            self.dependency_resolutions += 1
+        return self._source_reader.resolve_current_node(*args, **kwargs)
+
+    def read_scope(self, *args: Any, **kwargs: Any):
+        if self.mode == "dependency":
+            self.dependency_source_reads += 1
+        else:
+            self.explicit_source_reads += 1
+        return self._source_reader.read_scope(*args, **kwargs)
+
+
 class ScenarioResolver:
-    def __init__(self, source_reader: Any, missing_ids: set[str]):
+    def __init__(self, source_reader: CountingSourceReader, missing_ids: set[str]):
         from sfra_context_integrations.dependency_resolver import E1DependencyResolver
         self._delegate = E1DependencyResolver(source_reader)
+        self._source_reader = source_reader
         self._missing_ids = missing_ids
 
     @property
@@ -523,7 +564,12 @@ class ScenarioResolver:
     def resolve_node(self, node_id: str, snapshot: Any):
         if node_id in self._missing_ids:
             return None
-        return self._delegate.resolve_node(node_id, snapshot)
+        previous_mode = self._source_reader.mode
+        self._source_reader.mode = "dependency"
+        try:
+            return self._delegate.resolve_node(node_id, snapshot)
+        finally:
+            self._source_reader.mode = previous_mode
 
 
 class ControlledE2SearchAdapter:
@@ -689,6 +735,35 @@ def _token_efficiency(
     return round(1.0 - included_source_tokens / baseline_tokens, 4)
 
 
+def _relevant_context_source_paths(
+    case: Mapping[str, Any],
+    node_map: Mapping[str, Mapping[str, Any]],
+) -> tuple[str, ...]:
+    """Return unique source documents for required + allowed additional nodes."""
+    context = case["context_pack"]
+    relevant_ids = set(context["required_node_ids"]) | set(
+        context["allowed_additional_node_ids"]
+    )
+    missing = relevant_ids.difference(node_map)
+    if missing:
+        raise BenchmarkError("A relevant context node has no validated source document")
+    return tuple(sorted({str(node_map[node_id]["source_path"]) for node_id in relevant_ids}))
+
+
+def _fallback_rate(dependency_source_reads: int, engine_result_count: int) -> float:
+    """Dependency source reads divided by max(1, initial E2 engine results)."""
+    if (
+        isinstance(dependency_source_reads, bool)
+        or not isinstance(dependency_source_reads, int)
+        or dependency_source_reads < 0
+        or isinstance(engine_result_count, bool)
+        or not isinstance(engine_result_count, int)
+        or engine_result_count < 0
+    ):
+        raise BenchmarkError("Fallback Rate counts must be non-negative integers")
+    return round(dependency_source_reads / max(1, engine_result_count), 4)
+
+
 def _render_markdown(report: Mapping[str, Any]) -> str:
     lines = [
         "# SFRA synthetic gold benchmark",
@@ -739,9 +814,13 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
         "Status mismatches are quality diagnostics, not hidden or rewritten gates. "
         "Recall and precision are measured against the accepted labels and do not "
         "modify the corpus. Token efficiency is 1 - Included raw_text tokens / "
-        "relevant full-document tokens, using the same o200k_base tokenizer on both "
-        "sides. Source-read budget_exceeded cannot coexist with Context Pack status=complete. "
-        "Raw source text, query text, source paths and hashes are not written to the report.",
+        "relevant full-document tokens for unique documents containing required and "
+        "allowed-additional nodes, using o200k_base on both sides. Fallback Rate is "
+        "dependency source_scope reads / max(1, initial E2 engine result count); "
+        "failed address lookups count zero, while E2 exact-hit reads and explicit "
+        "SourceReadRequest reads are reported separately. Source-read budget_exceeded "
+        "cannot coexist with Context Pack status=complete. Raw source text, query text, "
+        "source paths and hashes are not written to the report.",
         "",
     ])
     return "\n".join(lines)
@@ -785,7 +864,8 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
             expected_sidecar_branch="sfra-state",
         )
         counted_api = CountingSourceAPI(e1)
-        source_reader = E1SourceReader(counted_api, pinned, counter)
+        base_source_reader = E1SourceReader(counted_api, pinned, counter)
+        source_reader = CountingSourceReader(base_source_reader)
         reverse_map = {
             e1_id: gold_id for gold_id, e1_id in fixture["gold_to_e1"].items()
         }
@@ -912,11 +992,28 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
             source_read = _source_read_for_case(case, fixture, node_map)
             source_reads = () if source_read is None else (source_read,)
 
-            counted_api.read_calls = 0
-            counted_api.resolve_calls = 0
+            counted_api.reset()
+            source_reader.reset()
             first = pipeline.run(request, source_reads=source_reads)
             first_read_calls = counted_api.read_calls
             first_resolve_calls = counted_api.resolve_calls
+            first_e2_exact_source_reads = source_reader.e2_exact_source_reads
+            first_dependency_resolutions = source_reader.dependency_resolutions
+            first_dependency_source_reads = source_reader.dependency_source_reads
+            first_explicit_source_reads = source_reader.explicit_source_reads
+            classified_source_reads = (
+                first_e2_exact_source_reads
+                + first_dependency_source_reads
+                + first_explicit_source_reads
+            )
+            if classified_source_reads != first_read_calls:
+                raise BenchmarkError(
+                    "Source-read origin counters do not reconcile with E1 read_source_scope calls"
+                )
+            if first_dependency_resolutions != first_resolve_calls:
+                raise BenchmarkError(
+                    "Dependency address-resolution counters do not reconcile with E1 resolve_current_node calls"
+                )
             first_pack = first.context_pack
             first_retrieved_ids = {
                 reverse_map.get(item.node_id, "unannotated")
@@ -936,8 +1033,8 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
                 for item in first_pack.get("Deferred", [])
             }
 
-            counted_api.read_calls = 0
-            counted_api.resolve_calls = 0
+            counted_api.reset()
+            source_reader.reset()
             second = pipeline.run(request, source_reads=source_reads)
             second_pack = second.context_pack
             second_ids = [
@@ -992,13 +1089,7 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
                 )
             )
 
-            relevant_paths = {
-                next(
-                    doc["source_path"] for doc in corpus["documents"]
-                    if any(node["node_id"] == node_id for node in doc["nodes"])
-                )
-                for node_id in expected_context
-            }
+            relevant_paths = _relevant_context_source_paths(case, node_map)
             token_efficiency = _token_efficiency(
                 counter,
                 first_included,
@@ -1055,8 +1146,10 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
                     )
                 )
 
-            fallback_rate = round(
-                first_resolve_calls / max(1, first.search.engine_result_count), 4
+            fallback_rate_denominator = first.search.engine_result_count
+            fallback_rate = _fallback_rate(
+                first_dependency_source_reads,
+                fallback_rate_denominator,
             )
             tool_cost = 1 + first_read_calls + first_resolve_calls
             gate_passed = all([
@@ -1077,6 +1170,11 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
                 "source_fidelity": source_fidelity,
                 "facet_coverage": facet_coverage,
                 "fallback_rate": fallback_rate,
+                "fallback_rate_denominator": fallback_rate_denominator,
+                "dependency_source_reads": first_dependency_source_reads,
+                "dependency_resolutions": first_dependency_resolutions,
+                "e2_exact_source_reads": first_e2_exact_source_reads,
+                "explicit_source_reads": first_explicit_source_reads,
                 "tool_cost": tool_cost,
                 "expected_status": expected_status,
                 "actual_status": actual_status,
@@ -1113,6 +1211,18 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
     }
     aggregate["mean_tool_cost"] = _metric_average(
         [float(item["tool_cost"]) for item in per_case]
+    )
+    aggregate["dependency_source_reads"] = sum(
+        item["dependency_source_reads"] for item in per_case
+    )
+    aggregate["dependency_resolutions"] = sum(
+        item["dependency_resolutions"] for item in per_case
+    )
+    aggregate["e2_exact_source_reads"] = sum(
+        item["e2_exact_source_reads"] for item in per_case
+    )
+    aggregate["explicit_source_reads"] = sum(
+        item["explicit_source_reads"] for item in per_case
     )
     failed = [item for item in per_case if not item["gate_passed"]]
     try:
@@ -1157,6 +1267,17 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
             "e1_package": "sfra-structural-indexer",
             "e3_package": "sfra-context-integrations",
             "b1_package": "sfra-context-builder",
+        },
+        "metric_definitions": {
+            "token_efficiency": (
+                "1 - Included raw_text o200k_base tokens / full-document o200k_base tokens "
+                "for unique documents containing required_node_ids union allowed_additional_node_ids."
+            ),
+            "fallback_rate": (
+                "dependency_source_reads / max(1, initial E2 engine_result_count); "
+                "counts actual dependency read_source_scope calls, not address-resolution attempts. "
+                "E2 exact-hit reads and explicit SourceReadRequest reads are separate."
+            ),
         },
         "aggregate": aggregate,
         "gate_summary": {
