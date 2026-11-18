@@ -1,4 +1,4 @@
-"""Test-only factory for sealed PinnedSnapshot fixtures.
+"""Test-only factory for synthetic PinnedSnapshot fixtures.
 
 Production code must use sfra_context_integrations.snapshot.bind_pinned_snapshot.
 This helper is intentionally kept under tests/fixtures so a no-op verifier cannot
@@ -26,7 +26,7 @@ def make_test_pinned_snapshot(
     manifest: Mapping[str, Any],
     verifier: Callable[[], None] | None = None,
 ) -> PinnedSnapshot:
-    """Build an explicitly test-only snapshot with a controllable verifier."""
+    """Build a synthetic snapshot with a test-controlled verifier callback."""
     callback = verifier if verifier is not None else (lambda: None)
     # This constructor bypass is intentionally confined to the test fixture.
     # Production code has no importable verifier minting class/token and must
