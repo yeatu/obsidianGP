@@ -42,7 +42,7 @@
 ### Конфликтующие и завершённые handoff’ы
 
 - [#119](https://github.com/yeatu/obsidianGP/issues/119) — CLOSED / C3 accepted. Полный synthetic bundle builder/verifier и corrections #173/#204/#228 merged в main через PR #162.
-- [#240](https://github.com/yeatu/obsidianGP/issues/241) — CLOSED / duplicate of canonical E1 verifier task #240. It must not be claimed separately.
+- [#241](https://github.com/yeatu/obsidianGP/issues/241) — CLOSED / duplicate of canonical E1 verifier task #240. It must not be claimed separately.
 - [#208](https://github.com/yeatu/obsidianGP/issues/208) — CLOSED / C3 coordination decision completed. Порядок #235 → #209 → #184 → #162 выполнен; final parent merged.
 - [#232](https://github.com/yeatu/obsidianGP/issues/232) — CLOSED / completed by final PR #162 merge; отдельная синхронизация больше не требуется.
 - [#236](https://github.com/yeatu/obsidianGP/issues/236) — CLOSED / A1 REVIEW_ACCEPTED + RELEASED для exact bundle parent/child tree и merge-ref `c5b32e0...`.
