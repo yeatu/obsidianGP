@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from sfra_context_builder.models import SnapshotRef
 from sfra_context_integrations import ContextIntegrationResult, ReadSourceRequest, ReadSourceResult, SourceFragment
 from sfra_issue_core import IssueWorkerCore
+from .corpus import SyntheticCase, SyntheticGoldCorpus
 from .github_api import GitHubREST
 from .handler import handle_opened_event
 from .ports import GitHubCommentStatusStore, GitHubIssueReader
@@ -17,44 +18,36 @@ SNAPSHOT = SnapshotRef(
     sidecar_commit_sha="2" * 40,
     manifest_sha256="sha256:" + "3" * 64,
 )
-GOLD_NODE = {
-    "node_id": "manual_intro",
-    "source_path": "synthetic/operations/manual.md",
-    "content_hash": "sha256:04b8c940ba7056617a1fc4d4e45eff787033888862cd291eb9770f3fe6ea0f77",
-    "line_start": 1,
-    "line_end": 2,
-    "raw_text": "Операционный справочник станции «Люмен».\nРуководство относится к тестовому объекту Л-7.\n",
-}
+CANONICAL_QUERY = "обычный лимит шлюза и исключение для учений"
 
 class SyntheticSearchApplication:
-    """Injected V2.1-shaped port backed by one accepted synthetic gold-corpus node."""
-    def __init__(self):
+    """V2.1-shaped search port restricted to exact cases in gold corpus v1.0.0."""
+    def __init__(self, corpus: SyntheticGoldCorpus | None = None):
+        self.corpus = corpus or SyntheticGoldCorpus.load_default()
         self.last_projection = None
 
     def search(self, request):
-        self.last_projection = {
-            "schema_version": 1,
-            "operation": "search_vault",
-            "items": [{
-                "node_id": GOLD_NODE["node_id"],
-                "source_path": GOLD_NODE["source_path"],
-                "content_hash": GOLD_NODE["content_hash"],
-                "line_start": GOLD_NODE["line_start"],
-                "line_end": GOLD_NODE["line_end"],
-                "excerpt": GOLD_NODE["raw_text"],
-            }],
-        }
+        case = self.corpus.case_for_query(request.query)
+        nodes = tuple(self.corpus.node(node_id) for node_id in case.node_ids) if case else ()
+        nodes = tuple(node for node in nodes if node is not None)
+        self.last_projection = self.corpus.evidence(case) if case is not None and nodes else None
+        included = [{"node_id": node.node_id, "raw_text": node.raw_text} for node in nodes]
+        candidates = tuple(SimpleNamespace(
+            node_id=node.node_id,
+            source_path=node.source_path,
+            content_hash=node.content_hash,
+        ) for node in nodes)
         pack = {
-            "Status": "complete",
-            "Included": [{"node_id": GOLD_NODE["node_id"], "raw_text": GOLD_NODE["raw_text"]}],
+            "Status": "complete" if nodes else "not_found",
+            "Included": included,
             "Deferred": [],
-            "Coverage": {"covered": 1, "uncovered": 0},
+            "Coverage": {"covered": len(nodes), "uncovered": 0},
             "Diagnostics": [],
         }
         return ContextIntegrationResult(
             snapshot=SNAPSHOT,
             search=SimpleNamespace(
-                batch=SimpleNamespace(inspected_count=1, candidates=(object(),)),
+                batch=SimpleNamespace(inspected_count=len(candidates), candidates=candidates),
                 diagnostics=(),
             ),
             context_pack=pack,
@@ -62,34 +55,26 @@ class SyntheticSearchApplication:
         )
 
 class SyntheticReadSourceApplication:
-    """Mock-only source port; never opens a path, database or Vault."""
-    def __init__(self):
+    """Mock-only source port backed by the same pinned gold corpus."""
+    def __init__(self, corpus: SyntheticGoldCorpus | None = None):
+        self.corpus = corpus or SyntheticGoldCorpus.load_default()
         self.last_projection = None
 
     def read(self, request: ReadSourceRequest):
-        if request.node_id != GOLD_NODE["node_id"] or request.expected_hash != GOLD_NODE["content_hash"]:
+        node = self.corpus.node(request.node_id)
+        case = self.corpus.case_for_node(request.node_id)
+        if node is None or case is None or request.expected_hash != node.content_hash:
             self.last_projection = None
             return ReadSourceResult(request=request, status="not_found", fragments=())
         fragment = SourceFragment(
             role="target",
-            node_id=GOLD_NODE["node_id"],
-            source_path=GOLD_NODE["source_path"],
-            content_hash=GOLD_NODE["content_hash"],
-            raw_text=GOLD_NODE["raw_text"],
+            node_id=node.node_id,
+            source_path=node.source_path,
+            content_hash=node.content_hash,
+            raw_text=node.raw_text,
             index_generation=1,
         )
-        self.last_projection = {
-            "schema_version": 1,
-            "operation": "read_source",
-            "items": [{
-                "node_id": fragment.node_id,
-                "source_path": fragment.source_path,
-                "content_hash": fragment.content_hash,
-                "line_start": GOLD_NODE["line_start"],
-                "line_end": GOLD_NODE["line_end"],
-                "excerpt": fragment.raw_text,
-            }],
-        }
+        self.last_projection = self.corpus.evidence(case, (node.node_id,))
         return ReadSourceResult(request=request, status="ok", fragments=(fragment,))
 
 def main() -> int:
@@ -103,10 +88,11 @@ def main() -> int:
         raise RuntimeError("GitHub event payload is unavailable")
     with open(event_path, "r", encoding="utf-8") as stream:
         payload = json.load(stream)
+    corpus = SyntheticGoldCorpus.load_default()
     client = GitHubREST(token=token, repository=repository)
     store = GitHubCommentStatusStore(client)
-    search_application = SyntheticSearchApplication()
-    read_source_application = SyntheticReadSourceApplication()
+    search_application = SyntheticSearchApplication(corpus)
+    read_source_application = SyntheticReadSourceApplication(corpus)
     worker = IssueWorkerCore(
         issue_reader=GitHubIssueReader(client),
         status_store=store,
