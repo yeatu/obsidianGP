@@ -49,3 +49,13 @@ For a Git-tagged synthetic fixture, the public E1 v1 `verify_state_directory()` 
 
 All fixture tests use temporary source directories and disposable SQLite files created by the E1 public `index_vault()` API. No real Vault, production SQLite, sidecar, manifest, `sfra-state`, provider, credentials, upload, workflow dispatch, catalogue activation or production path is used.
 
+
+## Canonical attestation and verification boundary
+
+The canonical inventory root is `{ "format": "sfra.e1.markdown-inventory.v1", "documents": [...] }`, serialized as UTF-8 JSON with `ensure_ascii=False`, sorted keys, compact separators, no trailing LF and duplicate keys rejected. Each document row is exactly `path`, `byte_size`, `sha256`; paths sort by their UTF-8 byte sequence. `markdown_inventory_sha256` covers these exact canonical bytes and is independent from the complete source archive SHA-256/size.
+
+The E1 cloud-index attestation uses `sfra.e1.cloud-index-attestation.v1`. It includes the tagged source revision, inventory digest/count, installed E1 indexer identity, parser name/version pairs from active document rows, exact `schema_info.schema_version` (currently `schema_info_version=2`), database path/full-byte hash/size and document/node/passage counts. It intentionally excludes provider, bucket/object keys, object version IDs and caller-supplied snapshot IDs.
+
+SQLite is opened read-only (`mode=ro`) with `query_only=ON`; the builder never invokes mutating E1 connect/migration methods. It verifies integrity and foreign keys, requires exact schema_info version 2, compares active documents to the inventory by exact path/byte-size/full-file hash, and validates active node Content Hash values against exact UTF-8 raw_text. The Git-backed fixture also goes through the public `verify_state_directory()` API on a disposable copy. For immutable imports that legacy verifier is deliberately skipped because its v1 manifest is Git-shaped; the attestation retains the tagged `immutable_import` identity for the separately versioned E1 verifier. No `import_id` is coerced into a Git SHA.
+
+These checks are a bundle consistency/integrity preflight. The additive E1 cloud verifier remains responsible for the deeper database/document/node/event consistency guarantees over the already-materialized root. The bundle builder does not set catalogue state to VERIFIED or ACTIVE.
