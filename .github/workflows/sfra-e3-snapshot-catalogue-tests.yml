@@ -1,0 +1,40 @@
+name: SFRA E3 snapshot catalogue fixture tests
+
+on:
+  push:
+    branches:
+      - "executor-3/issue-118-snapshot-catalogue"
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/src/sfra_context_integrations/snapshot_catalogue.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/test_snapshot_catalogue.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/SNAPSHOT_CATALOGUE.md"
+      - ".github/workflows/sfra-e3-snapshot-catalogue-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot-catalogue-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/pyproject.toml"
+      - name: Install B1 core and E3 package
+        shell: bash
+        run: |
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$E3_DIR[test]"
+          python -m pip install -e "$E2_DIR"
+      - name: Run snapshot catalogue tests
+        run: |
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pytest -q "$E3_DIR/tests/test_snapshot_catalogue.py"
