@@ -36,7 +36,7 @@ def test_comment_history_uses_bounded_pagination(monkeypatch):
     calls = []
     def paged(method, path, payload=None):
         calls.append(path)
-        if "page=1" in path:
+        if path.endswith("page=1"):
             return [{"body": str(i)} for i in range(100)]
         return [{"body": "last"}]
     monkeypatch.setattr(instance, "_request", paged)
