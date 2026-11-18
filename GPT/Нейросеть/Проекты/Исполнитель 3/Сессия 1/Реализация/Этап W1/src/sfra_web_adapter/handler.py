@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 from typing import Mapping, Protocol
+from sfra_issue_core import validate_transport_status_v2
 from .event import OpenedIssueRequest, parse_opened_issue_event
 from .ledger import MarkerLedger
 
@@ -19,6 +20,7 @@ def _safe_status_mapping(status: object) -> dict[str, object]:
     value = method()
     if not isinstance(value, Mapping):
         raise TypeError("transport status must be a mapping")
+    value = validate_transport_status_v2(value)
     keys = {
         "status_schema_version", "issue_number", "request_id", "operation",
         "transport_status", "request_body_sha256", "worker_commit_sha",
