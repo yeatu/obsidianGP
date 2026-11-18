@@ -25,8 +25,10 @@ class SyntheticSearchApplication:
     def __init__(self, corpus: SyntheticGoldCorpus | None = None):
         self.corpus = corpus or SyntheticGoldCorpus.load_default()
         self.last_projection = None
+        self.calls = 0
 
     def search(self, request):
+        self.calls += 1
         case = self.corpus.case_for_query(request.query)
         nodes = tuple(self.corpus.node(node_id) for node_id in case.node_ids) if case else ()
         nodes = tuple(node for node in nodes if node is not None)
@@ -59,8 +61,10 @@ class SyntheticReadSourceApplication:
     def __init__(self, corpus: SyntheticGoldCorpus | None = None):
         self.corpus = corpus or SyntheticGoldCorpus.load_default()
         self.last_projection = None
+        self.calls = 0
 
     def read(self, request: ReadSourceRequest):
+        self.calls += 1
         node = self.corpus.node(request.node_id)
         case = self.corpus.case_for_node(request.node_id)
         if node is None or case is None or request.expected_hash != node.content_hash:
