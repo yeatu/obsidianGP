@@ -163,6 +163,14 @@ def test_snapshot_module_exposes_no_verifier_minting_symbols():
     assert not hasattr(snapshot_module, "_SNAPSHOT_VERIFIER_SEAL")
 
 
+def test_unregistered_snapshot_fails_closed(tmp_path):
+    # Bypassing __init__ does not produce a trusted instance without registry binding.
+    unregistered = object.__new__(PinnedSnapshot)
+
+    with pytest.raises(SnapshotBindingError, match="no active verifier binding"):
+        unregistered.verify_current()
+
+
 def test_rejects_vault_root_outside_pinned_git_checkout(tmp_path):
     sidecar, vault_git, _, manifest, _, _ = _fixture(tmp_path)
     outside = tmp_path / "elsewhere"
