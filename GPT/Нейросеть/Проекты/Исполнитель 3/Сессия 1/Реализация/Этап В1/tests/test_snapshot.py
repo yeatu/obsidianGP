@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
 import hashlib
 import json
 
@@ -141,20 +140,20 @@ def test_pinned_snapshot_rejects_public_direct_construction_with_noop(tmp_path):
         )
 
 
-def test_bound_verifier_callback_cannot_be_replaced(tmp_path):
+def test_bound_verifier_callback_is_not_exposed_or_rebindable(tmp_path):
     sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
     pinned = _binder(sidecar, vault_git, vault_root, manifest)
 
-    # The original factory-created verifier is active before any attempted bypass.
-    pinned.verify_current()
+    # No mutable function object is reachable through the snapshot instance.
+    assert not hasattr(pinned, "_verifier_callback")
+    with pytest.raises(AttributeError):
+        pinned._verifier_callback.__code__ = (lambda: None).__code__
 
-    with pytest.raises(FrozenInstanceError):
-        pinned._verifier_callback = lambda: None
+    # Even the private, one-shot registrar cannot replace an existing binding.
+    with pytest.raises(SnapshotBindingError, match="already has an active verifier"):
+        snapshot_module._register_snapshot_verifier(pinned, lambda: None)
 
-    with pytest.raises(FrozenInstanceError):
-        del pinned._verifier_callback
-
-    database.write_bytes(b"replacement after attempted verifier replacement")
+    database.write_bytes(b"replacement after attempted verifier mutation")
     with pytest.raises(SnapshotBindingError, match="SQLite database digest changed"):
         pinned.verify_current()
 
