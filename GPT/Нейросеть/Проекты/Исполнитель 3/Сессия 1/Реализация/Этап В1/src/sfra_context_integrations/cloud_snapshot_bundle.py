@@ -510,7 +510,17 @@ def _inspect_database_bytes(
                 if not isinstance(node_id, str) or not node_id or node_id in seen_node_ids:
                     raise BundleIntegrityError("active E1 nodes contain missing or duplicate Node IDs")
                 seen_node_ids.add(node_id)
-                expected_hash = _sha256(raw_text.encode("utf-8", errors="strict")) if isinstance(raw_text, str) else None
+                if not isinstance(raw_text, str):
+                    raise BundleIntegrityError("active E1 node raw_text must be a UTF-8 text string")
+                if not isinstance(content_hash, str) or not content_hash:
+                    raise BundleIntegrityError("active E1 node Content Hash must be a non-empty string")
+                try:
+                    raw_text_bytes = raw_text.encode("utf-8", errors="strict")
+                except UnicodeEncodeError as exc:
+                    raise BundleIntegrityError(
+                        "active E1 node raw_text is not valid strict UTF-8 text"
+                    ) from exc
+                expected_hash = _sha256(raw_text_bytes)
                 if content_hash != expected_hash:
                     raise BundleIntegrityError("active E1 node Content Hash does not match exact raw_text bytes")
 
