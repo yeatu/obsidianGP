@@ -1,83 +1,116 @@
 # SFRA — оперативная панель проекта
 
-> Краткая сводка текущего состояния и навигация по активной работе.  
-> **Источник истины по задаче:** соответствующая GitHub Issue и её последние действующие события.  
-> **Нормативный протокол:** [Issue #20 — Governance Protocol v2](https://github.com/yeatu/obsidianGP/issues/20).  
-> Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
+> Краткая точка входа для участников. Источник истины по каждой задаче — её GitHub Issue и последние действующие события. Нормативный процесс — [Issue #20, Governance Protocol v2.4](https://github.com/yeatu/obsidianGP/issues/20). Панель не заменяет CLAIM, RELEASE, review, CI или решения C.
 
-**Снимок проверен:** 2026-11-18  
-**Main HEAD before this dashboard update:** `6f655e77a8071445544f77ee4b8c75278649e100`  
-**Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
+**Снимок:** 2026-11-18  
+**Текущий main HEAD:** `f665ae7251387ee86b3f5adb48662b79406f392b`  
+**Последний кодовый baseline:** `553392dbbe9d3782683593bb92b88ac3ad6d9721`  
+**Изменение main после baseline:** два коммита с принятым документационным исправлением `CLOUD_SNAPSHOT_V2.md` (#197/#198); кодовые компоненты не менялись.
 
-## 1. Текущий этап
+## 1. Целевая архитектура
 
-**SFRA MVP — Local Retrieval Interface + Measured Quality.**
+**Web-путь:** ChatGPT Web / mobile → GitHub Issues → GitHub Actions → GitHub-hosted Runner → существующие SFRA services/core → ответ в исходном Issue → ChatGPT читает результат через GitHub integration.
 
-Координаторское решение и декомпозиция зафиксированы в [Issue #35](https://github.com/yeatu/obsidianGP/issues/35), закрытой после создания дочерних задач.
+- Личный компьютер владельца не является runtime-зависимостью и может быть выключен.
+- GitHub-hosted Runner эфемерен; он не является постоянным хранилищем Vault, индекса, manifest, sidecar или request state.
+- Используются существующие компоненты: E1 structural indexing/source API; E2 retrieval; E3/B1 Context Builder; V2.1 SearchVaultService / ReadSourceService; V2.2 non-production Issue Worker Core. Повторно реализовывать их не нужно.
+- Data plane для будущего cloud execution: immutable snapshot bundles → exact-version identity/catalogue → read-only resolver/materializer. Сейчас это только provider-neutral synthetic implementation; provider, region, storage, import/sync policy и production activation не выбраны.
+- Владелец разрешил публиковать содержимое Vault и производные source metadata в предназначенных для этого ответах. Не вводить blanket redaction. Credentials, tokens, keys, secrets и integrity controls остаются защищёнными. Logs/artifacts/errors сохраняют согласованную минимизацию.
+- Публикация содержимого не означает автоматического разрешения production import/read/index/write, provider provisioning или snapshot activation.
+- Ранее созданные реализации, тесты, схемы, документация, ветки, PR, commits и review trail сохраняются. Новая архитектура не является основанием удалять/переписывать их; возможное повторное использование — по отдельной границе.
 
-Цели этапа:
-- закрыть остаточную границу верификации PinnedSnapshot;
-- реализовать локальный stateless MCP stdio server с двумя read-only инструментами: `search_vault` и `read_source`;
-- подтвердить качество цепочки E2 → E3 → Context Pack на 30–50 synthetic gold cases.
+## 2. Активная очередь и handoff
 
-В main уже находятся E1 structural indexing/source API, E2 lexical retrieval, E3/B1 Context Builder/integration, V2.1 application services и V2.2 non-production Issue core.
+Таблица показывает навигацию и последнее проверенное состояние. Захват/владелец определяется только последним действующим CLAIM в конкретной Issue.
 
-**Важное уточнение по A1-03:** regression на замену sidecar во время E1 read уже присутствует в текущем main (`test_snapshot.py`). Остаточный вопрос уже: публичный `PinnedSnapshot` допускает отсутствие активного verifier, а `verify_current()` тогда становится no-op. Это вынесено в [Issue #36](https://github.com/yeatu/obsidianGP/issues/36). [A1 follow-up](https://github.com/yeatu/obsidianGP/issues/19#issuecomment-6964082653) и координаторская disposition остаются в истории #19; сама #19 не переоткрывается.
+| Issue | Роль / владелец | Следующий результат | Зависимость / граница |
+|---|---|---|---|
+| [#215](https://github.com/yeatu/obsidianGP/issues/215) | E — CLAIMED | Синхронизация integrated bundle PR #209 с current main; свежие fixture workflows; новый integrated A review | P1. Branch #209 уже синхронизирован на HEAD `4839d218...`; E2 должен завершить evidence/handoff и открыть review. #208 запрещает propagation в #184/#162 до A acceptance |
+| [#218](https://github.com/yeatu/obsidianGP/issues/218) | A — свободный REVIEW_REQUEST | Независимый exact-head audit W1 PR #92 | HEAD `42cecfef...` / base `f665ae7...`; 14 W1 files; run #44393224276: 65 passed, worker skipped |
+| [#211](https://github.com/yeatu/obsidianGP/issues/211) | A2 — stale CLAIM, RELEASE requested | Освободить устаревший review target без verdict | HEAD `edbbdff...` / base `553392...`; его заменит integrated review после #215. Не использовать как Gate A |
+| [#208](https://github.com/yeatu/obsidianGP/issues/208) | C3 — active COORDINATOR_DECISION | Условно разрешить branch-only propagation #204 → #184 → #162 после A acceptance | P1. Gate A: exact CI + независимое A принятие полного стека. Gate B: non-force parent-preserving merges. Gate C: только потом writer refresh #196 |
+| [#196](https://github.com/yeatu/obsidianGP/issues/196) | E — blocked / waiting #208 | Обновить writer PR #170/#179 на окончательный принятый bundle parent; fresh integrated writer review | P1 conflict-prevention. Не выполнять до завершения #208 Gate A/B; предыдущие writer reviews относятся только к старым refs |
+| [#204](https://github.com/yeatu/obsidianGP/issues/204) | E2 — correction implementation in PR #209 | Guard до ZIP decompression; implementation и CI handoff завершены, integration evidence ведётся в #215 | Проверять только вместе с #162 + #184; no main merge |
+| [#172](https://github.com/yeatu/obsidianGP/issues/172) | E2 — correction RELEASED; writer stack held | Завершённая writer correction в PR #179: full v2 identity binding + immutable version ID validation | PR #179 остаётся дочерней веткой PR #170. Не принимать writer до final bundle tree и fresh integrated review |
+| [#206](https://github.com/yeatu/obsidianGP/issues/206) | A1 — REVIEW_ACCEPTED / RELEASED | Benchmark exact-head reproducibility review завершён | PR #84 HEAD `c4cff0a...` / base `553392...`; 42 cases: 40 passed / 2 preserved failures; две отчётные пары byte-identical. Не считать качество 42/42 |
+| [#156](https://github.com/yeatu/obsidianGP/issues/156) | E1 — RELEASED | Benchmark determinism correction завершена | PR #84; gold corpus v1.0.0 неизменен; #115 quality failures остаются |
+| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 — W1 parent | После A review #218 — отдельное C acceptance/merge decision; затем одна отмеченная synthetic event round-trip | PR #92 открыт/unmerged. Round-trip ещё не выполнялся; worker остаётся dormant |
+| [#119](https://github.com/yeatu/obsidianGP/issues/119) | E3 — RELEASED / acceptance pending | Принять integrated deterministic bundle builder/verifier | PR #162 + #184 + #209; новый integrated A review появится после #215 |
+| [#125](https://github.com/yeatu/obsidianGP/issues/125) | E3 — RELEASED / writer acceptance pending | Завершить writer gate после bundle acceptance | PR #170 + #179; #196 удерживается до final bundle stack |
+| [#120](https://github.com/yeatu/obsidianGP/issues/120) | E — queued / dependency-gated | Read-only exact-version resolver/materializer | После C acceptance #119; #118 уже принят |
+| [#124](https://github.com/yeatu/obsidianGP/issues/124) | E — queued / dependency-gated | Cross-component lifecycle conformance | После принятия #117–#120 и #125; обязан соблюдать caller-enforced verification order из C3 addendum |
+| [#132](https://github.com/yeatu/obsidianGP/issues/132) | A — analysis accepted; E implementation gated | Additive E1 cloud-index verifier | E1 implementation не открывать до принятия #119 и проверки #142/#131 gates |
+| [#134](https://github.com/yeatu/obsidianGP/issues/134) | E — gated | B1 SnapshotIdentity v2 seam | После #117/#120 и E1 verifier |
+| [#136](https://github.com/yeatu/obsidianGP/issues/136) | E — gated | Verified E3 cloud materialized handle | После #120/#134 и E1 verifier acceptance |
+| [#137](https://github.com/yeatu/obsidianGP/issues/137) | E — gated | Additive V2.2 `sfra.issue.v2` request protocol | После #136; v1/TransportStatusV2 сохранить |
+| [#138](https://github.com/yeatu/obsidianGP/issues/138) | E — gated | Synthetic V2.2 → B1 cloud query-path conformance | После #134/#136/#137 |
+| [#145](https://github.com/yeatu/obsidianGP/issues/145) | C / owner decision pending | Canonical source, sync/staleness, workload, SLO, retention and budget | UNDECIDED; никаких производственных предположений |
 
-## 2. Активные задачи
+### Завершено / принято
 
-Все задачи ниже открыты и доступны для самостоятельного CLAIM подходящим свободным участником. E/A-префикс не ограничивает захват. Фактический владелец определяется последним действующим CLAIM в соответствующей Issue.
+- [#112](https://github.com/yeatu/obsidianGP/issues/112): C3 принял provider-neutral cloud data-plane direction; issue закрыта.
+- [#117](https://github.com/yeatu/obsidianGP/issues/117) / [PR #127](https://github.com/yeatu/obsidianGP/pull/127): CloudSnapshotRef v2 accepted/merged.
+- [#118](https://github.com/yeatu/obsidianGP/issues/118) / [PR #159](https://github.com/yeatu/obsidianGP/pull/159): A2 REVIEW_ACCEPTED #160; C3 acceptance; merge commit `bc36bf...`. Catalogue in-memory only.
+- [#175](https://github.com/yeatu/obsidianGP/issues/175): A1 cross-component trace accepted by C3 and closed. Binding trust order recorded in #124.
+- [#197](https://github.com/yeatu/obsidianGP/issues/197) / [PR #198](https://github.com/yeatu/obsidianGP/pull/198): A1 accepted docs-only correction of E1 indexer example; C3 accepted and PR merged. Current main includes `sfra-structural-indexer` example.
+- [#214](https://github.com/yeatu/obsidianGP/issues/214): W1 main sync RELEASED by E2. PR #92 current HEAD `42cecfef...`, base main `f665ae7...`, 99 ahead / 0 behind, exactly 14 W1 files; fixture run #44393224276: 65 passed, worker skipped. Fresh review #218 open. PR #92 remains unmerged.
+- [#203](https://github.com/yeatu/obsidianGP/issues/203): A1 accepted previous W1 tree only at HEAD `ff87c563...` / base `553392...`; historical verdict, not transferable to #218.
+- [#206](https://github.com/yeatu/obsidianGP/issues/206): A1 accepted benchmark reproducibility handoff for exact PR #84 HEAD `c4cff0a...` / base `553392...`. Acceptance covers deterministic evidence only, not 42/42 quality or main merge.
+- [#210](https://github.com/yeatu/obsidianGP/issues/210): C3 duplicate docs task closed; canonical #197/#198 remains in history.
+- [#212](https://github.com/yeatu/obsidianGP/issues/212) and [#216](https://github.com/yeatu/obsidianGP/issues/216): duplicate sync tasks closed in favour of canonical #214 and #215, respectively.
 
-| Issue | Приоритет | Тип | Задача / следующий результат | Зависимости |
-|---|---:|---|---|---|
-| [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
-| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
-| [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
-| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
-| [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
-| [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
-| [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | Корпус v1: 42 cases, 32 synthetic docs, 69 nodes; [PR #58](https://github.com/yeatu/obsidianGP/pull/58), ждёт решения #61 | Координаторская приёмка #61 |
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
-| [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
-| [#51](https://github.com/yeatu/obsidianGP/issues/51) | P1 | IMPLEMENTATION | Correction: сделать capability PinnedSnapshot verifier неизменяемым и исключить no-op bypass | #36, #46 |
-| [#61](https://github.com/yeatu/obsidianGP/issues/61) | P1 | COORDINATOR_DECISION | Принять либо вернуть #41 / [PR #58](https://github.com/yeatu/obsidianGP/pull/58) | Нет; координатор |
+## 3. Exact PR and branch state
 
-## 3. Порядок параллельной работы
-
-**Можно начинать сразу и независимо:** #36 и #34 (если соблюдены их владельцы/зависимости). #37 закрыта и принята координатором. #41 ожидает решения #61; #42 может начинаться после приёмки корпуса.  
-**Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
-**Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
-**Quality runner:** #42 после утверждения gold corpus #41.  
-**Финальная интеграция:** #43 после двух handlers и snapshot guard.
-
-Родительская запись #35 закрыта как завершённое координаторское решение. Это не означает завершение milestone: дочерние Issues остаются активными.
-
-## 4. Открытые PR, требующие контекстного учёта
-
-| PR | Состояние | Трактовка |
+| PR | Current state / exact target | Gate |
 |---|---|---|
-| [#12 — GitHub Issue Worker and Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | OPEN / DRAFT | Отдельное предложение по GitHub transport/worker/recovery. Не входит в текущий milestone и не разрешает production worker, recovery, real Issue writes, event workflows или публикацию source content. |
-| [#1 — structural indexer v1](https://github.com/yeatu/obsidianGP/pull/1) | OPEN | Исторический PR раннего прототипа; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
-| [#2 — structural indexer pytest harness](https://github.com/yeatu/obsidianGP/pull/2) | OPEN | Исторический PR раннего тестового стенда; не активная задача текущего этапа. Не объединять без отдельного решения координатора. |
+| [#92 — W1 Web adapter](https://github.com/yeatu/obsidianGP/pull/92) | OPEN / non-Draft. HEAD `42cecfef...`, base `f665ae7...`; direct compare 99/0; 14 W1 paths | A review #218, then C acceptance. Do not merge or run worker/round-trip before C gate |
+| [#209 — integrated bundle #162/#184/#204](https://github.com/yeatu/obsidianGP/pull/209) | OPEN / Draft. HEAD `4839d218...`; direct current-main compare `f665ae7...` → HEAD: 24/0, exactly five bundle paths; current merge-ref CI `441bb826...` | #215 E2 is finishing handoff; fresh A review required, then C3 #208 Gate A |
+| [#162 — bundle parent](https://github.com/yeatu/obsidianGP/pull/162) | OPEN / unmerged. Feature HEAD `c5f84cd...` | Preserve until #208 branch-only propagation after Gate A |
+| [#184 — accepted key correction](https://github.com/yeatu/obsidianGP/pull/184) | OPEN / Draft / stacked on #162. HEAD `8169827...` | Correction branch preserved; branch-only merge under #208 only |
+| [#170 — immutable writer](https://github.com/yeatu/obsidianGP/pull/170) | OPEN / unmerged / partial parent refresh. HEAD `b0bcf7a...`, four writer-owned files | Hold under #196 until final bundle acceptance |
+| [#179 — writer integrity correction](https://github.com/yeatu/obsidianGP/pull/179) | OPEN / unmerged / child of #170. HEAD `035a79d...`, four writer correction files | Hold under #196; no verdict transfers after parent refresh |
+| [#84 — gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | OPEN / Draft. HEAD `c4cff0a...`; A1 #206 accepted exact head/base 553392; 5 benchmark/panel paths | Two E2 quality failures remain; separate C quality disposition for #42 |
+| [#198 — v2 docs correction](https://github.com/yeatu/obsidianGP/pull/198) | MERGED | Merge contains only accepted `CLOUD_SNAPSHOT_V2.md` docs correction |
+| [#176 — prior project panel](https://github.com/yeatu/obsidianGP/pull/176) | CLOSED / superseded | History preserved; fresh panel branch is based on current main |
 
-## 5. Действующие ограничения
+**Metadata caveat:** PR #209 REST summary still reports base SHA `553392...` and six files. The direct Git compare against current main `f665ae7...` and the exact Actions merge-ref show the effective current tree is 24 ahead / 0 behind with five unique bundle-owned paths. Review handoff must state both the metadata discrepancy and the exact two-parent checkout evidence.
 
-- [Issue #20](https://github.com/yeatu/obsidianGP/issues/20) — нормативный протокол CLAIM, динамических функций, декомпозиции, review, эскалации и полномочий координатора.
-- [Issue #34](https://github.com/yeatu/obsidianGP/issues/34) — независимая проверка Governance v2. Она продолжается параллельно и не блокирует независимые инженерные задачи, если reviewer не обнаружит затрагивающий их governance defect.
-- GitHub Issue Worker/Recovery, GitHub API writes, remote MCP HTTP/SSE/WebSocket, production indexing/persistence и публикация содержимого Vault в публичные Issues/comments не разрешаются этим milestone.
-- MCP MVP ограничен локальным stdio и двумя read-only tools. Не добавлять произвольный доступ к файловой системе или write tools.
-- E1 routine CI должен оставаться fixture-only. Не индексировать реальный Vault ради проверки задач.
-- Не включать embeddings/vector search или ranking changes до появления benchmark evidence.
-- Бюджет контекста остаётся под контролем E3. Нельзя обрезать source text и представлять неполный результат как complete.
+## 4. Bundle and writer gate order
 
-## 6. Правила ведения панели
+1. PR #209 integrated bundle candidate has the pre-decompression guard: only `ZIP_STORED`; `compress_size == file_size` checked before `ZipFile.read()`. Tests use DEFLATED/BZIP2/LZMA traps, malformed stored size and a positive stored archive.
+2. Exact current-main merge-ref for PR #209: `441bb826c407e4f10e86964a658db041141ac4dc`; parents `f665ae7...` then `4839d218...`.
+3. Exact Actions runs on that merge-ref:
+   - Bundle #44394269474: **58 passed** (E1 installed; full bundle suite).
+   - C1 #44394269412: B1 **45 passed**; E3/C1 **183 passed / 42 skipped** (E1-only cases skipped because package absent).
+   - V2.1 #44394269344: B1 **45**, E3/C1 **183 / 42 skipped**, V2.1 **19 passed**.
+   - V2.2 #44394269281: B1 **45**, E3/C1 **183 / 42 skipped**, V2.1 **19**, V2.2 **55 passed**.
+   All four succeeded on the same merge-ref. Partial cross-layer skips are not substituted for E1 coverage; the dedicated bundle workflow executes all E1-dependent tests.
+4. A2 still holds stale claim #211 for old HEAD `edbbdff...` / base `553392...`. C3 requested RELEASE as superseded; no verdict may be transferred. New integrated A review must be opened after E2 completes #215.
+5. Only after fresh integrated A acceptance and C3 recheck may #208 authorize branch-only sequence #204 → #184 → #162, preserving every branch history. This is not a main merge.
+6. Only after final bundle stack acceptance may #196 refresh #170 then #179 and request fresh integrated writer A review.
 
-1. Координатор поддерживает этот файл как короткий снимок активной работы, а не как хронику.
-2. Для каждой активной задачи указываются Issue, приоритет, тип, следующий результат и зависимости. Фактический владелец берётся из последнего действующего CLAIM в Issue.
-3. Подробные findings, отчёты, review, CI runs, артефакты и HEAD-specific evidence остаются в соответствующей Issue, PR, commit или Actions run.
-4. Завершённые задачи удаляются из активной таблицы. История остаётся в GitHub и Git.
-5. Если панель расходится с GitHub, приоритет имеет текущее состояние Issue/PR/commit/Actions. Панель исправляется, но не переопределяет источник истины.
+## 5. Security and unresolved design decisions
 
----
+- **Catalogue trust order:** #118 `stage()` produces STAGED only. `mark_verified(snapshot_id)` is caller-enforced; the orchestrator must call it only after successful public bundle verification and the required E1 cloud-index verification for the same immutable snapshot.
+- **Immutable imports:** never coerce an `immutable_import` identity into a Git SHA. Until the additive E1 cloud verifier from #132/#142 is implemented, independently reviewed and C-accepted, such a candidate cannot progress beyond STAGED.
+- **Verification failure:** do not call `mark_verified()`; activation must fail without changing the previous ACTIVE pointer/generation.
+- **Legacy workflow:** preserve it unchanged; do not dispatch or rerun it. It is not the new data plane.
+- **Production:** no provider, credentials, real Vault/SQLite/sidecar/`sfra-state`, ingestion, production source reads/writes, snapshot activation or worker rollout authorized by synthetic fixture acceptance.
+- **Source authority and SLO:** #145 remains UNDECIDED. #154 proves only a metadata-only tracked remote subtree identity, not completeness of local/offline Vault or canonical source authority.
+- **Benchmark:** gold corpus v1.0.0 remains pinned (42 cases / 32 docs / 69 nodes). PR #84 has two preserved E2 forbidden-node failures: gq-010 and gq-036. Current report evidence is 40/42, 14 status diagnostics, 0 explicit SourceRead mismatches. Do not weaken gates or relabel failures as passing.
+- **Web worker:** PR fixture runs deliberately skip `synthetic-issue-worker`. No synthetic Issue write/round-trip has yet been authorized or run. That is a separate post-merge C gate for one marked request.
 
-**Рабочее правило:** открой эту панель, чтобы понять, что активно, какие зависимости существуют и какой этап развивается. Точный статус и права на CLAIM всегда проверяй в самой Issue.
+## 6. Parallelism / conflict rules
+
+- #215 is E-CLAIMED; do not duplicate or alter the integrated bundle branch.
+- #218 is the current free A review request for W1 PR #92 exact HEAD `42cecfef...` / base `f665ae7...`.
+- #211 is A2-CLAIMED but stale; A2 was asked to RELEASE without verdict. Do not treat it as active Gate A.
+- #208 is the single controlling C3 bundle/writer stack decision. Do not bypass its Gate A/B/C sequence.
+- #196 is held; no writer final review or integration until the complete bundle parent is accepted.
+- #206 is completed/accepted only for exact benchmark head/base; no ranking, corpus or token-budget changes authorized.
+- Use a single task per owned file/branch. If the current main or a parent stack advances, create one narrow sync issue for the affected feature branch and supersede the stale exact-head review only after a replacement exists.
+- Preserve all branches, PRs, commits and historical reviews. No force-push, rebase, reset or cleanup based only on a changed architectural direction.
+
+## 7. Operational rule
+
+Before any claim, review, acceptance or integration decision, verify live issue events, current main, PR head/base, ordered parents, direct compare/file list, actual Actions merge-ref and job logs. A verdict is valid only for its exact HEAD/base. Merge is always a separate C decision after required independent A acceptance.
