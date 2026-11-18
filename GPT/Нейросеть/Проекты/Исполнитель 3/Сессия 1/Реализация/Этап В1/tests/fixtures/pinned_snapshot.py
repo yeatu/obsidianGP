@@ -1,8 +1,9 @@
-"""Test-only factory for synthetic PinnedSnapshot fixtures.
+"""Test-only factory for synthetic PinnedSnapshot subclass fixtures.
 
 Production code must use sfra_context_integrations.snapshot.bind_pinned_snapshot.
-This helper is intentionally kept under tests/fixtures so a no-op verifier cannot
-become a production composition path.
+The subclass returned here is intentionally rejected by production E1/E2/E3
+consumer constructors. Tests may use consumer_seams.py to exercise adapter
+methods without making the fixture acceptable to production composition.
 """
 
 from __future__ import annotations
@@ -43,8 +44,8 @@ def make_test_pinned_snapshot(
     """Build a synthetic snapshot with a test-controlled verifier callback."""
     callback = verifier if verifier is not None else (lambda: None)
     # This constructor bypass is intentionally confined to the test fixture.
-    # Production code has no importable verifier minting class/token and must
-    # use bind_pinned_snapshot(), which creates its own verified closure.
+    # Production consumers require type(snapshot) is PinnedSnapshot and reject
+    # this subclass before invoking any overridable verification method.
     pinned = object.__new__(_FixturePinnedSnapshot)
     object.__setattr__(pinned, "ref", ref)
     object.__setattr__(pinned, "sidecar_root", sidecar_root)
