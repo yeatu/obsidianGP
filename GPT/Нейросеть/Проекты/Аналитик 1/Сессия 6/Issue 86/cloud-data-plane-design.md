@@ -3,6 +3,7 @@
 **Тип:** ANALYSIS, Issue #86  
 **Автор:** A1  
 **Проверенная база:** main, commit 2051d0ce6cdbceab1fc825c617708f8255266476  
+**C3 cross-check:** key E1 persistence and disabled E3 workflow definitions revalidated on current main `52f1bdda1dd6b281b1fbe91add06e5fceda541fe` on 2026-11-18  
 **Дата:** 2026-11-18  
 **Режим:** read-only. Production Vault, SQLite, sfra-state и реальные workflows не открывались и не запускались.
 
