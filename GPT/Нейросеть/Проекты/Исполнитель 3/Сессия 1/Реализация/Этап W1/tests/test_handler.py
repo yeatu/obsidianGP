@@ -26,7 +26,7 @@ class Status:
             "status_schema_version": 2, "issue_number": 21,
             "request_id": "6f2f5b1e-6ab7-4a9e-9c2b-c0c9846c7d14",
             "operation": "search_vault", "transport_status": self.state,
-            "request_body_sha256": self.digest, "worker_commit_sha": "a" * 40,
+            "request_body_sha256": "sha256:" + self.digest, "worker_commit_sha": "a" * 40,
             "error_code": None if self.state == "COMPLETED" else "application_service_failed",
             "result": {"operation": "search_vault", "business_status": "complete",
                        "scope": None, "counts": {"candidates": 1}, "diagnostic_codes": []}
