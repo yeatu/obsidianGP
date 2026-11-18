@@ -712,13 +712,14 @@ def _completeness_honesty(
     """
     if not search_complete and context_status == "complete":
         return False
-    budget_reasons = {
+    pack_incomplete_reasons = {
         "budget_limit",
         "required_group_budget_limit",
         "lower_priority_budget_limit",
+        "unresolved_required_dependency",
     }
     if (
-        any(item.get("reason") in budget_reasons for item in deferred)
+        any(item.get("reason") in pack_incomplete_reasons for item in deferred)
         and context_status == "complete"
     ):
         return False

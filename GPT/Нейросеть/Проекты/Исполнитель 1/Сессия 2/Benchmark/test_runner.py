@@ -56,6 +56,19 @@ def test_incomplete_search_and_deferred_budget_cannot_be_complete():
     )
 
 
+def test_unresolved_required_dependency_cannot_be_reported_as_complete():
+    assert not runner._completeness_honesty(
+        search_complete=True,
+        context_status="complete",
+        deferred=[{"reason": "unresolved_required_dependency"}],
+    )
+    assert runner._completeness_honesty(
+        search_complete=True,
+        context_status="partial",
+        deferred=[{"reason": "unresolved_required_dependency"}],
+    )
+
+
 def test_non_ok_source_read_must_not_contain_fragments():
     status_match, non_ok_empty = runner._source_read_contract(
         actual_status="stale",
