@@ -187,6 +187,127 @@ def _database_rows(database_path: Path) -> list[dict[str, Any]]:
         connection.close()
 
 
+def _remap_fixture_references(value: Any, id_map: Mapping[str, str]) -> Any:
+    """Replace fixture Node IDs recursively in JSON metadata/event payloads."""
+    if isinstance(value, str):
+        return id_map.get(value, value)
+    if isinstance(value, list):
+        return [_remap_fixture_references(item, id_map) for item in value]
+    if isinstance(value, dict):
+        return {
+            id_map.get(str(key), str(key)): _remap_fixture_references(item, id_map)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
+    """Normalize every disposable E1 ID and its textual references to UUIDv5.
+
+    E1's production indexer correctly creates fresh UUIDv4 IDs for new nodes.
+    A benchmark fixture is different: equal-rank B1 candidates use Node ID as
+    a deterministic tie-breaker, so random fixture IDs would perturb metrics.
+    This helper is benchmark-only and runs against the temporary SQLite copy.
+    """
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """SELECT n.node_pk, n.node_id, n.local_key, d.source_path
+               FROM structural_nodes AS n
+               JOIN documents AS d ON d.document_pk = n.document_pk
+               ORDER BY d.source_path, n.local_key, n.node_pk"""
+        ).fetchall()
+        id_map = {
+            str(row["node_id"]): _stable_synthetic_node_id(
+                "indexed-node",
+                str(row["source_path"]) + "\\n" + str(row["local_key"]),
+            )
+            for row in rows
+        }
+        if len(set(id_map.values())) != len(id_map):
+            raise BenchmarkError("Synthetic fixture Node ID normalization produced a collision")
+
+        with connection:
+            for row in rows:
+                connection.execute(
+                    "UPDATE structural_nodes SET node_id = ? WHERE node_pk = ?",
+                    (id_map[str(row["node_id"])], int(row["node_pk"])),
+                )
+
+            version_rows = connection.execute(
+                """SELECT node_version_pk, parent_node_id, metadata_json, warnings_json
+                   FROM node_versions ORDER BY node_version_pk"""
+            ).fetchall()
+            for row in version_rows:
+                parent_id = row["parent_node_id"]
+                metadata = _remap_fixture_references(
+                    json.loads(row["metadata_json"]), id_map
+                )
+                warnings = _remap_fixture_references(
+                    json.loads(row["warnings_json"]), id_map
+                )
+                connection.execute(
+                    """UPDATE node_versions
+                       SET parent_node_id = ?, metadata_json = ?, warnings_json = ?
+                       WHERE node_version_pk = ?""",
+                    (
+                        id_map.get(parent_id, parent_id),
+                        json.dumps(metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                        json.dumps(warnings, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                        int(row["node_version_pk"]),
+                    ),
+                )
+
+            event_rows = connection.execute(
+                """SELECT event_pk, node_id, candidate_node_ids_json, details_json
+                   FROM node_match_events ORDER BY event_pk"""
+            ).fetchall()
+            for row in event_rows:
+                candidates = _remap_fixture_references(
+                    json.loads(row["candidate_node_ids_json"]), id_map
+                )
+                details = _remap_fixture_references(
+                    json.loads(row["details_json"]), id_map
+                )
+                connection.execute(
+                    """UPDATE node_match_events
+                       SET node_id = ?, candidate_node_ids_json = ?, details_json = ?
+                       WHERE event_pk = ?""",
+                    (
+                        id_map.get(row["node_id"], row["node_id"]),
+                        json.dumps(candidates, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                        json.dumps(details, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                        int(row["event_pk"]),
+                    ),
+                )
+
+            node_rows = connection.execute(
+                """SELECT node_pk, metadata_json, warnings_json
+                   FROM structural_nodes ORDER BY node_pk"""
+            ).fetchall()
+            for row in node_rows:
+                metadata = _remap_fixture_references(
+                    json.loads(row["metadata_json"]), id_map
+                )
+                warnings = _remap_fixture_references(
+                    json.loads(row["warnings_json"]), id_map
+                )
+                connection.execute(
+                    """UPDATE structural_nodes
+                       SET metadata_json = ?, warnings_json = ?
+                       WHERE node_pk = ?""",
+                    (
+                        json.dumps(metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                        json.dumps(warnings, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                        int(row["node_pk"]),
+                    ),
+                )
+        return id_map
+    finally:
+        connection.close()
+
+
 def _patch_gold_metadata(
     database_path: Path,
     corpus: Mapping[str, Any],
@@ -440,6 +561,7 @@ def _create_disposable_repositories(corpus: Mapping[str, Any], work_root: Path):
     )
 
     index_vault(vault_root, index_dir)
+    _canonicalize_synthetic_node_ids(index_dir / "structure.sqlite3")
     initial_rows = _database_rows(index_dir / "structure.sqlite3")
     deleted_initial = [
         row for row in initial_rows
@@ -456,6 +578,7 @@ def _create_disposable_repositories(corpus: Mapping[str, Any], work_root: Path):
     )
     deleted_path.unlink()
     index_vault(vault_root, index_dir)
+    _canonicalize_synthetic_node_ids(index_dir / "structure.sqlite3")
 
     final_rows = _database_rows(index_dir / "structure.sqlite3")
     ambiguous_rows = [

@@ -33,6 +33,74 @@ def test_synthetic_fixture_node_ids_are_stable_and_purpose_scoped():
     assert first != runner._stable_synthetic_node_id("not-found-source", "torch_location")
 
 
+def test_synthetic_database_node_ids_and_references_are_canonicalized(tmp_path):
+    database_path = tmp_path / "fixture.sqlite3"
+    connection = sqlite3.connect(database_path)
+    connection.executescript(
+        """
+        CREATE TABLE documents(document_pk INTEGER PRIMARY KEY, source_path TEXT NOT NULL);
+        CREATE TABLE structural_nodes(
+            node_pk INTEGER PRIMARY KEY, document_pk INTEGER NOT NULL,
+            local_key TEXT NOT NULL, node_id TEXT NOT NULL,
+            metadata_json TEXT NOT NULL, warnings_json TEXT NOT NULL
+        );
+        CREATE TABLE node_versions(
+            node_version_pk INTEGER PRIMARY KEY, parent_node_id TEXT,
+            metadata_json TEXT NOT NULL, warnings_json TEXT NOT NULL
+        );
+        CREATE TABLE node_match_events(
+            event_pk INTEGER PRIMARY KEY, node_id TEXT,
+            candidate_node_ids_json TEXT NOT NULL, details_json TEXT NOT NULL
+        );
+        INSERT INTO documents VALUES (1, 'synthetic/a.md');
+        INSERT INTO documents VALUES (2, 'synthetic/b.md');
+        INSERT INTO structural_nodes VALUES
+            (1, 1, 'root', 'node_00000000-0000-4000-8000-000000000001',
+             '{"required_with":["node_00000000-0000-4000-8000-000000000002"]}', '[]');
+        INSERT INTO structural_nodes VALUES
+            (2, 2, 'child', 'node_00000000-0000-4000-8000-000000000002', '{}', '[]');
+        INSERT INTO node_versions VALUES
+            (1, 'node_00000000-0000-4000-8000-000000000002',
+             '{"parent":"node_00000000-0000-4000-8000-000000000001"}', '[]');
+        INSERT INTO node_match_events VALUES
+            (1, 'node_00000000-0000-4000-8000-000000000001',
+             '["node_00000000-0000-4000-8000-000000000002"]', '{}');
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    mapping = runner._canonicalize_synthetic_node_ids(database_path)
+    second_mapping = runner._canonicalize_synthetic_node_ids(database_path)
+
+    assert mapping == second_mapping
+    connection = sqlite3.connect(database_path)
+    try:
+        ids = [row[0] for row in connection.execute(
+            "SELECT node_id FROM structural_nodes ORDER BY node_pk"
+        )]
+        assert ids == [
+            runner._stable_synthetic_node_id("indexed-node", "synthetic/a.md\\nroot"),
+            runner._stable_synthetic_node_id("indexed-node", "synthetic/b.md\\nchild"),
+        ]
+        parent = connection.execute(
+            "SELECT parent_node_id, metadata_json FROM node_versions WHERE node_version_pk = 1"
+        ).fetchone()
+        assert parent[0] == ids[1]
+        assert json.loads(parent[1]) == {"parent": ids[0]}
+        metadata = connection.execute(
+            "SELECT metadata_json FROM structural_nodes WHERE node_pk = 1"
+        ).fetchone()[0]
+        assert json.loads(metadata) == {"required_with": [ids[1]]}
+        event = connection.execute(
+            "SELECT node_id, candidate_node_ids_json FROM node_match_events WHERE event_pk = 1"
+        ).fetchone()
+        assert event[0] == ids[0]
+        assert json.loads(event[1]) == [ids[1]]
+    finally:
+        connection.close()
+
+
 def test_metric_average_ignores_undefined_cases():
     assert runner._metric_average([0.5, None, 1.0]) == 0.75
     assert runner._metric_average([None, None]) is None
