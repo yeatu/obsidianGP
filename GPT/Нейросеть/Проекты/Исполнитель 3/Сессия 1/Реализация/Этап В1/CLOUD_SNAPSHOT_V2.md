@@ -77,7 +77,7 @@ The identity tuple binds:
 
 The ref parser requires exact fields and exact schema version. It recomputes the ID and rejects forged, incomplete, unknown or unsupported values. \`verify_cloud_snapshot_manifest()\` additionally checks the digest over exact bytes, canonical serialization, and equality of every identity component with the ref.
 
-## Public module API
+## Machine-readable schemas\n\n- `schemas/cloud-snapshot-manifest-v1.schema.json` — canonical manifest payload v1.\n- `schemas/cloud-snapshot-ref-v2.schema.json` — cloud SnapshotRef v2 wire identity.\n\nBoth files use JSON Schema Draft 2020-12 and close root and nested objects with `additionalProperties: false`. Runtime parsing applies the stricter Python validation as the fail-closed authority.\n\n## Public module API
 
 Import from \`sfra_context_integrations.cloud_snapshot_v2\`:
 
