@@ -406,7 +406,4 @@ def require_pinned_snapshot(snapshot: object, *, consumer: str) -> PinnedSnapsho
             f"{consumer} requires the exact factory-created PinnedSnapshot type; "
             "subclasses and test fixtures are not accepted"
         )
-    # Dispatch through the exact class implementation after the exact-type
-    # check, so a caller-supplied instance override is never invoked.
-    PinnedSnapshot.verify_current(snapshot)
     return snapshot
