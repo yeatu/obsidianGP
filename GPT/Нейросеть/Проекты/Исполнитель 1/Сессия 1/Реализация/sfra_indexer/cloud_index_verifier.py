@@ -294,12 +294,15 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
 
 
 def _safe_path(value: Any) -> str:
-    path = _text(value)
-    if (path.startswith("/") or "\\" in path or "\x00" in path
-            or any(part in {"", ".", ".."} for part in path.split("/"))
-            or PurePosixPath(path).is_absolute() or PurePosixPath(path).as_posix() != path):
+    # Match #119's canonical relative-POSIX path contract exactly. Do not add
+    # normalization or whitespace restrictions that its producer does not use.
+    if not isinstance(value, str) or not value or value.startswith("/") or "\\" in value or "\x00" in value:
         raise ValueError("unsafe path")
-    return path
+    value.encode("utf-8", errors="strict")
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts) or PurePosixPath(value).is_absolute():
+        raise ValueError("unsafe path")
+    return value
 
 
 def _read_regular(path: Path) -> bytes:
