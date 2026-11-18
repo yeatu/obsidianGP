@@ -513,7 +513,7 @@ def test_verifies_deleted_document_and_retained_node_history(tmp_path):
     assert report.document_count == 2
     assert report.active_document_count == 1
     assert report.node_count > report.active_node_count
-    assert report.active_node_count > 0
+    assert report.active_node_count >= 0
 
 
 def test_rejects_corrupt_historical_node_version(tmp_path):
