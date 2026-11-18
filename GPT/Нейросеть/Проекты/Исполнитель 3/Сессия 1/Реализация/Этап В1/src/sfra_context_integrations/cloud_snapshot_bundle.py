@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 import sqlite3
 import stat
 import tempfile
+import unicodedata
 from typing import Any, Iterable, Mapping
 from zipfile import BadZipFile, ZIP_STORED, ZipFile, ZipInfo
 
@@ -215,8 +216,17 @@ def _validate_relative_posix_path(path: str) -> str:
 
 
 def _validate_object_key(key: str, name: str) -> str:
-    if not isinstance(key, str) or not key or key.startswith("/") or "\\" in key:
-        raise CloudSnapshotBundleError(f"{name} must be a non-empty relative POSIX object key")
+    """Validate an object key against CloudSnapshotRef v2 text and path rules."""
+    if not isinstance(key, str) or not key or not key.strip():
+        raise CloudSnapshotBundleError(f"{name} must be a non-empty non-whitespace string")
+    if len(key) > 4096:
+        raise CloudSnapshotBundleError(f"{name} exceeds the 4096-character limit")
+    if key != unicodedata.normalize("NFC", key):
+        raise CloudSnapshotBundleError(f"{name} must use Unicode NFC normalization")
+    if any(unicodedata.category(char) in {"Cc", "Cs"} for char in key):
+        raise CloudSnapshotBundleError(f"{name} contains a control or surrogate character")
+    if key.startswith("/") or "\\" in key:
+        raise CloudSnapshotBundleError(f"{name} must be a relative POSIX object key")
     try:
         key.encode("utf-8", errors="strict")
     except UnicodeEncodeError as exc:
@@ -617,7 +627,10 @@ def _attestation_payload(
 def _validate_prepared_object(obj: PreparedBundleObject, name: str) -> None:
     if type(obj) is not PreparedBundleObject or not isinstance(obj.payload, bytes):
         raise BundleIntegrityError(f"{name} must be a PreparedBundleObject with byte payload")
-    _validate_object_key(obj.key, f"{name}.key")
+    try:
+        _validate_object_key(obj.key, f"{name}.key")
+    except CloudSnapshotBundleError as exc:
+        raise BundleIntegrityError(f"{name} has an invalid CloudSnapshotRef v2 object key") from exc
     if obj.byte_size != len(obj.payload) or obj.sha256 != _sha256(obj.payload):
         raise BundleIntegrityError(f"{name} payload hash/size does not match its descriptor")
 
