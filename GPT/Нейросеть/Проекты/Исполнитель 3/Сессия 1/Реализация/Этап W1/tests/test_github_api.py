@@ -6,7 +6,7 @@ import pytest
 
 import sfra_web_adapter.github_api as github_api
 from sfra_web_adapter import GitHubAPIError, GitHubREST, GitHubCommentStatusStore
-from sfra_web_adapter.ledger import authenticated_markers
+from sfra_web_adapter.ledger import MarkerLedger, authenticated_markers
 
 
 def client():
