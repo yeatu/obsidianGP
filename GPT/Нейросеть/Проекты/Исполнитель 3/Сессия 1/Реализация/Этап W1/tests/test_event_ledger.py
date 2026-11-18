@@ -3,7 +3,7 @@ import hashlib
 import pytest
 from sfra_web_adapter import EventRejection, MarkerLedger, parse_opened_issue_event
 
-BOT = {"login": "github-actions[bot]"}
+BOT = {"login": "github-actions[bot]", "type": "Bot"}
 
 def event(**kwargs):
     issue = {"number": 17, "title": "[SFRA] request", "body": '{"protocol_version":"sfra.issue.v1}', "user": {"login": "yeatu"}}
