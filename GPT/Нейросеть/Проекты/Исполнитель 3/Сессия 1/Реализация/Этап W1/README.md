@@ -12,7 +12,7 @@ This isolated package implements the approved GitHub Issues â†’ GitHub Actions â
 - Thin handler around the existing V2.2 IssueWorkerCore contract.
 - Actions runner injects synthetic-only V2.1-shaped search/read application ports. It does not instantiate production E1 readers, E2 indexes, SQLite, Vault or sidecar.
 - V2.2 status-v2 aggregate plus a separate W1-specific allowlisted synthetic evidence projection in the intended response comment only.
-- Canonical case gq-004-exception-pair from synthetic gold corpus v1.0.0, pinned by digest sha256:915304e812906f64003d9aacb0dd4b7701f7fbcf4f24fdc3cda21d1108b13068. The response contains only node IDs, synthetic paths, content hashes, line spans and bounded excerpts from that corpus.
+- Runtime-enforced evidence allowlist: only the exact canonical query/case gq-004-exception-pair can create search evidence. Only nodes gate_rule and gate_exception with their exact pinned paths, SHA-256 hashes and line spans can create read evidence. The response projection validator independently enforces the same identity and verifies the excerpt bytes against the pinned content hash. Corpus v1.0.0 remains pinned by digest sha256:915304e812906f64003d9aacb0dd4b7701f7fbcf4f24fdc3cda21d1108b13068.
 - Per-Issue Actions concurrency with cancel-in-progress disabled. Fixture tests and issue-worker jobs have separate event gates and permissions.
 
 ## Workflow
