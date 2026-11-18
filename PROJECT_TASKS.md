@@ -39,6 +39,7 @@
 | [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | 30–50 synthetic gold cases с обязательными Node IDs и критическими условиями | Нет; параллельно |
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
+| [#51](https://github.com/yeatu/obsidianGP/issues/51) | P1 | IMPLEMENTATION | Correction: сделать capability PinnedSnapshot verifier неизменяемым и исключить no-op bypass | #36, #46 |
 
 ## 3. Порядок параллельной работы
 
