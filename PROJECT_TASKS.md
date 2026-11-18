@@ -71,7 +71,7 @@
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Synthetic benchmark runner и метрики Context Pack | E1 CLAIM; corpus v1.0.0 принят; Draft 2020-12 schema validation before execution |
 | [#53](https://github.com/yeatu/obsidianGP/issues/53) | P1 | `COORDINATOR_DECISION` | **C** | Owner-side retention/removal review старого Actions run/artifact | C1 CLAIM; Actions DELETE требует `Actions: write`; текущая интеграция не предоставляет DELETE |
 | [#72](https://github.com/yeatu/obsidianGP/issues/72) | P2 | `IMPLEMENTATION` | **E** | Enforce accepted #37 constraints in actual generated MCP tool schemas | Canonical correction to #65/#47; свободна; только tools.py/schema/tests |
-| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Synthetic ChatGPT Web Issues → Actions → SFRA response worker | E2 CLAIM; decision #75; isolated package/workflow/tests; synthetic fixtures only |
+| [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 | `IMPLEMENTATION` | **E** | Synthetic ChatGPT Web Issues → Actions → SFRA response worker | E2 CLAIM; Draft PR #85 HEAD `b2556f777adf3c993b6581fbc78dee2942f2a1fc`; exact-head CI and workflow audit pending; synthetic fixtures only |
 | [#80](https://github.com/yeatu/obsidianGP/issues/80) | P1 | `ANALYSIS` | **A** | Preflight audit of W1 event/auth, immutable body binding, idempotency, recovery, retry semantics and Actions permissions | A1 CLAIM; read-only; independent of E2 implementation #77 |
 | [#79](https://github.com/yeatu/obsidianGP/issues/79) | P1 | `REVIEW_REQUEST` | **A** | Independent exact-head audit of PR #87 | E2 implementation complete; PR #87 Ready for review; review request #88; C acceptance after A verdict |
 
@@ -93,7 +93,7 @@
 | [#87 — exact PinnedSnapshot consumer type](https://github.com/yeatu/obsidianGP/pull/87) | Открыт / Ready for review | Exact HEAD `162e4190b00c63c67ed1f7fb29871819315c4d92`; combined C1/V2.1/V2.2 fixture CI passed; A review #88; C acceptance required; no merge |
 | [#57 — search_vault handler](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft | Подготовительный handler для #39; интеграция после принятия #38 |
 | [#66 — read_source request parser](https://github.com/yeatu/obsidianGP/pull/66) | Открыт | Exact HEAD `b6db66655fa1ab476413c5259246e22d5279c43d`; accepted parser-only under #69; not full #40 |
-| [#85 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/85) | Открыт / Draft | Exact-head CI not yet green; implementation #77 remains in progress; no production Vault |\n| [#12 — GitHub Issue Worker/Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | Открыт / Draft | Историческое proposal; не является разрешением на production worker |
+| [#85 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/85) | Открыт / Draft | HEAD `b2556f777adf3c993b6581fbc78dee2942f2a1fc`; exact-head CI not yet green; implementation #77 remains in progress; no production Vault |\n| [#12 — GitHub Issue Worker/Recovery proposal](https://github.com/yeatu/obsidianGP/pull/12) | Открыт / Draft | Историческое proposal; не является разрешением на production worker |
 | [#1 / #2 — исторические прототипы](https://github.com/yeatu/obsidianGP/pulls) | Открыты | Не объединять без отдельного решения C |
 
 
