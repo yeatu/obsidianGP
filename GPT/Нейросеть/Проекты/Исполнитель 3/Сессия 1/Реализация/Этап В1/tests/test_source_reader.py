@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from sfra_context_integrations.snapshot import SnapshotBindingError
-from sfra_context_integrations.source_reader import E1SourceReader
-from tests.fixtures.consumer_seams import make_test_source_reader, SourceReaderContractError
+from sfra_context_integrations.source_reader import SourceReaderContractError
+from tests.fixtures.consumer_seams import make_test_source_reader
 from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, FixtureTokenCounter, snapshot
 
