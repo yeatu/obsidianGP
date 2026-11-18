@@ -8,7 +8,6 @@ from pathlib import Path
 import zipfile
 
 import pytest
-from sfra_indexer import index_vault
 
 from sfra_context_integrations.cloud_snapshot_v2 import (
     CloudSnapshotContractError,
@@ -47,6 +46,10 @@ def _source_tree(root: Path) -> None:
 
 
 def _indexed_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    try:
+        from sfra_indexer import index_vault
+    except ImportError:
+        pytest.skip("the isolated E1 indexer fixture package is not installed in this workflow")
     source_root = tmp_path / "synthetic-source"
     source_root.mkdir()
     _source_tree(source_root)
