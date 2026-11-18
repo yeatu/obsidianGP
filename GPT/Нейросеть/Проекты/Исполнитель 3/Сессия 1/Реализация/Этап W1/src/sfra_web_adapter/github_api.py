@@ -9,6 +9,9 @@ class GitHubAPIError(RuntimeError):
     """Sanitized GitHub API failure; response bodies are deliberately omitted."""
 
 class GitHubREST:
+    MAX_COMMENT_PAGES = 10
+    COMMENTS_PER_PAGE = 100
+
     def __init__(self, *, token: str, repository: str, api_url: str = "https://api.github.com"):
         if not isinstance(token, str) or not token:
             raise ValueError("GitHub token is required")
@@ -46,12 +49,21 @@ class GitHubREST:
         return result
 
     def list_comments(self, issue_number: int) -> list[dict[str, object]]:
-        result = self._request("GET", f"/repos/{self._repository}/issues/{issue_number}/comments?per_page=100")
-        if not isinstance(result, list) or any(not isinstance(item, dict) for item in result):
-            raise GitHubAPIError("GitHub comments response has an invalid shape")
-        if len(result) == 100:
-            raise GitHubAPIError("Issue comment history exceeds the supported single-page limit")
-        return result
+        if isinstance(issue_number, bool) or not isinstance(issue_number, int) or issue_number < 1:
+            raise ValueError("issue_number must be positive")
+        collected: list[dict[str, object]] = []
+        for page in range(1, self.MAX_COMMENT_PAGES + 1):
+            result = self._request(
+                "GET",
+                f"/repos/{self._repository}/issues/{issue_number}/comments"
+                f"?per_page={self.COMMENTS_PER_PAGE}&page={page}",
+            )
+            if not isinstance(result, list) or any(not isinstance(item, dict) for item in result):
+                raise GitHubAPIError("GitHub comments response has an invalid shape")
+            collected.extend(result)
+            if len(result) < self.COMMENTS_PER_PAGE:
+                return collected
+        raise GitHubAPIError("Issue comment history exceeds the bounded pagination limit")
 
     def create_comment(self, issue_number: int, body: str) -> None:
         if not isinstance(body, str) or not body or len(body.encode("utf-8")) > 45 * 1024:
