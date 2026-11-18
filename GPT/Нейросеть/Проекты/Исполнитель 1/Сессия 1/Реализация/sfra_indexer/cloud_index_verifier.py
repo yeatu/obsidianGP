@@ -293,6 +293,8 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
             active_node_count=_uint(counts["active_node_count"]),
             passage_count=_uint(counts["passage_count"]),
         )
+    except CloudIndexVerificationError:
+        raise
     except Exception as exc:
         raise CloudIndexVerificationError("attestation_invalid") from exc
 
