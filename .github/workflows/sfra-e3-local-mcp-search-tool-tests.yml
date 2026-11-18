@@ -1,0 +1,46 @@
+name: SFRA E3 local MCP search_vault handler tests
+
+on:
+  push:
+    branches:
+      - executor-1/issue-39-search-vault-handler
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP/**"
+      - ".github/workflows/sfra-e3-local-mcp-search-tool-tests.yml"
+  pull_request:
+    branches:
+      - executor-3/issue-38-mcp-stdio-bootstrap
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP/**"
+      - ".github/workflows/sfra-e3-local-mcp-search-tool-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  search-vault-handler-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install existing application layers and local MCP package
+        shell: bash
+        run: |
+          E1_DIR="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          MCP_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$E1_DIR"
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$E3_DIR"
+          python -m pip install -e "$MCP_DIR[test]"
+      - name: Run fixture-only search_vault handler tests
+        run: |
+          MCP_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Локальный MCP"
+          python -m pytest -q "$MCP_DIR/tests/test_search_vault.py"
