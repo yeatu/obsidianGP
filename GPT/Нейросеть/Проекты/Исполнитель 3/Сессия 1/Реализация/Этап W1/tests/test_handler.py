@@ -3,7 +3,7 @@ from sfra_web_adapter import handle_opened_event
 
 BOT = {"login": "github-actions[bot]"}
 
-def payload(body='{"protocol_version":"sfra.issue.v1}'):
+def payload(body='{"protocol_version":"sfra.issue.v1"}'):
     return {"repository": {"full_name": "yeatu/obsidianGP"},
             "sender": {"login": "yeatu"},
             "issue": {"number": 21, "title": "[SFRA] synthetic", "body": body,
