@@ -37,7 +37,7 @@
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
 | [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | Корпус v1: 42 cases, 32 synthetic docs, 69 nodes; [PR #58](https://github.com/yeatu/obsidianGP/pull/58), ждёт решения #61 | Координаторская приёмка #61 |
-| [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
+| [#156](https://github.com/yeatu/obsidianGP/issues/156) | P2 | RELEASED / REVIEW_REQUEST | **RELEASED (E1)** Устранение межпроцессного дрейфа метрик synthetic benchmark; [PR #84](https://github.com/yeatu/obsidianGP/pull/84) | [Независимое A-review #189](https://github.com/yeatu/obsidianGP/issues/189); exact-head double-run, JSON/Markdown byte-identical |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
 | [#51](https://github.com/yeatu/obsidianGP/issues/51) | P1 | IMPLEMENTATION | Correction: сделать capability PinnedSnapshot verifier неизменяемым и исключить no-op bypass | #36, #46 |
 | [#61](https://github.com/yeatu/obsidianGP/issues/61) | P1 | COORDINATOR_DECISION | Принять либо вернуть #41 / [PR #58](https://github.com/yeatu/obsidianGP/pull/58) | Нет; координатор |
