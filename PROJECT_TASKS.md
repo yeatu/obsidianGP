@@ -27,7 +27,7 @@
 
 | Issue | Статус / роль | Следующий результат | Приоритет / зависимость |
 |---|---|---|---|
-| [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / UNBLOCKED** | Исторически частичные writer PR #170/#179 синхронизировать с текущим принятым bundle base | **P1**; main `8d1d3c9...`; сохранить четыре writer-owned и четыре correction-owned файла; non-force, main-first, expected-old-HEAD; затем свежий A review |
+| [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / UNBLOCKED** | Завершить интеграцию writer stack: branch sync #170/#179 выполнен; exact-head fixture/cross-layer CI и свежий интегрированный A review остаются | **P1**; #170 `123de377...` (main 9/0, 4 writer paths); #179 `f4f8e78...` (от #170 9/0, 4 correction paths; combined main diff — 4 уникальных файла); новые exact-head CI ещё не подтверждены |
 | [#120](https://github.com/yeatu/obsidianGP/issues/120) | **E — READY TO CLAIM** | Read-only exact-version resolver и materializer для эфемерного GitHub-hosted runner | **P2**; #117/#118/#119 приняты и merged; synthetic/in-memory tests only |
 | [#240](https://github.com/yeatu/obsidianGP/issues/240) | **E1 — READY TO CLAIM** | Additive E1 cloud-index attestation и read-only verifier | **P1**; принятые design #132 и decision #142; bundle #119 уже merged; E1 files/tests only; свежий A review обязателен |
 | [#229](https://github.com/yeatu/obsidianGP/issues/229) | **E — GATED / unclaimed** | Синхронизировать benchmark PR #84 с main, повторить два 42-case прогона и открыть A review | **P1**; ждать A acceptance, C merge и merge панели PR #223 по #234; сохранить main `PROJECT_TASKS.md` verbatim и оставить четыре benchmark technical paths |
@@ -61,12 +61,13 @@
 
 ## 4. Writer stack — P1 conflict resolution
 
-- PR #170 historical partial HEAD: `b0bcf7ae587c3613b80ef811264bdd4437eedc93`, previously based on bundle HEAD `c5f84cd...`.
-- PR #179 historical partial HEAD: `035a79d652fb4015c1b7a258a092143319ae0ae4`, previously based on #170 HEAD `b0bcf7...`.
-- The complete accepted bundle tree is now in main `8d1d3c9...`. E1 has been explicitly unblocked in #196 comment #6994072174; existing E1 CLAIM/ownership is unchanged.
-- Required order: non-force main-first sync of #170 → verify four writer-owned paths → non-force sync refreshed #170 into #179 → verify four correction paths → exact parent/child fixture and cross-layer CI → one fresh integrated A review.
-- Historical A2 #171 / A1 #180 verdicts apply only to old exact heads. No PR #170/#179 main merge before fresh A acceptance and separate C decision.
-- No provider, credentials, upload, catalogue activation, real data or workflow_dispatch is authorized.
+- PR #170 current HEAD: `123de3771cc2aab1664bbecdfc5533df90696c6a`. Its sync commit `123de377...` has ordered parents current main `8d1d3c9...` first and former writer HEAD `b0bcf7...` second. Direct main compare: **9 ahead / 0 behind**, merge base equals main; exactly four writer-owned files (workflow, docs, module, tests).
+- PR #179 current HEAD: `f4f8e78f4ce8714b9f12247041563474cdf61aec`. Its propagation commit has refreshed #170 `123de377...` first and former correction HEAD `035a79d...` second. Direct #170 → #179 compare: **9 ahead / 0 behind**, merge base equals refreshed #170; correction delta is exactly the same four writer-owned paths.
+- **Combined-scope clarification:** parent #170 diff from main = four paths; child #179 incremental correction diff = four paths; combined main → #179 diff = **four unique paths total**, not eight. Do not duplicate files to satisfy the earlier incorrect “eight paths” wording; C3 corrected this in #196 comment #6994531621.
+- The corrected bundle tree is in main `8d1d3c9...`; E1's existing CLAIM remains active. Both writer branch sync steps are complete, but new exact-head fixture/cross-layer CI has not yet been found for these two HEADs. Historical runs #44389072053 (18 passed) and #44389159850 (27 passed) apply only to former partial heads.
+- Next: run the parent and child writer fixture workflows plus required bundle/C1/V2.1/V2.2 suites against the final exact child merge-ref; record checkout SHA, ordered parents, test counts and dependency skips; then create one fresh independent A review for the complete integrated writer stack.
+- Historical A2 #171 / A1 #180 verdicts apply only to their old exact heads. Keep PR #170/#179 open and unmerged until fresh A acceptance and separate C integration decision.
+- No provider, credentials, upload, catalogue activation, real data, workflow_dispatch or production operation is authorized.
 
 ## 5. Benchmark — P1 shared-file conflict remains
 
