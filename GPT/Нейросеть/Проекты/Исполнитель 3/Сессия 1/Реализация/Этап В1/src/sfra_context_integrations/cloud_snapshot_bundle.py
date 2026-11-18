@@ -118,7 +118,7 @@ class PreparedCloudSnapshotBundle:
         index_version_id: str,
     ) -> BuiltCloudSnapshotV2:
         """Bind actual immutable upload version IDs after the #125 writer succeeds."""
-        _validate_prepared_bundle(self)
+        verify_prepared_cloud_snapshot_bundle(self)
         manifest = CloudSnapshotManifestV1(
             source_revision=self.source_revision,
             source_bundle=ImmutableObjectVersion(
