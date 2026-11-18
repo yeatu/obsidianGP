@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/sfra-gold-benchmark.yml"
+      - "PROJECT_TASKS.md"
       - "GPT/Нейросеть/Проекты/Аналитик 1/Сессия 4/Issue 41/**"
       - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark/**"
