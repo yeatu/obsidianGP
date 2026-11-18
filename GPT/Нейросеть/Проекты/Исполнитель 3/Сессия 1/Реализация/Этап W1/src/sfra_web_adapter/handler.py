@@ -41,7 +41,7 @@ def _safe_status_mapping(status: object) -> dict[str, object]:
 def _render_status(status: Mapping[str, object], marker: str) -> str:
     encoded = json.dumps(status, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     fence = chr(96) * 3
-    return "\\n".join((marker, "SFRA transport status v2", "", fence + "json", encoded, fence))
+    return "\n".join((marker, "SFRA transport status v2", "", fence + "json", encoded, fence))
 
 def handle_opened_event(payload: Mapping[str, object], *, event_name: str, action: str,
                         comments: CommentPort, worker: WorkerPort, snapshot: object,
