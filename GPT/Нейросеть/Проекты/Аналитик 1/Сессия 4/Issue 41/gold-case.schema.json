@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfra.local/schemas/synthetic-gold-corpus-v1.schema.json",
+  "title": "SFRA Synthetic Gold Corpus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "corpus_id",
+    "version",
+    "created_date",
+    "synthetic_only",
+    "privacy_statement",
+    "source_model",
+    "documents",
+    "cases"
+  ],
+  "properties": {
+    "corpus_id": {
+      "const": "sfra.synthetic.gold.e2-e3-context-pack"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "created_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "synthetic_only": {
+      "const": true
+    },
+    "privacy_statement": {
+      "type": "string",
+      "minLength": 30
+    },
+    "source_model": {
+      "type": "object",
+      "required": [
+        "content_encoding",
+        "line_numbering",
+        "node_text_rule",
+        "hashes",
+        "source_scope_states"
+      ]
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_path",
+          "source_state",
+          "document_hash",
+          "content",
+          "nodes"
+        ],
+        "properties": {
+          "source_path": {
+            "type": "string",
+            "pattern": "^synthetic/"
+          },
+          "source_state": {
+            "enum": [
+              "available",
+              "stale",
+              "deleted",
+              "ambiguous",
+              "not_found"
+            ]
+          },
+          "document_hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "content": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "node_id",
+                "node_type",
+                "heading_path",
+                "line_start",
+                "line_end",
+                "content_hash",
+                "raw_text",
+                "preservation",
+                "required_with",
+                "matched_entities",
+                "matched_facets"
+              ],
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$"
+                },
+                "node_type": {
+                  "type": "string"
+                },
+                "heading_path": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "line_start": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "line_end": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "content_hash": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                },
+                "raw_text": {
+                  "type": "string"
+                },
+                "parent_node_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "preservation": {
+                  "enum": [
+                    "required",
+                    "normal"
+                  ]
+                },
+                "required_with": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "matched_entities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "matched_facets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "category",
+          "query",
+          "retrieval",
+          "context_pack",
+          "source_assertions",
+          "scenario_controls",
+          "rationale"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^gq-\\d{3}-[a-z0-9-]+$"
+          },
+          "category": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "retrieval": {
+            "type": "object",
+            "required": [
+              "expected_node_ids",
+              "acceptable_node_ids",
+              "forbidden_node_ids"
+            ],
+            "properties": {
+              "expected_node_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "acceptable_node_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "forbidden_node_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "context_pack": {
+            "type": "object",
+            "required": [
+              "required_node_ids",
+              "allowed_additional_node_ids",
+              "forbidden_node_ids",
+              "expected_status",
+              "critical_constraints",
+              "required_dependency_groups",
+              "facet_evaluation",
+              "completeness"
+            ],
+            "properties": {
+              "required_node_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allowed_additional_node_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "forbidden_node_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expected_status": {
+                "enum": [
+                  "complete",
+                  "partial",
+                  "empty",
+                  "budget_limited",
+                  "integrity_warning"
+                ]
+              },
+              "critical_constraints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "required_dependency_groups": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "facet_evaluation": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "facet",
+                    "required_node_ids"
+                  ],
+                  "properties": {
+                    "facet": {
+                      "type": "string"
+                    },
+                    "required_node_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "completeness": {
+                "type": "string"
+              }
+            }
+          },
+          "source_assertions": {
+            "type": "array"
+          },
+          "scenario_controls": {
+            "type": "array"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 10
+          },
+          "expected_read_source": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}
