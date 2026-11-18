@@ -13,9 +13,9 @@ The writer does not build bundles, change the catalogue, select a provider, pers
 - `put_if_absent(key, payload, expected_sha256, expected_byte_size)`: conditionally creates an immutable object and returns an `ObjectWriteReceipt` or no acknowledgement;
 - `read_exact(key, version_id)`: reads back precisely the acknowledged immutable version.
 
-Before the port is called, the writer revalidates the prepared bundle with #119's public `verify_prepared_cloud_snapshot_bundle()`. Each payload's complete SHA-256 and byte size are checked again before conditional creation. A receipt must echo the exact key/hash/size and carry an opaque immutable version ID. The writer then reads that exact version back and compares exact bytes, size and SHA-256.
+Before the port is called, the writer revalidates the prepared bundle with #119's public `verify_prepared_cloud_snapshot_bundle()`. Each payload's complete SHA-256 and byte size are checked again before conditional creation. A receipt must echo the exact key/hash/size and carry an opaque immutable version ID. The version ID is checked immediately against the exact #117 `ImmutableObjectVersion` rules: non-empty, at most 4096 characters, Unicode NFC, no control/surrogate characters, no leading/trailing whitespace and no mutable aliases. An invalid source receipt stops the sequence before the index object is written. The writer then reads that exact version back and compares exact bytes, size and SHA-256.
 
-Only after both source and index objects have acknowledged writes and passed exact-version read-back does the writer call `PreparedCloudSnapshotBundle.build_cloud_snapshot_v2()` with the two returned opaque version IDs. It returns an `UploadedCloudSnapshotBundle` containing the verified receipts and complete v2 identity. Object version IDs are never interpreted as Git commit SHAs.
+Only after both source and index objects have acknowledged writes and passed exact-version read-back does the writer call `PreparedCloudSnapshotBundle.build_cloud_snapshot_v2()` with the two returned opaque version IDs. It returns an `UploadedCloudSnapshotBundle` containing the verified receipts and complete v2 identity. Its public constructor independently re-derives the expected `BuiltCloudSnapshotV2` from the prepared descriptor and exact receipt version IDs, then compares the complete typed identity and canonical manifest bytes. A valid but unrelated v2 manifest cannot be attached to the receipts. Object version IDs are never interpreted as Git commit SHAs.
 
 ## Retry, conflict and failure semantics
 
@@ -38,12 +38,12 @@ The dedicated fixture workflow installs E1, B1, E3 and E2 packages, creates temp
 
 No provider SDK, remote storage, network, credentials, OIDC/KMS, real Vault/SQLite/sidecar/manifest/sfra-state, workflow dispatch, production upload, catalogue activation, retention or delete operation is used. The read-only resolver/query port remains separate from this write-only seam.
 
-
 ## Current stack integration baseline (2026-11-18)
 
-This writer branch consumes the refreshed bundle-builder dependency:
+The writer correction branch is stacked on the refreshed writer implementation:
 - Bundle PR #162 exact HEAD: `c5f84cd64877167b9feef3140fe20adf39c616cd`.
-- Current main/base incorporated by that bundle HEAD: `553392dbbe9d3782683593bb92b88ac3ad6d9721`.
-- Writer branch sync commit: `c9b21be108ae7943b475838559b6bd2c163ba1bf`, with the refreshed bundle HEAD as first parent and the former writer HEAD `8c957c9e2554ebef8458978a4245b7a27bbe866e` as second parent.
+- Writer PR #170 exact HEAD before this correction-base propagation: `c9b21be108ae7943b475838559b6bd2c163ba1bf`.
+- Writer base documentation sync commit: `b0bcf7ae587c3613b80ef811264bdd4437eedc93`.
+- Correction branch propagation commit: to be recorded in the linked integration Issue after publication.
 
-This records branch ancestry for the stacked implementation only. It does not change the writer contract or enable a provider, upload, catalogue activation or production operation.
+This is branch-ancestry documentation only. The correction retains the writer's fail-closed identity checks and does not enable a provider, upload, catalogue activation or production operation.
