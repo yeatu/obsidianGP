@@ -96,3 +96,12 @@ def test_marker_requires_bot_account_type_even_when_login_matches():
     }
     decision = ledger.inspect(17, body, [forged])
     assert (decision.action, decision.reason) == ("START", "first_observation")
+
+@pytest.mark.parametrize("state", ["REJECTED", "FAILED"])
+def test_terminal_failure_markers_are_not_retried(state):
+    ledger = MarkerLedger()
+    body = b'{"request":1}'
+    digest = hashlib.sha256(body).hexdigest()
+    terminal = marker_comment(ledger._marker(17, digest, state))
+    decision = ledger.inspect(17, body, [terminal])
+    assert (decision.action, decision.reason) == ("SKIP", "terminal_state")
