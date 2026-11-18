@@ -17,13 +17,36 @@ SNAPSHOT = SnapshotRef(
     sidecar_commit_sha="2" * 40,
     manifest_sha256="sha256:" + "3" * 64,
 )
+GOLD_NODE = {
+    "node_id": "manual_intro",
+    "source_path": "synthetic/operations/manual.md",
+    "content_hash": "sha256:04b8c940ba7056617a1fc4d4e45eff787033888862cd291eb9770f3fe6ea0f77",
+    "line_start": 1,
+    "line_end": 2,
+    "raw_text": "Операционный справочник станции «Люмен».\nРуководство относится к тестовому объекту Л-7.\n",
+}
 
 class SyntheticSearchApplication:
-    """Injected V2.1-shaped port backed only by fixed disposable test data."""
+    """Injected V2.1-shaped port backed by one accepted synthetic gold-corpus node."""
+    def __init__(self):
+        self.last_projection = None
+
     def search(self, request):
+        self.last_projection = {
+            "schema_version": 1,
+            "operation": "search_vault",
+            "items": [{
+                "node_id": GOLD_NODE["node_id"],
+                "source_path": GOLD_NODE["source_path"],
+                "content_hash": GOLD_NODE["content_hash"],
+                "line_start": GOLD_NODE["line_start"],
+                "line_end": GOLD_NODE["line_end"],
+                "excerpt": GOLD_NODE["raw_text"],
+            }],
+        }
         pack = {
             "Status": "complete",
-            "Included": [{"node_id": "synthetic-node-001", "raw_text": "Synthetic fixture excerpt only."}],
+            "Included": [{"node_id": GOLD_NODE["node_id"], "raw_text": GOLD_NODE["raw_text"]}],
             "Deferred": [],
             "Coverage": {"covered": 1, "uncovered": 0},
             "Diagnostics": [],
@@ -40,15 +63,33 @@ class SyntheticSearchApplication:
 
 class SyntheticReadSourceApplication:
     """Mock-only source port; never opens a path, database or Vault."""
+    def __init__(self):
+        self.last_projection = None
+
     def read(self, request: ReadSourceRequest):
+        if request.node_id != GOLD_NODE["node_id"] or request.expected_hash != GOLD_NODE["content_hash"]:
+            self.last_projection = None
+            return ReadSourceResult(request=request, status="not_found", fragments=())
         fragment = SourceFragment(
             role="target",
-            node_id="synthetic-node-001",
-            source_path="synthetic://fixture/source.md",
-            content_hash=request.expected_hash,
-            raw_text="Synthetic fixture source text only.",
+            node_id=GOLD_NODE["node_id"],
+            source_path=GOLD_NODE["source_path"],
+            content_hash=GOLD_NODE["content_hash"],
+            raw_text=GOLD_NODE["raw_text"],
             index_generation=1,
         )
+        self.last_projection = {
+            "schema_version": 1,
+            "operation": "read_source",
+            "items": [{
+                "node_id": fragment.node_id,
+                "source_path": fragment.source_path,
+                "content_hash": fragment.content_hash,
+                "line_start": GOLD_NODE["line_start"],
+                "line_end": GOLD_NODE["line_end"],
+                "excerpt": fragment.raw_text,
+            }],
+        }
         return ReadSourceResult(request=request, status="ok", fragments=(fragment,))
 
 def main() -> int:
@@ -64,12 +105,22 @@ def main() -> int:
         payload = json.load(stream)
     client = GitHubREST(token=token, repository=repository)
     store = GitHubCommentStatusStore(client)
+    search_application = SyntheticSearchApplication()
+    read_source_application = SyntheticReadSourceApplication()
     worker = IssueWorkerCore(
         issue_reader=GitHubIssueReader(client),
         status_store=store,
-        search_application=SyntheticSearchApplication(),
-        read_source_application=SyntheticReadSourceApplication(),
+        search_application=search_application,
+        read_source_application=read_source_application,
     )
+
+    def response_projection(operation: str):
+        if operation == "search_vault":
+            return search_application.last_projection
+        if operation == "read_source":
+            return read_source_application.last_projection
+        return None
+
     outcome = handle_opened_event(
         payload,
         event_name=event_name,
@@ -78,8 +129,9 @@ def main() -> int:
         worker=worker,
         snapshot=SNAPSHOT,
         worker_commit_sha=worker_sha,
+        response_projection=response_projection,
     )
-    # Aggregate-only output. Never print request payloads, hashes, or results.
+    # Aggregate-only output. Synthetic excerpts are emitted only in the intended Issue response comment.
     print("SFRA_W1_OUTCOME=" + outcome)
     return 0
 
