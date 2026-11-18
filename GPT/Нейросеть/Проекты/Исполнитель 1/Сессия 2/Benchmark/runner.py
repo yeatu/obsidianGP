@@ -751,6 +751,35 @@ def _context_status_diagnostic(case_id: str, status_match: bool) -> str:
     return "unexpected_context_status_mismatch"
 
 
+def _resolve_pr_checkout_identity(
+    root: Path,
+    *,
+    pr_head_sha: str,
+    event_base_sha: str,
+    actual_checkout_sha: str,
+) -> tuple[str, str | None, str | None]:
+    """Resolve the effective PR base from the checked-out merge-commit graph.
+
+    GitHub's pull_request event payload can retain an older base SHA after a
+    branch is refreshed with a merge commit that already contains current main.
+    When HEAD is a two-parent PR merge commit and its second parent is the
+    declared PR head, the first parent is the exact base used to build the
+    checked-out tree. Otherwise the event base is retained as unverified.
+    """
+    try:
+        record = git(root, "rev-list", "--parents", "-n", "1", actual_checkout_sha).split()
+    except Exception:
+        return event_base_sha, None, None
+    parents = record[1:]
+    if (
+        pr_head_sha not in {"", "not-a-pull-request"}
+        and len(parents) == 2
+        and parents[1] == pr_head_sha
+    ):
+        return parents[0], parents[0], parents[1]
+    return event_base_sha, None, None
+
+
 def _token_efficiency(
     counter: Any,
     included_entries: Sequence[Mapping[str, Any]],
@@ -1303,16 +1332,25 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
         checkout_sha = "unavailable"
         actual_checkout_sha = "unavailable"
     pr_head_sha = os.environ.get("BENCHMARK_PR_HEAD_SHA", "not-a-pull-request")
-    pr_base_sha = os.environ.get("BENCHMARK_PR_BASE_SHA", "not-a-pull-request")
+    event_pr_base_sha = os.environ.get("BENCHMARK_PR_BASE_SHA", "not-a-pull-request")
     pr_number = os.environ.get("BENCHMARK_PR_NUMBER", "not-a-pull-request")
+    pr_base_sha, checkout_base_sha, checkout_pr_head_sha = _resolve_pr_checkout_identity(
+        REPO_ROOT,
+        pr_head_sha=pr_head_sha,
+        event_base_sha=event_pr_base_sha,
+        actual_checkout_sha=actual_checkout_sha,
+    )
     report = {
         "runner_version": RUNNER_VERSION,
         "implementation_ref": actual_checkout_sha,
         "pr_number": pr_number,
         "pr_head_sha": pr_head_sha,
         "pr_base_sha": pr_base_sha,
+        "pr_base_sha_event": event_pr_base_sha,
         "checkout_sha": actual_checkout_sha,
         "workflow_checkout_sha": checkout_sha,
+        "checkout_base_sha": checkout_base_sha,
+        "checkout_pr_head_sha": checkout_pr_head_sha,
         "corpus_version": CORPUS_VERSION,
         "corpus_digest": digest,
         "case_count": len(per_case),

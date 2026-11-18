@@ -112,6 +112,51 @@ def test_legacy_context_status_mismatches_remain_classified_and_visible():
     assert runner._context_status_diagnostic("gq-025-source-budget-exceeded", True) == "matched"
 
 
+def test_pr_report_uses_verified_checkout_base_when_event_base_is_stale(monkeypatch, tmp_path):
+    checkout = "d" * 40
+    current_base = "b" * 40
+    pr_head = "c" * 40
+    stale_event_base = "a" * 40
+
+    def fake_git(root, *args):
+        assert args == ("rev-list", "--parents", "-n", "1", checkout)
+        return f"{checkout} {current_base} {pr_head}"
+
+    monkeypatch.setattr(runner, "git", fake_git)
+    effective_base, checkout_base, checkout_head = runner._resolve_pr_checkout_identity(
+        tmp_path,
+        pr_head_sha=pr_head,
+        event_base_sha=stale_event_base,
+        actual_checkout_sha=checkout,
+    )
+
+    assert effective_base == current_base
+    assert checkout_base == current_base
+    assert checkout_head == pr_head
+
+
+def test_pr_report_keeps_event_base_when_merge_ref_parent_does_not_match_pr_head(monkeypatch, tmp_path):
+    checkout = "d" * 40
+    event_base = "a" * 40
+    declared_pr_head = "c" * 40
+
+    monkeypatch.setattr(
+        runner,
+        "git",
+        lambda root, *args: f"{checkout} {'b' * 40} {'e' * 40}",
+    )
+    effective_base, checkout_base, checkout_head = runner._resolve_pr_checkout_identity(
+        tmp_path,
+        pr_head_sha=declared_pr_head,
+        event_base_sha=event_base,
+        actual_checkout_sha=checkout,
+    )
+
+    assert effective_base == event_base
+    assert checkout_base is None
+    assert checkout_head is None
+
+
 def test_token_efficiency_uses_same_source_text_tokenizer_on_both_sides():
     class WordCounter:
         def count(self, value: str) -> int:

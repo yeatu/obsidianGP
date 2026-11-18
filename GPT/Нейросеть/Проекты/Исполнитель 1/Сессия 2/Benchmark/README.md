@@ -81,3 +81,8 @@ Each report records four distinct references: PR head SHA, PR base SHA, actual c
 ## CI
 
 The dedicated workflow `.github/workflows/sfra-gold-benchmark.yml` runs on pull requests and uses fixture-only data. It has read-only repository permissions and never checks out a user Vault or the production sidecar.
+
+
+## Checkout and PR identity
+
+The report records the PR head, the effective PR base verified from the checked-out merge-commit parents, the raw webhook event base, the actual checkout SHA and workflow checkout SHA separately. This avoids reporting a stale webhook base as the tree actually tested after a current-main synchronization. If the merge-ref graph cannot prove the base/head pairing, the report retains the event base and leaves the verified parent fields unavailable.
