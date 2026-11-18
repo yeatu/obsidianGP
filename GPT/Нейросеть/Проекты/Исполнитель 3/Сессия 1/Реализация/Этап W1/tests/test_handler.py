@@ -114,14 +114,23 @@ def test_handler_renders_only_allowlisted_canonical_gold_evidence_in_issue_comme
 
 def test_handler_rejects_non_synthetic_projection_provenance():
     from sfra_web_adapter.handler import _safe_synthetic_projection
-    bad = {
-        "schema_version": 1, "operation": "search_vault",
-        "items": [{
-            "node_id": "node", "source_path": "/private/vault.md",
-            "content_hash": "sha256:" + "a" * 64,
-            "line_start": 1, "line_end": 1, "excerpt": "not allowed",
-        }],
-    }
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus
     import pytest
-    with pytest.raises(ValueError, match="not synthetic"):
+    corpus = SyntheticGoldCorpus.load_default()
+    case = corpus.case_for_query("обычный лимит шлюза и исключение для учений")
+    bad = corpus.evidence(case)
+    bad["evidence"][0]["source_path"] = "/private/vault.md"
+    with pytest.raises(ValueError, match="provenance is not synthetic"):
+        _safe_synthetic_projection(bad, "search_vault")
+
+
+def test_handler_rejects_projection_with_unapproved_corpus_digest():
+    from sfra_web_adapter.handler import _safe_synthetic_projection
+    from sfra_web_adapter.corpus import SyntheticGoldCorpus
+    import pytest
+    corpus = SyntheticGoldCorpus.load_default()
+    case = corpus.case_for_query("обычный лимит шлюза и исключение для учений")
+    bad = corpus.evidence(case)
+    bad["corpus_sha256"] = "sha256:" + "0" * 64
+    with pytest.raises(ValueError, match="corpus identity mismatch"):
         _safe_synthetic_projection(bad, "search_vault")
