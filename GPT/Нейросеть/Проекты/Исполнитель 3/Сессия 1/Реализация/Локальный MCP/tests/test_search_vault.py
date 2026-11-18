@@ -197,6 +197,17 @@ def test_invalid_wire_input_fails_before_service_call(arguments):
     assert service.calls == []
 
 
+def test_search_vault_sdk_types_keep_known_and_focus_fields_closed():
+    from sfra_mcp_server.search_vault import FocusAspectInput, KnownVersionInput
+
+    assert KnownVersionInput.__required_keys__ == {"node_id", "content_hash"}
+    assert KnownVersionInput.__optional_keys__ == set()
+    assert FocusAspectInput.__required_keys__ == {"id", "label"}
+    assert FocusAspectInput.__optional_keys__ == {
+        "entities", "facets", "terms", "match_mode",
+    }
+
+
 def test_build_search_vault_handler_exposes_the_contract_signature():
     from inspect import signature
 

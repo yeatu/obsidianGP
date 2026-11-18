@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import math
-from typing import Any, Callable
+from typing import Any, Callable, Literal
+
+from typing_extensions import NotRequired, TypedDict
 
 from sfra_context_builder.models import SnapshotRef
 from sfra_context_builder.validation import (
@@ -33,6 +35,20 @@ _ALLOWED_FIELDS = frozenset({
 })
 _ARRAY_FIELDS = ("entities", "facets", "zones", "known", "focus")
 _FOCUS_ARRAY_FIELDS = ("entities", "facets", "terms")
+
+
+class KnownVersionInput(TypedDict):
+    node_id: str
+    content_hash: str
+
+
+class FocusAspectInput(TypedDict):
+    id: str
+    label: str
+    entities: NotRequired[list[str]]
+    facets: NotRequired[list[str]]
+    terms: NotRequired[list[str]]
+    match_mode: NotRequired[Literal["any", "all"]]
 
 
 class SearchVaultToolError(ValueError):
@@ -294,8 +310,8 @@ def build_search_vault_handler(
         facets: list[str] | None = None,
         zones: list[str] | None = None,
         budget_tokens: int = 3000,
-        known: list[dict[str, str]] | None = None,
-        focus: list[dict[str, Any]] | None = None,
+        known: list[KnownVersionInput] | None = None,
+        focus: list[FocusAspectInput] | None = None,
     ) -> dict[str, Any]:
         arguments: dict[str, Any] = {
             "query": query,
