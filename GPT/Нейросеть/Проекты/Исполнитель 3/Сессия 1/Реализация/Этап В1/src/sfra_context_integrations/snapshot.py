@@ -24,80 +24,6 @@ class SnapshotBindingError(ValueError):
     """Raised when Vault, sidecar and manifest do not describe one snapshot."""
 
 
-@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
-class PinnedSnapshot:
-    """Snapshot identity bound to a verifier created by the trusted factory.
-
-    Direct construction is deliberately disabled. Production instances are
-    created only inside bind_pinned_snapshot(), after checkout, manifest and
-    E1 state verification. The active verifier is kept in a private weak
-    registry, not in an instance attribute: consumers cannot obtain or mutate
-    the callback function object through a PinnedSnapshot reference.
-    """
-
-    ref: SnapshotRef
-    sidecar_root: Path
-    database_path: Path
-    manifest_path: Path
-    vault_git_root: Path
-    vault_root: Path
-    manifest: Mapping[str, Any]
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        raise SnapshotBindingError(
-            "PinnedSnapshot must be created by bind_pinned_snapshot()"
-        )
-
-    def verify_current(self) -> None:
-        """Fail closed if any bound checkout, manifest or database changed."""
-        _run_registered_verifier(self)
-
-
-def _build_verifier_registry():
-    """Create a one-shot verifier registry without exposing callback state on snapshots."""
-    entries: dict[
-        int,
-        tuple[weakref.ReferenceType[PinnedSnapshot], Callable[[], None]],
-    ] = {}
-
-    def register(snapshot: PinnedSnapshot, callback: Callable[[], None]) -> None:
-        if not callable(callback):
-            raise SnapshotBindingError("Pinned snapshot verifier must be callable")
-        key = id(snapshot)
-        existing = entries.get(key)
-        if existing is not None and existing[0]() is snapshot:
-            raise SnapshotBindingError(
-                "Pinned snapshot already has an active verifier"
-            )
-
-        def discard(reference: weakref.ReferenceType[PinnedSnapshot]) -> None:
-            current = entries.get(key)
-            if current is not None and current[0] is reference:
-                entries.pop(key, None)
-
-        reference = weakref.ref(snapshot, discard)
-        entries[key] = (reference, callback)
-
-    def verify(snapshot: PinnedSnapshot) -> None:
-        entry = entries.get(id(snapshot))
-        if entry is None or entry[0]() is not snapshot:
-            raise SnapshotBindingError(
-                "Pinned snapshot has no active verifier binding"
-            )
-        callback = entry[1]
-        try:
-            callback()
-        except SnapshotBindingError:
-            raise
-        except Exception as exc:
-            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
-
-    return register, verify
-
-
-_register_snapshot_verifier, _run_registered_verifier = _build_verifier_registry()
-
-
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -136,8 +62,10 @@ def _git_status(root: str | Path) -> str:
     return completed.stdout
 
 
-def bind_pinned_snapshot(
+def _bind_pinned_snapshot_impl(
     *,
+    _snapshot_type: type[Any],
+    _register_verifier: Callable[[Any, Callable[[], None]], None],
     sidecar_root: str | Path,
     vault_git_root: str | Path,
     vault_root: str | Path,
@@ -358,7 +286,7 @@ def bind_pinned_snapshot(
 
     # Construct only after all snapshot identities and the active verifier
     # closure have been established. Public direct construction is disabled.
-    pinned = object.__new__(PinnedSnapshot)
+    pinned = object.__new__(_snapshot_type)
     object.__setattr__(pinned, "ref", ref)
     object.__setattr__(pinned, "sidecar_root", sidecar)
     object.__setattr__(pinned, "database_path", database_file.resolve())
@@ -366,5 +294,100 @@ def bind_pinned_snapshot(
     object.__setattr__(pinned, "vault_git_root", vault_git)
     object.__setattr__(pinned, "vault_root", vault)
     object.__setattr__(pinned, "manifest", manifest)
-    _register_snapshot_verifier(pinned, verify_current)
+    _register_verifier(pinned, verify_current)
     return pinned
+
+
+
+def _create_pinned_snapshot_api():
+    """Create the public snapshot type and binder around a private verifier registry."""
+    entries: dict[
+        int,
+        tuple[weakref.ReferenceType[Any], Callable[[], None]],
+    ] = {}
+
+    def register(snapshot: Any, callback: Callable[[], None]) -> None:
+        if not callable(callback):
+            raise SnapshotBindingError("Pinned snapshot verifier must be callable")
+        key = id(snapshot)
+        current = entries.get(key)
+        if current is not None and current[0]() is snapshot:
+            raise SnapshotBindingError(
+                "Pinned snapshot already has an active verifier"
+            )
+
+        def discard(reference: weakref.ReferenceType[Any]) -> None:
+            registered = entries.get(key)
+            if registered is not None and registered[0] is reference:
+                entries.pop(key, None)
+
+        reference = weakref.ref(snapshot, discard)
+        entries[key] = (reference, callback)
+
+    def verify(snapshot: Any) -> None:
+        entry = entries.get(id(snapshot))
+        if entry is None or entry[0]() is not snapshot:
+            raise SnapshotBindingError(
+                "Pinned snapshot has no active verifier binding"
+            )
+        try:
+            entry[1]()
+        except SnapshotBindingError:
+            raise
+        except Exception as exc:
+            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
+
+    @dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+    class PinnedSnapshot:
+        """Verified snapshot identity; active verifier state is not instance data."""
+
+        ref: SnapshotRef
+        sidecar_root: Path
+        database_path: Path
+        manifest_path: Path
+        vault_git_root: Path
+        vault_root: Path
+        manifest: Mapping[str, Any]
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise SnapshotBindingError(
+                "PinnedSnapshot must be created by bind_pinned_snapshot()"
+            )
+
+        def verify_current(self) -> None:
+            """Fail closed unless this exact object has a factory-bound verifier."""
+            verify(self)
+
+    implementation = _bind_pinned_snapshot_impl
+
+    def bind_pinned_snapshot(
+        *,
+        sidecar_root: str | Path,
+        vault_git_root: str | Path,
+        vault_root: str | Path,
+        state_verifier: Callable[[str | Path], Mapping[str, Any]],
+        git_head_reader: Callable[[str | Path], str] = _git_head,
+        git_branch_reader: Callable[[str | Path], str] = _git_branch,
+        git_status_reader: Callable[[str | Path], str] = _git_status,
+        expected_repository: str = "yeatu/obsidianGP",
+        expected_sidecar_branch: str = "sfra-state",
+    ) -> PinnedSnapshot:
+        return implementation(
+            _snapshot_type=PinnedSnapshot,
+            _register_verifier=register,
+            sidecar_root=sidecar_root,
+            vault_git_root=vault_git_root,
+            vault_root=vault_root,
+            state_verifier=state_verifier,
+            git_head_reader=git_head_reader,
+            git_branch_reader=git_branch_reader,
+            git_status_reader=git_status_reader,
+            expected_repository=expected_repository,
+            expected_sidecar_branch=expected_sidecar_branch,
+        )
+
+    return PinnedSnapshot, bind_pinned_snapshot
+
+
+PinnedSnapshot, bind_pinned_snapshot = _create_pinned_snapshot_api()
+del _create_pinned_snapshot_api, _bind_pinned_snapshot_impl
