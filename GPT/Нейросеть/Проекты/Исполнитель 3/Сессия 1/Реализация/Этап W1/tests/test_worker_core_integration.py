@@ -72,13 +72,13 @@ def test_synthetic_applications_expose_bounded_gold_corpus_projection():
     assert projected["schema_version"] == "sfra.web.synthetic-evidence.v1"
     assert projected["case_id"] == "gq-004-exception-pair"
     assert projected["corpus_sha256"] == "sha256:915304e812906f64003d9aacb0dd4b7701f7fbcf4f24fdc3cda21d1108b13068"
-    assert projected["evidence"][0]["node_id"] == "gate_rule"
-    assert projected["evidence"][0]["source_path"] == "synthetic/policies/limits.md"
+    assert [item["node_id"] for item in projected["evidence"]] == ["gate_rule", "gate_exception"]
+    assert {item["source_path"] for item in projected["evidence"]} == {"synthetic/policies/limits.md"}
 
     node = corpus.node("gate_rule")
     assert node is not None
     read = SyntheticReadSourceApplication(corpus)
-    request = SimpleNamespace(node_id=node.node_id, expected_hash=node.content_hash)
+    request = SimpleNamespace(node_id=node.node_id, expected_hash=node.content_hash, scope="node")
     result = read.read(request)
     assert result.status == "ok"
     assert read.last_projection["case_id"] == "gq-004-exception-pair"
@@ -126,3 +126,50 @@ def test_event_body_digest_is_rechecked_against_api_reread_before_any_service_ca
     assert search_app.calls == 0
     assert read_app.calls == 0
     assert "request_body_changed" in comments.items[-1]["body"]
+
+
+def test_noncanonical_search_query_never_returns_or_projects_corpus_evidence():
+    corpus = SyntheticGoldCorpus.load_default()
+    app = SyntheticSearchApplication(corpus)
+    result = app.search(SimpleNamespace(query="режимы установки Факел и ограничение переключения"))
+
+    assert app.calls == 1
+    assert app.last_projection is None
+    assert result.search.batch.candidates == ()
+    assert result.context_pack["Included"] == []
+
+
+def test_noncanonical_read_source_node_with_valid_corpus_hash_is_rejected():
+    corpus = SyntheticGoldCorpus.load_default()
+    node = corpus.node("torch_modes")
+    assert node is not None
+    app = SyntheticReadSourceApplication(corpus)
+    request = SimpleNamespace(node_id=node.node_id, expected_hash=node.content_hash, scope="node")
+
+    result = app.read(request)
+
+    assert result.status == "not_found"
+    assert result.fragments == ()
+    assert app.last_projection is None
+
+
+def test_canonical_search_and_read_are_the_only_projected_nodes():
+    corpus = SyntheticGoldCorpus.load_default()
+    search = SyntheticSearchApplication(corpus)
+    result = search.search(SimpleNamespace(query=CANONICAL_QUERY))
+    assert [item["node_id"] for item in result.context_pack["Included"]] == [
+        "gate_rule", "gate_exception"
+    ]
+    assert [item["node_id"] for item in search.last_projection["evidence"]] == [
+        "gate_rule", "gate_exception"
+    ]
+
+    for node_id in ("gate_rule", "gate_exception"):
+        node = corpus.node(node_id)
+        assert node is not None
+        read = SyntheticReadSourceApplication(corpus)
+        result = read.read(SimpleNamespace(
+            node_id=node_id, expected_hash=node.content_hash, scope="node"
+        ))
+        assert result.status == "ok"
+        assert [item["node_id"] for item in read.last_projection["evidence"]] == [node_id]
