@@ -3,7 +3,7 @@ import hashlib
 import pytest
 from sfra_web_adapter import EventRejection, MarkerLedger, parse_opened_issue_event
 
-BOT = {"login": "github-actions[bot]", "type": "Bot"}
+BOT = {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"}
 
 def event(**kwargs):
     issue = {"number": 17, "title": "[SFRA] request", "body": '{"protocol_version":"sfra.issue.v1"}', "user": {"login": "yeatu"}}
@@ -86,6 +86,38 @@ def test_ledger_fails_closed_on_conflicting_marker_history():
     b = ledger._marker(17, "b" * 64, "STARTED")
     decision = ledger.inspect(17, b"x", [marker_comment(a), marker_comment(b)])
     assert (decision.action, decision.reason) == ("REJECT", "ledger_conflict")
+
+
+@pytest.mark.parametrize("identity", [
+    {"login": "github-actions[bot]", "type": "Bot"},
+    {"login": "github-actions[bot]", "id": 1, "type": "Bot"},
+    {"login": "github-actions[bot]", "id": "41898282", "type": "Bot"},
+    {"login": "github-actions[bot]", "id": 41898282, "type": "User"},
+])
+def test_ledger_ignores_marker_without_exact_stable_bot_identity(identity):
+    ledger = MarkerLedger()
+    body = b'{"request":1}'
+    forged = {
+        "body": ledger._marker(17, hashlib.sha256(body).hexdigest(), "COMPLETED"),
+        "user": identity,
+    }
+
+    decision = ledger.inspect(17, body, [forged])
+
+    assert (decision.action, decision.reason) == ("START", "first_observation")
+
+
+def test_ledger_accepts_exact_bot_id_when_type_field_is_absent():
+    ledger = MarkerLedger()
+    body = b'{"request":1}'
+    valid = {
+        "body": ledger._marker(17, hashlib.sha256(body).hexdigest(), "STARTED"),
+        "user": {"login": "github-actions[bot]", "id": 41898282},
+    }
+
+    decision = ledger.inspect(17, body, [valid])
+
+    assert (decision.action, decision.reason) == ("RETRY", "interrupted_or_retried")
 
 def test_marker_requires_bot_account_type_even_when_login_matches():
     ledger = MarkerLedger()
