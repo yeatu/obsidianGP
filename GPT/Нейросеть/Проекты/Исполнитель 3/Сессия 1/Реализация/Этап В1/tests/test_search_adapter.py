@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from sfra_context_builder.models import SearchRequest, SnapshotRef
-from sfra_context_integrations.search_adapter import E2SearchAdapter, SearchAdapterError
+from sfra_context_integrations.search_adapter import SearchAdapterError
+from tests.fixtures.consumer_seams import make_test_search_adapter
 from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 
 
@@ -124,7 +125,7 @@ def test_adapter_uses_e1_exact_text_and_preserves_e2_rank_and_metadata():
     original = "Точный исходный узел.\r\nБез нормализации."
     hit = _hit(original)
     reader = FakeSourceReader(_source(hit, original))
-    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([hit]), search_limit=10)
+    adapter = make_test_search_adapter(_pinned(), reader, search_call=_engine([hit]), search_limit=10)
 
     result = adapter.search(_request())
 
@@ -152,7 +153,7 @@ def test_adapter_uses_e1_exact_text_and_preserves_e2_rank_and_metadata():
 
 def test_adapter_maps_empty_retrieval_to_empty_complete_batch():
     reader = FakeSourceReader({"status": "not_found_in_retrieval", "node": None})
-    adapter = E2SearchAdapter(
+    adapter = make_test_search_adapter(
         _pinned(), reader,
         search_call=_engine([], status="not_found_in_retrieval"),
         search_limit=10,
@@ -167,7 +168,7 @@ def test_adapter_maps_empty_retrieval_to_empty_complete_batch():
 def test_adapter_does_not_turn_engine_error_into_empty_search():
     def fail(*args, **kwargs):
         raise OSError("sidecar unavailable")
-    adapter = E2SearchAdapter(_pinned(), FakeSourceReader({}), search_call=fail)
+    adapter = make_test_search_adapter(_pinned(), FakeSourceReader({}), search_call=fail)
     with pytest.raises(SearchAdapterError) as error:
         adapter.search(_request())
     assert error.value.code == "e2_search_failed"
@@ -176,7 +177,7 @@ def test_adapter_does_not_turn_engine_error_into_empty_search():
 def test_adapter_marks_limit_sized_result_as_truncated():
     hit = _hit()
     reader = FakeSourceReader(_source(hit))
-    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([hit, hit]), search_limit=2)
+    adapter = make_test_search_adapter(_pinned(), reader, search_call=_engine([hit, hit]), search_limit=2)
     result = adapter.search(_request())
     assert result.batch.complete is False
     assert result.batch.truncated_by_limit is True
@@ -187,7 +188,7 @@ def test_adapter_marks_limit_sized_result_as_truncated():
 def test_adapter_excludes_non_ok_source_status_and_marks_batch_incomplete(status):
     hit = _hit()
     reader = FakeSourceReader(_source(hit, status=status))
-    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([hit]))
+    adapter = make_test_search_adapter(_pinned(), reader, search_call=_engine([hit]))
     result = adapter.search(_request())
     assert result.batch.candidates == ()
     assert result.batch.complete is False
@@ -197,7 +198,7 @@ def test_adapter_excludes_non_ok_source_status_and_marks_batch_incomplete(status
 def test_adapter_treats_source_integrity_error_as_error_diagnostic():
     hit = _hit()
     reader = FakeSourceReader(_source(hit, status="integrity_error"))
-    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([hit]))
+    adapter = make_test_search_adapter(_pinned(), reader, search_call=_engine([hit]))
     result = adapter.search(_request())
     assert result.batch.complete is False
     assert result.diagnostics[0]["severity"] == "error"
@@ -207,7 +208,7 @@ def test_adapter_rejects_locator_metadata_mismatch():
     hit = _hit()
     source = _source(hit)
     source["node"]["source_path"] = "другой/документ.md"
-    adapter = E2SearchAdapter(_pinned(), FakeSourceReader(source), search_call=_engine([hit]))
+    adapter = make_test_search_adapter(_pinned(), FakeSourceReader(source), search_call=_engine([hit]))
     result = adapter.search(_request())
     assert result.batch.candidates == ()
     assert result.batch.complete is False
@@ -217,7 +218,7 @@ def test_adapter_rejects_locator_metadata_mismatch():
 def test_adapter_rejects_source_text_with_wrong_hash():
     hit = _hit("expected text")
     source = _source(hit, "different text")
-    adapter = E2SearchAdapter(_pinned(), FakeSourceReader(source), search_call=_engine([hit]))
+    adapter = make_test_search_adapter(_pinned(), FakeSourceReader(source), search_call=_engine([hit]))
     result = adapter.search(_request())
     assert result.batch.candidates == ()
     assert result.diagnostics[0]["code"] == "source_content_hash_mismatch"
@@ -227,7 +228,7 @@ def test_adapter_rejects_source_text_with_wrong_hash():
 def test_adapter_does_not_infer_facet_match_and_reports_missing_dependency_metadata():
     hit = _hit()
     source = _source(hit, metadata={})
-    adapter = E2SearchAdapter(_pinned(), FakeSourceReader(source), search_call=_engine([hit]))
+    adapter = make_test_search_adapter(_pinned(), FakeSourceReader(source), search_call=_engine([hit]))
     result = adapter.search(_request(facets=("VOICE",)))
     assert result.batch.candidates[0].matched_facets == ()
     assert result.batch.candidates[0].preservation == "normal"
@@ -255,7 +256,7 @@ def test_adapter_accepts_exact_empty_source_span_from_e2(
         "line_end": line_end,
     })
     reader = FakeSourceReader(_source(hit, ""))
-    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([hit]))
+    adapter = make_test_search_adapter(_pinned(), reader, search_call=_engine([hit]))
 
     result = adapter.search(_request())
 
@@ -287,7 +288,7 @@ def test_adapter_rejects_malformed_or_inverted_empty_source_spans(
         hit.pop("raw_text")
     else:
         hit["raw_text"] = raw_text
-    adapter = E2SearchAdapter(
+    adapter = make_test_search_adapter(
         _pinned(), FakeSourceReader({}), search_call=_engine([hit])
     )
 
@@ -304,7 +305,7 @@ def test_zone_post_filter_is_exact_and_marks_result_incomplete():
     other_hit["source_path"] = "персонажи/реанимация.md"
     other_hit["content_hash"] = _hash("Другой текст")
     reader = FakeSourceReader(_source(rules_hit))
-    adapter = E2SearchAdapter(_pinned(), reader, search_call=_engine([rules_hit, other_hit]))
+    adapter = make_test_search_adapter(_pinned(), reader, search_call=_engine([rules_hit, other_hit]))
     result = adapter.search(_request(zones=("правила",)))
     assert len(result.batch.candidates) == 1
     assert result.batch.candidates[0].zone == "правила"
