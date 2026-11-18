@@ -61,7 +61,7 @@
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / условие начала |
 |---|---:|---|:---:|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | `REVIEW_REQUEST` | **A** | Независимый аудит Governance v2.3 и PR #44 | Проверить актуальный HEAD PR #44 и Issue #20; после merge сверить результат в main |
-| [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | `IMPLEMENTATION` | **E** | Обязательная проверка активного verifier PinnedSnapshot до любого чтения E1 | Нет |
+| [#48 — review #36 / PR #46](https://github.com/yeatu/obsidianGP/issues/48) | P1 | `REVIEW_REQUEST` | **A** | Независимая проверка обязательного verifier PinnedSnapshot на HEAD `93048bf776fd0f6263d4355ea42903408419cd74` ([PR #46](https://github.com/yeatu/obsidianGP/pull/46)) | Implementation #36; нет дополнительных зависимостей |
 | [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | `ANALYSIS` | **A** | Единые контракты MCP-инструментов и непрерывность SnapshotRef между stateless-вызовами | Нет |
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | `IMPLEMENTATION` | **E** | Локальный каркас MCP stdio-сервера, конфигурация и сборка сервисов | Базовый жизненный цикл и конфигурацию можно делать до #37; публичные сигнатуры не фиксировать |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | `IMPLEMENTATION` | **E** | `search_vault` поверх SearchVaultService | После #37 и #38 |
@@ -77,6 +77,7 @@
 | PR | Состояние | Указание |
 |---|---|---|
 | [#44 — роли E/A/C и цикл E → A → E](https://github.com/yeatu/obsidianGP/pull/44) | Открыт | Изменения панели и governance; не входят в main до merge |
+| [#46 — verified PinnedSnapshot](https://github.com/yeatu/obsidianGP/pull/46) | Открыт | E1 implementation complete; независимая проверка через Issue #48; не слит |
 | [#12 — обработчик GitHub Issues и восстановление](https://github.com/yeatu/obsidianGP/pull/12) | Открыт / draft | Отдельное предложение, не входит в этап и не разрешает production worker/recovery, GitHub API writes или публикацию данных |
 | [#1 — структурный индексатор v1](https://github.com/yeatu/obsidianGP/pull/1) | Открыт | Исторический прототип; не сливать без отдельного решения C |
 | [#2 — тестовый стенд индексатора](https://github.com/yeatu/obsidianGP/pull/2) | Открыт | Исторический прототип; не сливать без отдельного решения C |
