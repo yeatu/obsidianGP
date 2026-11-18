@@ -23,45 +23,14 @@ class SnapshotBindingError(ValueError):
     """Raised when Vault, sidecar and manifest do not describe one snapshot."""
 
 
-# Capability seal: production code receives this only through
-# bind_pinned_snapshot(). Tests use it only from the isolated fixture factory.
-_SNAPSHOT_VERIFIER_SEAL = object()
-
-
-class _SnapshotVerifier:
-    """Sealed capability wrapping an active operation-boundary verifier."""
-
-    __slots__ = ("_callback", "_seal")
-
-    def __init__(self, callback: Callable[[], None], *, _seal: object) -> None:
-        if _seal is not _SNAPSHOT_VERIFIER_SEAL:
-            raise SnapshotBindingError(
-                "Snapshot verifier must be created by the trusted binding factory"
-            )
-        if not callable(callback):
-            raise SnapshotBindingError("Pinned snapshot requires a callable verifier")
-        self._callback = callback
-        self._seal = _seal
-
-    def verify(self) -> None:
-        if self._seal is not _SNAPSHOT_VERIFIER_SEAL:
-            raise SnapshotBindingError("Pinned snapshot verifier capability is invalid")
-        try:
-            self._callback()
-        except SnapshotBindingError:
-            raise
-        except Exception as exc:
-            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
-
-
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PinnedSnapshot:
-    """Snapshot identity with a mandatory, sealed operation-boundary verifier.
+    """Snapshot identity bound to a verifier created by the trusted factory.
 
-    Production instances must come from bind_pinned_snapshot(). The private
-    verifier capability prevents accidental construction with a missing or
-    arbitrary no-op callback. Unit tests use a clearly isolated test fixture
-    factory rather than constructing this production boundary directly.
+    Direct construction is deliberately disabled. Production instances are
+    created only inside bind_pinned_snapshot(), after the checkout, manifest
+    and E1 state have been verified. The callback is held directly in a frozen
+    slot; there is no separately mutable or importable capability object.
     """
 
     ref: SnapshotRef
@@ -71,21 +40,21 @@ class PinnedSnapshot:
     vault_git_root: Path
     vault_root: Path
     manifest: Mapping[str, Any]
-    _verifier: _SnapshotVerifier = field(repr=False, compare=False)
+    _verifier_callback: Callable[[], None] = field(repr=False, compare=False)
 
-    def __post_init__(self) -> None:
-        if (
-            not isinstance(self._verifier, _SnapshotVerifier)
-            or self._verifier._seal is not _SNAPSHOT_VERIFIER_SEAL
-        ):
-            raise SnapshotBindingError(
-                "PinnedSnapshot requires a sealed active verifier; "
-                "use bind_pinned_snapshot() for production"
-            )
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise SnapshotBindingError(
+            "PinnedSnapshot must be created by bind_pinned_snapshot()"
+        )
 
     def verify_current(self) -> None:
         """Fail closed if any bound checkout, manifest or database changed."""
-        self._verifier.verify()
+        try:
+            self._verifier_callback()
+        except SnapshotBindingError:
+            raise
+        except Exception as exc:
+            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
 
 
 def _sha256_file(path: Path) -> str:
@@ -346,16 +315,15 @@ def bind_pinned_snapshot(
         except Exception as exc:
             raise SnapshotBindingError("Could not complete pinned checkout verification") from exc
 
-    return PinnedSnapshot(
-        ref=ref,
-        sidecar_root=sidecar,
-        database_path=database_file.resolve(),
-        manifest_path=manifest_file.resolve(),
-        vault_git_root=vault_git,
-        vault_root=vault,
-        manifest=manifest,
-        _verifier=_SnapshotVerifier(
-            verify_current,
-            _seal=_SNAPSHOT_VERIFIER_SEAL,
-        ),
-    )
+    # Construct only after all snapshot identities and the active verifier
+    # closure have been established. Public direct construction is disabled.
+    pinned = object.__new__(PinnedSnapshot)
+    object.__setattr__(pinned, "ref", ref)
+    object.__setattr__(pinned, "sidecar_root", sidecar)
+    object.__setattr__(pinned, "database_path", database_file.resolve())
+    object.__setattr__(pinned, "manifest_path", manifest_file.resolve())
+    object.__setattr__(pinned, "vault_git_root", vault_git)
+    object.__setattr__(pinned, "vault_root", vault)
+    object.__setattr__(pinned, "manifest", manifest)
+    object.__setattr__(pinned, "_verifier_callback", verify_current)
+    return pinned
