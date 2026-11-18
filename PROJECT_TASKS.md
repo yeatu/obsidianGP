@@ -1,5 +1,16 @@
 # SFRA — оперативная панель проекта
 
+## 0. Current cloud-only handoffs (E2 transition, 2026-11-18)
+
+The earlier Local Retrieval Interface section below is retained as historical project context; current cloud data-plane, W1 and benchmark work is tracked by the live Issues listed in this section and their dependency decisions.
+
+| Issue | Priority | Type | Next action | Exact target / dependency |
+|---|---:|---|---|---|
+| [#219](https://github.com/yeatu/obsidianGP/issues/219) | P1 | REVIEW_REQUEST | Independent Role A review of the completed W1 current-main integration; after acceptance, C makes the separate acceptance/merge/round-trip decision | PR [#92](https://github.com/yeatu/obsidianGP/pull/92), HEAD `42cecfef0eaa74bc32a98d9e3063b30a28270fc4`, current main `f665ae7251387ee86b3f5adb48662b79406f392b`; compare 99 ahead / 0 behind, 14 W1-owned files; exact fixture run [#44393224276](https://github.com/yeatu/obsidianGP/actions/runs/44393224276), 65 passed, worker skipped |
+
+PR #92 remains open/unmerged. The previous A1 acceptance #203 applies only to its historical pre-sync HEAD and is not transferable to #219's exact target. The W1 worker remains dormant; no synthetic Issue round-trip or production operation is authorized by this handoff.
+
+
 > Краткая сводка текущего состояния и навигация по активной работе.  
 > **Источник истины по задаче:** соответствующая GitHub Issue и её последние действующие события.  
 > **Нормативный протокол:** [Issue #20 — Governance Protocol v2](https://github.com/yeatu/obsidianGP/issues/20).  
