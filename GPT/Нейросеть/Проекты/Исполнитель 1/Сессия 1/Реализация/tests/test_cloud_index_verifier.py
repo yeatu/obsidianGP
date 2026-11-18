@@ -200,7 +200,7 @@ def test_rejects_corrupt_node_even_when_database_digest_is_recomputed(tmp_path):
 
     with pytest.raises(CloudIndexVerificationError) as error:
         _verify(root, db_path, inventory, attestation)
-    assert error.value.code == "node_integrity_failure"
+    assert error.value.code == "node_content_mismatch"
 
 
 def test_rejects_schema_version_mismatch_without_migration(tmp_path):
@@ -329,7 +329,7 @@ def test_rejects_event_history_corruption_even_with_matching_database_digest(tmp
 
     with pytest.raises(CloudIndexVerificationError) as error:
         _verify(root, db_path, inventory, attestation)
-    assert error.value.code == "node_integrity_failure"
+    assert error.value.code == "node_history_mismatch"
 
 
 def test_rejects_node_coordinate_corruption_even_with_matching_database_digest(tmp_path):
@@ -349,7 +349,7 @@ def test_rejects_node_coordinate_corruption_even_with_matching_database_digest(t
 
     with pytest.raises(CloudIndexVerificationError) as error:
         _verify(root, db_path, inventory, attestation)
-    assert error.value.code == "node_integrity_failure"
+    assert error.value.code == "node_span_mismatch"
 
 
 def test_rejects_extra_markdown_file_and_invalid_utf8_markdown(tmp_path):
