@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from sfra_context_builder.models import SnapshotRef
-from sfra_context_integrations.snapshot import PinnedSnapshot
+from sfra_context_integrations.snapshot import (
+    PinnedSnapshot,
+    _register_snapshot_verifier,
+)
 
 
 def make_test_pinned_snapshot(
@@ -39,5 +42,5 @@ def make_test_pinned_snapshot(
     object.__setattr__(pinned, "vault_git_root", vault_git_root)
     object.__setattr__(pinned, "vault_root", vault_root)
     object.__setattr__(pinned, "manifest", manifest)
-    object.__setattr__(pinned, "_verifier_callback", callback)
+    _register_snapshot_verifier(pinned, callback)
     return pinned
