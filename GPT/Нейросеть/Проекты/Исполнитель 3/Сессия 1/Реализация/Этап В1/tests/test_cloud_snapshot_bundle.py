@@ -31,6 +31,7 @@ from sfra_context_integrations.cloud_snapshot_bundle import (
     build_markdown_inventory,
     build_prepared_cloud_snapshot_bundle,
     verify_prepared_cloud_snapshot_bundle,
+    _inventory_from_files,
 )
 
 INDEXER = IndexerIdentity(name="sfra-structural-indexer", version="0.2.0")
@@ -113,6 +114,19 @@ def test_markdown_inventory_is_canonical_and_preserves_exact_bytes(tmp_path: Pat
     assert inventory.sha256 == "sha256:" + hashlib.sha256(inventory.canonical_bytes).hexdigest()
     assert b"\n" not in inventory.canonical_bytes
 
+
+@pytest.mark.parametrize(
+    "path",
+    ["../escape.md", "/absolute.md", "folder/../escape.md", "folder//escape.md", "./escape.md"],
+)
+def test_inventory_rejects_unsafe_relative_paths(path: str):
+    with pytest.raises(UnsafeSourceTreeError):
+        _inventory_from_files([(path, b"synthetic")])
+
+
+def test_inventory_rejects_duplicate_canonical_markdown_paths():
+    with pytest.raises(UnsafeSourceTreeError, match="duplicate"):
+        _inventory_from_files([("same.md", b"one"), ("same.md", b"two")])
 
 def test_inventory_rejects_symlinks_without_following_them(tmp_path: Path):
     source_root = tmp_path / "source"
@@ -347,7 +361,7 @@ def test_manifest_bytes_tampering_is_detected_by_the_shared_v2_contract(tmp_path
         source_version_id="source-v1",
         index_version_id="index-v1",
     )
-    tampered = built.manifest_bytes.replace(b"immutable_import", b"immutable_importx")
+    tampered = built.manifest_bytes.replace(b"git_commit", b"git_commiX")
 
     with pytest.raises(CloudSnapshotContractError):
         verify_cloud_snapshot_manifest(built.ref, tampered)
