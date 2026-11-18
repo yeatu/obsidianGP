@@ -1,5 +1,6 @@
 """GitHub Actions entrypoint with synthetic-only application ports."""
 from __future__ import annotations
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,15 +11,30 @@ from sfra_context_integrations import ContextIntegrationResult, ReadSourceReques
 from sfra_issue_core import IssueWorkerCore
 from .corpus import SyntheticGoldCorpus
 from .github_api import GitHubREST
-from .handler import handle_opened_event
+from .handler import (
+    APPROVED_EVIDENCE_BY_NODE, CANONICAL_CASE_ID, CANONICAL_QUERY,
+    CANONICAL_SEARCH_NODE_IDS, handle_opened_event,
+)
 from .ports import GitHubCommentStatusStore, GitHubIssueReader
+
+def _matches_approved_node(node) -> bool:
+    expected = APPROVED_EVIDENCE_BY_NODE.get(node.node_id)
+    if expected is None:
+        return False
+    return (
+        node.source_path == expected["source_path"]
+        and node.content_hash == expected["content_hash"]
+        and node.line_start == expected["line_start"]
+        and node.line_end == expected["line_end"]
+        and "sha256:" + hashlib.sha256(node.raw_text.encode("utf-8")).hexdigest()
+        == expected["content_hash"]
+    )
 
 SNAPSHOT = SnapshotRef(
     vault_commit_sha="1" * 40,
     sidecar_commit_sha="2" * 40,
     manifest_sha256="sha256:" + "3" * 64,
 )
-CANONICAL_QUERY = "обычный лимит шлюза и исключение для учений"
 
 class SyntheticSearchApplication:
     """V2.1-shaped search port restricted to exact cases in gold corpus v1.0.0."""
@@ -29,21 +45,28 @@ class SyntheticSearchApplication:
 
     def search(self, request):
         self.calls += 1
-        case = self.corpus.case_for_query(request.query)
-        nodes = tuple(self.corpus.node(node_id) for node_id in case.node_ids) if case else ()
-        nodes = tuple(node for node in nodes if node is not None)
-        self.last_projection = self.corpus.evidence(case, operation="search_vault") if case is not None and nodes else None
-        included = [{"node_id": node.node_id, "raw_text": node.raw_text} for node in nodes]
+        # Only the exact approved query/case/node tuple may create source evidence.
+        case = self.corpus.case_for_query(request.query) if request.query == CANONICAL_QUERY else None
+        canonical_case = (
+            case is not None
+            and case.case_id == CANONICAL_CASE_ID
+            and tuple(case.node_ids) == CANONICAL_SEARCH_NODE_IDS
+        )
+        nodes = tuple(self.corpus.node(node_id) for node_id in CANONICAL_SEARCH_NODE_IDS) if canonical_case else ()
+        nodes = tuple(node for node in nodes if node is not None and _matches_approved_node(node))
+        approved = canonical_case and len(nodes) == len(CANONICAL_SEARCH_NODE_IDS)
+        self.last_projection = self.corpus.evidence(case, operation="search_vault") if approved else None
+        included = [{"node_id": node.node_id, "raw_text": node.raw_text} for node in nodes] if approved else []
         candidates = tuple(SimpleNamespace(
             node_id=node.node_id,
             source_path=node.source_path,
             content_hash=node.content_hash,
-        ) for node in nodes)
+        ) for node in nodes) if approved else ()
         pack = {
             "Status": "complete",
             "Included": included,
             "Deferred": [],
-            "Coverage": {"covered": len(nodes), "uncovered": 0},
+            "Coverage": {"covered": len(candidates), "uncovered": 0},
             "Diagnostics": [],
         }
         return ContextIntegrationResult(
@@ -65,9 +88,19 @@ class SyntheticReadSourceApplication:
 
     def read(self, request: ReadSourceRequest):
         self.calls += 1
-        node = self.corpus.node(request.node_id)
-        case = self.corpus.case_for_node(request.node_id)
-        if node is None or case is None or request.expected_hash != node.content_hash:
+        expected = APPROVED_EVIDENCE_BY_NODE.get(request.node_id)
+        node = self.corpus.node(request.node_id) if expected is not None else None
+        case = self.corpus.case_for_node(request.node_id) if node is not None else None
+        if (
+            expected is None
+            or node is None
+            or request.scope != "node"
+            or request.expected_hash != expected["content_hash"]
+            or case is None
+            or case.case_id != CANONICAL_CASE_ID
+            or tuple(case.node_ids) != CANONICAL_SEARCH_NODE_IDS
+            or not _matches_approved_node(node)
+        ):
             self.last_projection = None
             return ReadSourceResult(request=request, status="not_found", fragments=())
         fragment = SourceFragment(
