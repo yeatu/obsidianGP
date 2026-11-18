@@ -139,6 +139,13 @@ def test_inventory_rejects_symlinks_without_following_them(tmp_path: Path):
         build_markdown_inventory(source_root)
 
 
+def test_inventory_rejects_invalid_utf8_markdown_bytes(tmp_path: Path):
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    (source_root / "bad.md").write_bytes(b"invalid-\\xff-markdown")
+    with pytest.raises(UnsafeSourceTreeError, match="UTF-8"):
+        build_markdown_inventory(source_root)
+
 def test_inventory_rejects_special_files(tmp_path: Path):
     source_root = tmp_path / "source"
     source_root.mkdir()
@@ -231,6 +238,16 @@ def test_import_revision_is_kept_tagged_and_never_coerced_to_git_sha(tmp_path: P
     assert built.ref.source_bundle.version_id == "synthetic-source-object-version-1"
     assert built.ref.index_bundle.version_id == "synthetic-index-object-version-1"
 
+
+def test_build_cloud_snapshot_v2_reverifies_inventory_and_attestation_before_binding_versions(tmp_path: Path):
+    source_root, database_path = _indexed_fixture(tmp_path)
+    bundle = _build(source_root, database_path)
+    forged = replace(bundle, markdown_inventory_sha256="sha256:" + "0" * 64)
+    with pytest.raises(BundleIntegrityError, match="inventory"):
+        forged.build_cloud_snapshot_v2(
+            source_version_id="immutable-source-v1",
+            index_version_id="immutable-index-v1",
+        )
 
 def test_final_v2_manifest_is_bound_only_after_exact_upload_versions_are_supplied(tmp_path: Path):
     source_root, database_path = _indexed_fixture(tmp_path)
@@ -390,5 +407,5 @@ def test_verifier_rechecks_sqlite_identity_fields_on_prepared_descriptor(tmp_pat
     object.__setattr__(forged_identity, "engine", "not-sqlite")
     object.__setattr__(forged_identity, "schema_info_version", 2)
     forged = replace(bundle, sqlite_schema_identity=forged_identity)
-    with pytest.raises(BundleIntegrityError, match="sqlite_schema_identity") :
+    with pytest.raises(BundleIntegrityError, match="sqlite_schema_identity"):
         verify_prepared_cloud_snapshot_bundle(forged)
