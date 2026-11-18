@@ -37,12 +37,12 @@ ChatGPT Web / mobile → GitHub Issues → GitHub Actions → GitHub-hosted Runn
 
 | Issue | Роль / статус | Следующий результат | Зависимости и границы |
 |---|---|---|---|
-| [#118](https://github.com/yeatu/obsidianGP/issues/118) | E — E3 CLAIMED | Provider-neutral catalogue state machine и in-memory CAS adapter | #117 accepted/merged; synthetic in-memory only; отдельные catalogue files |
+| [#118](https://github.com/yeatu/obsidianGP/issues/118) | E — E3 RELEASED / A review #160 | Provider-neutral catalogue state machine и in-memory CAS adapter implemented in [PR #159](https://github.com/yeatu/obsidianGP/pull/159) | Exact HEAD `278c94baa2a28c299161dea380a6099cff39e352`; 4 catalogue files; fixture run #44272211955 SUCCESS, 12 passed; pending independent A review and C acceptance |
 | [#119](https://github.com/yeatu/obsidianGP/issues/119) | E — E3 CLAIMED | Deterministic immutable bundle builder/verifier и canonical Markdown inventory | #117 accepted/merged; synthetic fixtures only; bundle files отдельно от #118 |
-| [#148](https://github.com/yeatu/obsidianGP/issues/148) | A — stale REVIEW_REQUEST / awaiting replacement | A3 RELEASED old review claim #6973934758 after PR #92/main divergence; exact old target is superseded. E2 owns current-main sync #152. A fresh exact-head review request must be issued only after #152 fixture CI; #148 remains open to preserve review trail until replacement is linked |
-| [#151](https://github.com/yeatu/obsidianGP/issues/151) | A — REVIEW_REQUEST needs target refresh | A3 RELEASED old claim #6973988363 because PR #84 advanced. Current PR #84 HEAD `62466d1abacc4b77730fb4a5f6e728117ae54d59`; current main/merge base `2996e0f6a2cf4e65271d92330138e77899cad692`; 18 ahead / 0 behind. Double full-run evidence belongs to code HEAD `f9b12dc...`; exact current-head run #44272093810: preflight 17 passed, 42 cases 40 passed / 2 failed, 14 status mismatches; artifacts #14413395861 and #14413366511. Refresh #151 to the current exact HEAD and require reviewer to distinguish code-equivalent prior double-run evidence from this exact-head attempt |
-| [#121](https://github.com/yeatu/obsidianGP/issues/121) | E — E1 RELEASED | Реализация передана на A review #151 | Не считать benchmark прошедшим без оговорок: 40/42 cases pass, две E2 forbidden-node failures сохранены по #115 |
-| [#139](https://github.com/yeatu/obsidianGP/issues/139) | E — E3 RELEASED | Ожидает независимую проверку #148, затем отдельную C acceptance | W1-only allowlist correction; не менять shared V2.2 contracts |
+| [#157](https://github.com/yeatu/obsidianGP/issues/157) | A — A3 CLAIMED | Independent review of W1 PR #92 at HEAD `9ac913bbac479a5326e44d0679817c31153be5ac` / base `2996e0f...`; exact fixture run #44273234745 passed 56 tests and skipped the synthetic worker |
+| [#156](https://github.com/yeatu/obsidianGP/issues/156) | E — E1 CLAIMED | Устранить остаточный межпроцессный drift benchmark PR #84 и получить побайтно одинаковые JSON/Markdown отчёты | Current PR #84 HEAD `99ccda870205acc4c40267f454d18aa85f0e113f`; run #44274741041 preflight 18 passed, 42 cases 40/42, two preserved E2 failures, 14 diagnostics; only gq-033 Token Efficiency still differs between attempts. #151/#158 closed as superseded; no A review until #156 acceptance evidence |
+| [#121](https://github.com/yeatu/obsidianGP/issues/121) | E — E1 RELEASED | Benchmark corrections #113/#114/#121 implemented on PR #84; final review waits on #156 repeatability correction | Do not claim benchmark acceptance: 40/42 pass, two E2 forbidden-node failures preserved per #115; 14 diagnostics remain visible |
+| [#139](https://github.com/yeatu/obsidianGP/issues/139) | E — E3 RELEASED | W1 canonical evidence allowlist correction awaits independent review #157, then separate C acceptance | W1-only correction; preserve shared V2.2 contracts |
 | [#77](https://github.com/yeatu/obsidianGP/issues/77) | P1 — W1 acceptance | A review → C acceptance → отдельное разрешение на один synthetic round-trip | Нет worker execution, Issue write или merge до завершения ворот |
 | [#120](https://github.com/yeatu/obsidianGP/issues/120) | E — queued | Read-only exact-version resolver/materializer | После принятия #118 и #119; #117 уже принят |
 | [#125](https://github.com/yeatu/obsidianGP/issues/125) | E — queued | Synthetic immutable upload port/reference writer | После принятия #119; без provider SDK/credentials |
@@ -59,18 +59,22 @@ ChatGPT Web / mobile → GitHub Issues → GitHub Actions → GitHub-hosted Runn
 - [#143](https://github.com/yeatu/obsidianGP/issues/143): correction использует `schema_info_version`, связанный с E1 `schema_info.schema_version`, а не SQLite `PRAGMA user_version`.
 - [#123](https://github.com/yeatu/obsidianGP/issues/123), [#131](https://github.com/yeatu/obsidianGP/issues/131), [#132](https://github.com/yeatu/obsidianGP/issues/132), [#142](https://github.com/yeatu/obsidianGP/issues/142): интеграционная архитектура и additive E1 verifier design приняты. C откроет E1 implementation issue только после независимой проверки и C acceptance #119, как предписывает #142.
 - [#133](https://github.com/yeatu/obsidianGP/issues/133): metadata-only sizing analysis принят; provider/region не выбраны.
+- [#154](https://github.com/yeatu/obsidianGP/issues/154): A1 metadata-only source-tree comparison принят C3. На main и candidate source branch tracked `ГП/` subtree идентичен (SHA `94fd80ee95ab0514d1c1223c6fa0a763bd3bbb9f`): 66 Markdown blobs / 988,098 reported bytes / 30 directories / `truncated=false`. Это не подтверждает local/offline completeness или canonical source authority; выбор владельца в #145 остаётся UNDECIDED.
+- [#152](https://github.com/yeatu/obsidianGP/issues/152): E2 current-main sync PR #92 принят и закрыт. Non-force two-parent merge preserved; exact PR HEAD `9ac913bbac479a5326e44d0679817c31153be5ac`, 14 W1 files, fixture run #44273234745 SUCCESS (56 passed), synthetic worker skipped. Fresh A review #157 is active.
 - [#145](https://github.com/yeatu/obsidianGP/issues/145): owner-input coordination завершена; canonical source, sync/staleness, workload, latency, retention/RPO/RTO и budget оставлены UNDECIDED. Candidate branch не назначен canonical.
 - [#113](https://github.com/yeatu/obsidianGP/issues/113) и [#114](https://github.com/yeatu/obsidianGP/issues/114): benchmark correction slices RELEASED; входят в финальный PR #84.
-- [#121](https://github.com/yeatu/obsidianGP/issues/121): RELEASED после синхронизации PR #84 с текущим main и двух детерминированных прогонов; передан на #151.
-- [#122](https://github.com/yeatu/obsidianGP/issues/122): W1 current-main integration handoff RELEASED; #139/#148 остаются отдельными correction/review этапами.
+- [#121](https://github.com/yeatu/obsidianGP/issues/121): RELEASED; его final independent review remains gated by benchmark-wide byte-identical repeatability under #156.
+- [#118](https://github.com/yeatu/obsidianGP/issues/118) / [PR #159](https://github.com/yeatu/obsidianGP/pull/159): E3 implementation RELEASED, 12 fixture tests passed, awaiting independent A review #160 and separate C acceptance.
+- [#122](https://github.com/yeatu/obsidianGP/issues/122): W1 implementation handoff RELEASED; #152 current-main sync is completed, #148 closed as superseded, #139 awaits independent review #157.
 
 ## 3. Точные открытые PR
 
 | PR | Состояние | Точный контекст |
 |---|---|---|
-| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Open, unmerged | Prior W1 HEAD `c20e322...` / base `0be15bba...` was reviewed only on pre-sync evidence. A3 released #148 claim #6973934758 after main advanced to `2996e0f...`; E2 now owns non-force current-main sync #152. Require exact final merge-ref CI and a replacement independent A review before any merge; no synthetic Issue write/round-trip |
-| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Open / Draft / unmerged | Latest branch HEAD `62466d1abacc4b77730fb4a5f6e728117ae54d59`, current main/merge base `2996e0f6a2cf4e65271d92330138e77899cad692`, 18 ahead / 0 behind. Code HEAD `f9b12dc...` had two deterministic full runs (40/42, 2 E2 failures); later exact current-head run #44272093810 passed 17 preflight tests and again produced 40/42, 2 failures, 14 status mismatches. Artifacts #14413395861/#14413366511. #151 must be rebound to current HEAD; preserve the two E2 failures and 14 diagnostics, no gate weakening |
-| [#103 — previous governance panel](https://github.com/yeatu/obsidianGP/pull/103) | Superseded by this fresh panel branch | Old PR branch/commits/history preserved. It was bound to stale main and its HEAD-specific review #146 no longer matches the live branch. Do not merge it |
+| [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Open, unmerged | Current HEAD `9ac913bbac479a5326e44d0679817c31153be5ac`; base/current main `2996e0f...`; 89 ahead / 0 behind; exactly 14 W1 files. History-preserving two-parent sync #152 completed. Fixture run #44273234745 passed 56 tests; synthetic worker skipped. Independent A review #157 is A3-CLAIMED; no Issue write/round-trip or merge before A and C gates |
+| [#84 — synthetic gold benchmark](https://github.com/yeatu/obsidianGP/pull/84) | Open / Draft / unmerged | Current HEAD `99ccda870205acc4c40267f454d18aa85f0e113f`; current main `2996e0f...`; 19 ahead / 0 behind. E1 correction #156 changed fixture IDs to UUIDv5 and pinned `PYTHONHASHSEED=0`; run #44274741041 passed 18 preflight tests and ran 42 cases (40 pass / 2 preserved E2 failures / 14 diagnostics). Two artifacts still differ only at gq-033 Token Efficiency (-13.0244 vs -12.9512; aggregate -11.4911 vs -11.4890). #156 remains active; #151/#158 are superseded; no A review until two reports are byte-identical |
+| [#159 — snapshot catalogue](https://github.com/yeatu/obsidianGP/pull/159) | Open, unmerged | HEAD `278c94baa2a28c299161dea380a6099cff39e352`; current main `2996e0f...`; four catalogue-owned files; fixture run #44272211955 passed 12 tests; independent review #160 is open |
+| [#103 — previous governance panel](https://github.com/yeatu/obsidianGP/pull/103) | Closed / superseded by this fresh panel branch | Old PR branch/commits/history preserved. Do not merge; review #146 is closed as superseded |
 | [#127 — CloudSnapshotRef v2](https://github.com/yeatu/obsidianGP/pull/127) | Merged | Merge commit `2996e0f6a2cf4e65271d92330138e77899cad692` |
 | [#87 — PinnedSnapshot verifier](https://github.com/yeatu/obsidianGP/pull/87) | Merged | Accepted through #96; no production read activation |
 | [#47, #57, #66, #94](https://github.com/yeatu/obsidianGP/pulls) | Historical / HOLD | Preserve branches, PRs, reviews and implementation assets. Not runtime dependencies; no deletion |
@@ -88,12 +92,13 @@ ChatGPT Web / mobile → GitHub Issues → GitHub Actions → GitHub-hosted Runn
 
 ## 5. Parallelism and coordination
 
-- #118 and #119 are independently claimed by E3 on disjoint component/file boundaries and may proceed in parallel.
-- #121 has been released by E1; #151 is the next independent A handoff.
-- #148 is currently claimed by A3 for W1. The old W1 review target is not a merge authorization; current-main sync and exact-head CI must be checked before integration.
-- #120 waits for #118 and #119 acceptance; #125 waits for #119.
+- #118 implementation is RELEASED and awaits A review #160; #119 remains E3-CLAIMED on a disjoint bundle/inventory boundary.
+- #121 is RELEASED, but its benchmark acceptance/review remains gated by active correction #156; no A review is currently valid for PR #84.
+- W1 PR #92 is synchronized and fixture-validated; A3 owns fresh review #157. Old request #148 is closed as superseded and carries no verdict.
+- Catalogue review #160 and E3 bundle implementation #119 remain independent; #120 waits for #118 and #119 acceptance; #125 waits for #119.
 - E1 cloud verifier implementation is a later bounded task, not yet open: C creates it only after #119 review and C acceptance.
 - Consumer tasks #134/#136/#137/#138 and lifecycle conformance #124 retain their explicit prerequisites.
+- #145 is supported by accepted metadata-only comparison #154, but owner choices remain UNDECIDED. Do not infer canonical source from remote tree equality.
 - Do not create overlapping Issues for work already CLAIMED. Decompose only when a distinct independently reviewable result exists.
 
 ## 6. Operational rule
