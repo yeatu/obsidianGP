@@ -369,6 +369,10 @@ def _read_deterministic_zip(raw: bytes, name: str) -> dict[str, bytes]:
                     raise BundleIntegrityError(f"{name} contains a special archive member")
                 if info.flag_bits & 0x1:
                     raise BundleIntegrityError(f"{name} contains an encrypted archive member")
+                if info.compress_type != ZIP_STORED:
+                    raise BundleIntegrityError(f"{name} contains an unsupported compressed archive member")
+                if info.compress_size != info.file_size:
+                    raise BundleIntegrityError(f"{name} stored member size does not match its directory entry")
                 payload = archive.read(info)
                 if len(payload) != info.file_size:
                     raise BundleIntegrityError(f"{name} member size does not match its directory entry")
