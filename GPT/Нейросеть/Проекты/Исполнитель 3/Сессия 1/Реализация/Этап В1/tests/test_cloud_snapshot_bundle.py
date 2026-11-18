@@ -32,6 +32,7 @@ from sfra_context_integrations.cloud_snapshot_bundle import (
     build_prepared_cloud_snapshot_bundle,
     verify_prepared_cloud_snapshot_bundle,
     _inventory_from_files,
+    _read_deterministic_zip,
 )
 
 INDEXER = IndexerIdentity(name="sfra-structural-indexer", version="0.2.0")
@@ -487,3 +488,61 @@ def test_verifier_rechecks_sqlite_identity_fields_on_prepared_descriptor(tmp_pat
     forged = replace(bundle, sqlite_schema_identity=forged_identity)
     with pytest.raises(BundleIntegrityError, match="sqlite_schema_identity"):
         verify_prepared_cloud_snapshot_bundle(forged)
+
+
+@pytest.mark.parametrize(
+    "compression",
+    [
+        pytest.param(zipfile.ZIP_DEFLATED, id="deflated"),
+        pytest.param(zipfile.ZIP_BZIP2, id="bzip2"),
+        pytest.param(zipfile.ZIP_LZMA, id="lzma"),
+    ],
+)
+def test_deterministic_zip_reader_rejects_compression_before_member_read(
+    compression: int,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from io import BytesIO
+
+    stream = BytesIO()
+    with zipfile.ZipFile(stream, mode="w", compression=compression) as archive:
+        archive.writestr("source/a.md", b"synthetic payload " * 32)
+    payload = stream.getvalue()
+
+    def fail_if_payload_is_read(*args, **kwargs):
+        pytest.fail("compressed member payload was read before its compression type was rejected")
+
+    monkeypatch.setattr(zipfile.ZipFile, "read", fail_if_payload_is_read)
+
+    with pytest.raises(BundleIntegrityError, match="unsupported compressed archive member"):
+        _read_deterministic_zip(payload, "synthetic source bundle")
+
+
+def test_deterministic_zip_reader_rejects_stored_size_mismatch_before_member_read(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from io import BytesIO
+
+    payload = _zip_bytes({"source/a.md": b"synthetic stored payload"})
+    original_infolist = zipfile.ZipFile.infolist
+
+    def report_mismatched_stored_size(archive: zipfile.ZipFile):
+        infos = original_infolist(archive)
+        infos[0].compress_size += 1
+        return infos
+
+    def fail_if_payload_is_read(*args, **kwargs):
+        pytest.fail("stored member payload was read before its size metadata was rejected")
+
+    monkeypatch.setattr(zipfile.ZipFile, "infolist", report_mismatched_stored_size)
+    monkeypatch.setattr(zipfile.ZipFile, "read", fail_if_payload_is_read)
+
+    with pytest.raises(BundleIntegrityError, match="stored member size"):
+        _read_deterministic_zip(payload, "synthetic source bundle")
+
+
+def test_deterministic_zip_reader_accepts_valid_stored_members():
+    expected = {"source/a.md": b"synthetic stored payload", "source/empty.md": b""}
+    payload = _zip_bytes(expected)
+
+    assert _read_deterministic_zip(payload, "synthetic source bundle") == expected
