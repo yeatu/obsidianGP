@@ -61,7 +61,7 @@
 | Issue | Приоритет | Тип | Роль | Следующий результат | Зависимости / условие начала |
 |---|---:|---|:---:|---|---|
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | `REVIEW_REQUEST` | **A** | Независимая повторная проверка Governance v2.4 и обновлённого PR #44 | Проверить точный актуальный HEAD PR #44 и Issue #20 v2.4 |
-| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | `IMPLEMENTATION` | **E** | Завершить локальный MCP stdio scaffold и composition root | Bootstrap lane; контракт #37 принят C; не подключать read_source до #36/#51 |
+| [#56](https://github.com/yeatu/obsidianGP/issues/56) | P2 | `REVIEW_REQUEST` | **A** | Независимо проверить MCP stdio bootstrap и search composition в Issue #38 / PR #47 на exact HEAD `40c263011c0abda6f4215faf1f6f37c3a35f5202` | После A review требуется C acceptance: межпакетная composition/public tool boundary; read_source остаётся отключён до #36/#51 |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | `IMPLEMENTATION` | **E** | Handler и schema adapter `search_vault` | Контракт #37 принят; handler integration после #38; подготовительные тесты могут идти параллельно |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | `IMPLEMENTATION` | **E** | Handler и schema adapter `read_source` | Контракт #37 принят; production composition после #36/#51 и #38 |
 | [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | `ANALYSIS` | **A** | 30–50 синтетических эталонных сценариев с обязательными Node ID и критическими условиями | Независимо от MCP bootstrap и verifier correction |
