@@ -27,7 +27,7 @@ def parse_opened_issue_event(payload: Mapping[str, object], *, event_name: str,
     """Validate event metadata and bind exact UTF-8 body bytes."""
     if event_name != "issues" or action != "opened":
         raise EventRejection("unsupported_event")
-    repository, issue = payload.get("repository"), payload.get("issue")
+    repository, issue, sender = payload.get("repository"), payload.get("issue"), payload.get("sender")
     if not isinstance(repository, Mapping) or not isinstance(issue, Mapping):
         raise EventRejection("invalid_event_shape")
     full_name = repository.get("full_name")
@@ -44,6 +44,8 @@ def parse_opened_issue_event(payload: Mapping[str, object], *, event_name: str,
     user = issue.get("user")
     if not isinstance(user, Mapping) or user.get("login") != allowed_author:
         raise EventRejection("author_not_allowed")
+    if not isinstance(sender, Mapping) or sender.get("login") != allowed_author:
+        raise EventRejection("sender_not_allowed")
     raw_body = issue.get("body")
     if raw_body is None:
         body = b""
