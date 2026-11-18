@@ -83,6 +83,7 @@ def _build(
 _INVALID_V2_OBJECT_KEYS = [
     pytest.param(" \\t ", id="whitespace-only"),
     pytest.param("prepared/bad\nkey.zip", id="control-character"),
+    pytest.param("prepared/bad\0key.zip", id="nul-control"),
     pytest.param("prepared/cafe\u0301.zip", id="non-nfc"),
     pytest.param("prepared/" + ("x" * 4090), id="over-4096-characters"),
     pytest.param("prepared/\ud800.zip", id="surrogate"),
@@ -132,6 +133,16 @@ def test_bundle_builder_accepts_nfc_object_keys_within_v2_text_limit(tmp_path: P
 
     assert bundle.source_object.key == "prepared/café/source.zip"
     assert bundle.index_object.key == "prepared/индекс/index.zip"
+    boundary_key = "prepared/" + ("k" * 4087)
+    assert len(boundary_key) == 4096
+    boundary_bundle = _build(
+        source_root,
+        database_path,
+        source_object_key=boundary_key,
+        index_object_key="prepared/индекс/index.zip",
+    )
+    assert len(boundary_bundle.source_object.key) == 4096
+
     built = bundle.build_cloud_snapshot_v2(
         source_version_id="source-v1",
         index_version_id="index-v1",
