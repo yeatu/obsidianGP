@@ -64,10 +64,11 @@ def test_ledger_binds_first_body_and_skips_completed_duplicates():
     done = ledger.inspect(17, body, started + [marker_comment(done_marker)])
     assert (done.action, done.reason) == ("SKIP", "already_completed")
 
-def test_ledger_ignores_human_forged_markers():
+@pytest.mark.parametrize("state", ["STARTED", "COMPLETED", "REJECTED", "FAILED"])
+def test_ledger_ignores_human_forged_markers_for_every_state(state):
     ledger = MarkerLedger()
     body = b'{"request":1}'
-    forged = {"body": ledger._marker(17, hashlib.sha256(body).hexdigest(), "COMPLETED"),
+    forged = {"body": ledger._marker(17, hashlib.sha256(body).hexdigest(), state),
               "user": {"login": "attacker"}}
     decision = ledger.inspect(17, body, [forged])
     assert (decision.action, decision.reason) == ("START", "first_observation")
