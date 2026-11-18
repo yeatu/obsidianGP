@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-import weakref
 import hashlib
 import json
 from pathlib import Path
 import re
 import subprocess
 from typing import Any
+import weakref
 
 from sfra_context_builder.models import SnapshotRef
 
