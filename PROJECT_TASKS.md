@@ -29,7 +29,7 @@
 |---|---|---|---|
 | [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / UNBLOCKED** | Исторически частичные writer PR #170/#179 синхронизировать с текущим принятым bundle base | **P1**; main `8d1d3c9...`; сохранить четыре writer-owned и четыре correction-owned файла; non-force, main-first, expected-old-HEAD; затем свежий A review |
 | [#120](https://github.com/yeatu/obsidianGP/issues/120) | **E — READY TO CLAIM** | Read-only exact-version resolver и materializer для эфемерного GitHub-hosted runner | **P2**; #117/#118/#119 приняты и merged; synthetic/in-memory tests only |
-| [#240](https://github.com/yeatu/obsidianGP/issues/241) | **E1 — READY TO CLAIM** | Additive E1 cloud-index attestation и read-only verifier | **P1**; принятые design #132 и decision #142; bundle #119 уже merged; E1 files/tests only; свежий A review обязателен |
+| [#240](https://github.com/yeatu/obsidianGP/issues/240) | **E1 — READY TO CLAIM** | Additive E1 cloud-index attestation и read-only verifier | **P1**; принятые design #132 и decision #142; bundle #119 уже merged; E1 files/tests only; свежий A review обязателен |
 | [#229](https://github.com/yeatu/obsidianGP/issues/229) | **E — GATED / unclaimed** | Синхронизировать benchmark PR #84 с main, повторить два 42-case прогона и открыть A review | **P1**; ждать A acceptance, C merge и merge панели PR #223 по #234; сохранить main `PROJECT_TASKS.md` verbatim и оставить четыре benchmark technical paths |
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | E1 benchmark / quality gate | Сохранить воспроизводимый baseline и две видимые E2 retrieval failure | **P1**; gq-010 и gq-036 остаются failed; не менять corpus/метрики/ranking для зелёного отчёта |
 | [#125](https://github.com/yeatu/obsidianGP/issues/125) | E3 implementation / writer stack | Закончить writer после #196, получить независимый review и C acceptance | PR #170/#179 остаются open/unmerged; старые #171/#180 verdicts не переносятся на новые HEAD |
@@ -80,7 +80,7 @@ PR #84 current historical HEAD `64924c204f006bf9d41a42ca0724d8e026325014` was sy
 ## 6. E1 cloud-index verifier — new prerequisite #240
 
 - A3 analysis #132 was accepted by C3; decision #142 defines the additive E1 cloud-index attestation and exact schema boundary.
-- [#240](https://github.com/yeatu/obsidianGP/issues/241) is the single implementation task: typed `git_commit` / `immutable_import` source revision, canonical #119 Markdown inventory, E1 indexer/parser identity, exact `schema_info.schema_version`, DB hash, read-only whole-index verification.
+- [#240](https://github.com/yeatu/obsidianGP/issues/240) is the single implementation task: typed `git_commit` / `immutable_import` source revision, canonical #119 Markdown inventory, E1 indexer/parser identity, exact `schema_info.schema_version`, DB hash, read-only whole-index verification.
 - Preserve E1 manifest v1, `verify_state_directory()`, `create_state_snapshot()`, existing workflows and v1 callers unchanged. Do not map `immutable_import` into a Git SHA or use SQLite `PRAGMA user_version`.
 - The E1 verifier proves consistency of the supplied materialized tree and SQLite index; it does not prove source-origin authenticity or historical UUID assignment. It is a report, not an E3 capability.
 - #240 must receive independent A review and C acceptance before #134/#136/#137/#138 consume it. For `immutable_import`, without accepted #240 the snapshot remains STAGED; no VERIFIED/ACTIVE transition.
