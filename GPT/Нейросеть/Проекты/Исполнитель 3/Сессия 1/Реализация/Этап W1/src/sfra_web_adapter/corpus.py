@@ -18,6 +18,8 @@ class SyntheticNode:
     node_id: str
     source_path: str
     content_hash: str
+    line_start: int
+    line_end: int
     raw_text: str
 
 @dataclass(frozen=True, slots=True)
@@ -46,14 +48,20 @@ class SyntheticGoldCorpus:
                 node_id = raw_node.get("node_id")
                 raw_text = raw_node.get("raw_text")
                 content_hash = raw_node.get("content_hash")
-                if not all(isinstance(x, str) for x in (node_id, raw_text, content_hash)):
+                line_start, line_end = raw_node.get("line_start"), raw_node.get("line_end")
+                if (not all(isinstance(x, str) for x in (node_id, raw_text, content_hash)) or
+                        isinstance(line_start, bool) or not isinstance(line_start, int) or
+                        isinstance(line_end, bool) or not isinstance(line_end, int) or
+                        line_start < 1 or line_end < line_start):
                     raise ValueError("gold corpus node is malformed")
                 actual_node_hash = "sha256:" + hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
                 if actual_node_hash != content_hash:
                     raise ValueError("gold corpus node content hash mismatch")
                 if node_id in nodes:
                     raise ValueError("gold corpus node IDs must be unique")
-                nodes[node_id] = SyntheticNode(node_id, source_path, content_hash, raw_text)
+                nodes[node_id] = SyntheticNode(
+                    node_id, source_path, content_hash, line_start, line_end, raw_text
+                )
         cases: dict[str, SyntheticCase] = {}
         for raw_case in data.get("cases", []):
             case_id = raw_case.get("id")
@@ -100,6 +108,8 @@ class SyntheticGoldCorpus:
                 "node_id": node.node_id,
                 "source_path": node.source_path,
                 "content_hash": node.content_hash,
+                "line_start": node.line_start,
+                "line_end": node.line_end,
                 "excerpt": node.raw_text,
             })
         return {
