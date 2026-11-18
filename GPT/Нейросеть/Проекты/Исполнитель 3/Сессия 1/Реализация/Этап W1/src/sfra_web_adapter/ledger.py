@@ -6,6 +6,9 @@ import re
 from typing import Iterable, Mapping
 
 MARKER_AUTHOR = "github-actions[bot]"
+# Stable ID of the official GitHub Actions bot, verified from GitHub's public
+# user profile API. Marker body text is never used to establish this identity.
+MARKER_AUTHOR_ID = 41898282
 _MARKER = re.compile(r"^<!-- sfra-web-v1 issue=(?P<issue>[1-9][0-9]*) body_sha256=(?P<digest>[0-9a-f]{64}) state=(?P<state>STARTED|COMPLETED|REJECTED|FAILED) -->$")
 _STATES = frozenset({"STARTED", "COMPLETED", "REJECTED", "FAILED"})
 
@@ -29,12 +32,25 @@ class LedgerDecision:
 
 def authenticated_markers(issue_number: int,
                           comments: Iterable[Mapping[str, object]]) -> tuple[MarkerRecord, ...]:
-    """Parse only markers authored by the exact GitHub Actions bot identity."""
+    """Parse markers only from the verified Actions account identity.
+
+    GitHub comment metadata is authoritative. Require the exact login and
+    stable numeric user ID; if the API includes an account type, it must be
+    Bot. Missing IDs and type conflicts fail closed. Marker-shaped text from
+    any other account is ignored.
+    """
     records: list[MarkerRecord] = []
     for comment in comments:
         user = comment.get("user")
-        if (not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR
-                or user.get("type") != "Bot"):
+        if not isinstance(user, Mapping):
+            continue
+        user_id = user.get("id")
+        if (
+            user.get("login") != MARKER_AUTHOR
+            or type(user_id) is not int
+            or user_id != MARKER_AUTHOR_ID
+            or ("type" in user and user.get("type") != "Bot")
+        ):
             continue
         text = comment.get("body")
         if not isinstance(text, str):
