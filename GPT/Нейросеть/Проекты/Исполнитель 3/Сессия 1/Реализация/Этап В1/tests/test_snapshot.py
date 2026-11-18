@@ -145,8 +145,14 @@ def test_bound_verifier_callback_cannot_be_replaced(tmp_path):
     sidecar, vault_git, vault_root, manifest, _, database = _fixture(tmp_path)
     pinned = _binder(sidecar, vault_git, vault_root, manifest)
 
+    # The original factory-created verifier is active before any attempted bypass.
+    pinned.verify_current()
+
     with pytest.raises(FrozenInstanceError):
         pinned._verifier_callback = lambda: None
+
+    with pytest.raises(FrozenInstanceError):
+        del pinned._verifier_callback
 
     database.write_bytes(b"replacement after attempted verifier replacement")
     with pytest.raises(SnapshotBindingError, match="SQLite database digest changed"):
