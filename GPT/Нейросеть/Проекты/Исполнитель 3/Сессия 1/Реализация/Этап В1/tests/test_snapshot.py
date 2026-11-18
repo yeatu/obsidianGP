@@ -5,7 +5,11 @@ import json
 
 import pytest
 
-from sfra_context_integrations.snapshot import SnapshotBindingError, bind_pinned_snapshot
+from sfra_context_integrations.snapshot import (
+    PinnedSnapshot,
+    SnapshotBindingError,
+    bind_pinned_snapshot,
+)
 from sfra_context_integrations.search_adapter import E2SearchAdapter, SearchAdapterError
 from sfra_context_integrations.source_reader import E1SourceReader, SourceReaderContractError
 from sfra_context_builder.models import SearchRequest, SnapshotRef
@@ -116,6 +120,21 @@ def test_requires_e1_state_verifier(tmp_path):
             vault_git_root=vault_git,
             vault_root=vault_root,
             state_verifier=None,
+        )
+
+
+def test_pinned_snapshot_rejects_an_unsealed_noop_verifier(tmp_path):
+    root = tmp_path.resolve()
+    with pytest.raises(SnapshotBindingError, match="sealed active verifier"):
+        PinnedSnapshot(
+            ref=SnapshotRef("a" * 40, "b" * 40, "sha256:" + "c" * 64),
+            sidecar_root=root,
+            database_path=root / "state" / "structure.sqlite3",
+            manifest_path=root / "state" / "manifest.json",
+            vault_git_root=root,
+            vault_root=root / "ГП",
+            manifest={"source_commit": "a" * 40},
+            _verifier=lambda: None,
         )
 
 

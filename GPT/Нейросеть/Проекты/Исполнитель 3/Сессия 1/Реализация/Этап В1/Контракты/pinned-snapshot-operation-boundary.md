@@ -1,6 +1,10 @@
 # PinnedSnapshot operation-boundary verification
 
-`bind_pinned_snapshot()` still constructs the SnapshotRef from the actual clean Git checkouts, exact manifest bytes and E1-verified SQLite state. The returned production `PinnedSnapshot` now also carries an operation-boundary verifier.
+`bind_pinned_snapshot()` constructs the SnapshotRef from the actual clean Git checkouts, exact manifest bytes and E1-verified SQLite state. It is the only production factory for `PinnedSnapshot`.
+
+The snapshot carries a sealed verifier capability, not an optional callback. Direct construction with a missing verifier or an arbitrary callable (including a no-op) is rejected. The isolated unit-test factory lives only in `tests/fixtures/pinned_snapshot.py` and is not part of the production package API.
+
+`E1SourceReader` executes the verifier during construction and fails before accepting the reader if the pinned state is no longer valid. It also repeats verification at every operation boundary.
 
 Before and after E2 search and before/after each E1 address/source read, the verifier checks:
 - resolved sidecar, database, manifest, Vault checkout and Vault-root paths have not been redirected;

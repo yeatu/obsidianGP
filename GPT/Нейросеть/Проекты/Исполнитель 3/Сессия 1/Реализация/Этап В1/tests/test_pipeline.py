@@ -12,7 +12,7 @@ from sfra_context_integrations.pipeline import (
 )
 from sfra_context_integrations.dependency_resolver import E1DependencyResolver
 from sfra_context_integrations.search_adapter import E2SearchAdapter
-from sfra_context_integrations.snapshot import PinnedSnapshot
+from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 from sfra_context_integrations.source_reader import E1SourceReader
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, sha, snapshot
 
@@ -26,7 +26,7 @@ def _pinned(tmp_path, ref):
     database.write_bytes(b"pinned fixture sidecar bytes")
     manifest = sidecar / "manifest.json"
     manifest.write_text("{}", encoding="utf-8")
-    return PinnedSnapshot(
+    return make_test_pinned_snapshot(
         ref=ref,
         sidecar_root=sidecar,
         database_path=database,

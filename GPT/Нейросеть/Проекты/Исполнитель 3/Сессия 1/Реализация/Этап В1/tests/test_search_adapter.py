@@ -7,7 +7,7 @@ import pytest
 
 from sfra_context_builder.models import SearchRequest, SnapshotRef
 from sfra_context_integrations.search_adapter import E2SearchAdapter, SearchAdapterError
-from sfra_context_integrations.snapshot import PinnedSnapshot
+from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 
 
 _DEFAULT_RAW = "Текст исходного узла.\r\nВторая строка."
@@ -32,7 +32,7 @@ def _snapshot():
 
 def _pinned(tmp_path=None):
     root = Path(tmp_path or ".").resolve()
-    return PinnedSnapshot(
+    return make_test_pinned_snapshot(
         ref=_snapshot(),
         sidecar_root=root,
         database_path=root / "state" / "structure.sqlite3",

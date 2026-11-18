@@ -23,13 +23,45 @@ class SnapshotBindingError(ValueError):
     """Raised when Vault, sidecar and manifest do not describe one snapshot."""
 
 
+# Capability seal: production code receives this only through
+# bind_pinned_snapshot(). Tests use it only from the isolated fixture factory.
+_SNAPSHOT_VERIFIER_SEAL = object()
+
+
+class _SnapshotVerifier:
+    """Sealed capability wrapping an active operation-boundary verifier."""
+
+    __slots__ = ("_callback", "_seal")
+
+    def __init__(self, callback: Callable[[], None], *, _seal: object) -> None:
+        if _seal is not _SNAPSHOT_VERIFIER_SEAL:
+            raise SnapshotBindingError(
+                "Snapshot verifier must be created by the trusted binding factory"
+            )
+        if not callable(callback):
+            raise SnapshotBindingError("Pinned snapshot requires a callable verifier")
+        self._callback = callback
+        self._seal = _seal
+
+    def verify(self) -> None:
+        if self._seal is not _SNAPSHOT_VERIFIER_SEAL:
+            raise SnapshotBindingError("Pinned snapshot verifier capability is invalid")
+        try:
+            self._callback()
+        except SnapshotBindingError:
+            raise
+        except Exception as exc:
+            raise SnapshotBindingError("Pinned snapshot verifier failed") from exc
+
+
 @dataclass(frozen=True, slots=True)
 class PinnedSnapshot:
-    """Snapshot identity plus operation-boundary verification for mutable paths.
+    """Snapshot identity with a mandatory, sealed operation-boundary verifier.
 
-    Paths are retained for compatibility with the existing E1/E2 ports, but
-    production instances created by bind_pinned_snapshot carry a verifier that
-    re-checks their Git and content identities before and after every read.
+    Production instances must come from bind_pinned_snapshot(). The private
+    verifier capability prevents accidental construction with a missing or
+    arbitrary no-op callback. Unit tests use a clearly isolated test fixture
+    factory rather than constructing this production boundary directly.
     """
 
     ref: SnapshotRef
@@ -39,14 +71,21 @@ class PinnedSnapshot:
     vault_git_root: Path
     vault_root: Path
     manifest: Mapping[str, Any]
-    _verify_current: Callable[[], None] | None = field(
-        default=None, repr=False, compare=False
-    )
+    _verifier: _SnapshotVerifier = field(repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self._verifier, _SnapshotVerifier)
+            or self._verifier._seal is not _SNAPSHOT_VERIFIER_SEAL
+        ):
+            raise SnapshotBindingError(
+                "PinnedSnapshot requires a sealed active verifier; "
+                "use bind_pinned_snapshot() for production"
+            )
 
     def verify_current(self) -> None:
         """Fail closed if any bound checkout, manifest or database changed."""
-        if self._verify_current is not None:
-            self._verify_current()
+        self._verifier.verify()
 
 
 def _sha256_file(path: Path) -> str:
@@ -315,5 +354,8 @@ def bind_pinned_snapshot(
         vault_git_root=vault_git,
         vault_root=vault,
         manifest=manifest,
-        _verify_current=verify_current,
+        _verifier=_SnapshotVerifier(
+            verify_current,
+            _seal=_SNAPSHOT_VERIFIER_SEAL,
+        ),
     )

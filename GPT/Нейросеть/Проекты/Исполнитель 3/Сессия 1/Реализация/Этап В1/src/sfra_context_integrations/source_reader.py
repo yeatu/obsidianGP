@@ -73,6 +73,9 @@ class E1SourceReader:
         self._source_api = source_api
         self._pinned = pinned_snapshot
         self._token_counter = token_counter
+        # Reject an invalid/stale binding while constructing the reader, before
+        # any caller can trigger an E1 address or source read.
+        self._verify_pinned_snapshot()
 
     @property
     def pinned_snapshot(self) -> PinnedSnapshot:

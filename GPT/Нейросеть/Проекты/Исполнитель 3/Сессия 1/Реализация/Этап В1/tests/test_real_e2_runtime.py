@@ -6,7 +6,7 @@ import sqlite3
 
 from sfra_context_builder import TiktokenCounter, parse_search_request
 from sfra_context_integrations.search_adapter import E2SearchAdapter
-from sfra_context_integrations.snapshot import PinnedSnapshot
+from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
 from sfra_context_integrations.source_reader import E1SourceReader
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, FixtureTokenCounter, sha, snapshot
 
@@ -111,7 +111,7 @@ def test_default_adapter_invokes_real_e2_runtime_and_uses_e1_exact_text(tmp_path
     sidecar.mkdir()
     vault.mkdir(parents=True)
     (sidecar / "state").mkdir()
-    pinned = PinnedSnapshot(
+    pinned = make_test_pinned_snapshot(
         ref=ref,
         sidecar_root=sidecar,
         database_path=database,
