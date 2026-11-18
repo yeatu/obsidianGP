@@ -60,7 +60,7 @@ ChatGPT Web / mobile → GitHub Issues → GitHub Actions → GitHub-hosted Runn
 - [#123](https://github.com/yeatu/obsidianGP/issues/123), [#131](https://github.com/yeatu/obsidianGP/issues/131), [#132](https://github.com/yeatu/obsidianGP/issues/132), [#142](https://github.com/yeatu/obsidianGP/issues/142): интеграционная архитектура и additive E1 verifier design приняты. C откроет E1 implementation issue только после независимой проверки и C acceptance #119, как предписывает #142.
 - [#133](https://github.com/yeatu/obsidianGP/issues/133): metadata-only sizing analysis принят; provider/region не выбраны.
 - [#145](https://github.com/yeatu/obsidianGP/issues/145): owner-input coordination завершена; canonical source, sync/staleness, workload, latency, retention/RPO/RTO и budget оставлены UNDECIDED. Candidate branch не назначен canonical.
-- [#113](/yeatu/obsidianGP/issues/113) и [#114](/yeatu/obsidianGP/issues/114): benchmark correction slices RELEASED; входят в финальный PR #84.
+- [#113](https://github.com/yeatu/obsidianGP/issues/113) и [#114](https://github.com/yeatu/obsidianGP/issues/114): benchmark correction slices RELEASED; входят в финальный PR #84.
 - [#121](https://github.com/yeatu/obsidianGP/issues/121): RELEASED после синхронизации PR #84 с текущим main и двух детерминированных прогонов; передан на #151.
 - [#122](https://github.com/yeatu/obsidianGP/issues/122): W1 current-main integration handoff RELEASED; #139/#148 остаются отдельными correction/review этапами.
 
@@ -73,7 +73,7 @@ ChatGPT Web / mobile → GitHub Issues → GitHub Actions → GitHub-hosted Runn
 | [#103 — previous governance panel](https://github.com/yeatu/obsidianGP/pull/103) | Superseded by this fresh panel branch | Old PR branch/commits/history preserved. It was bound to stale main and its HEAD-specific review #146 no longer matches the live branch. Do not merge it |
 | [#127 — CloudSnapshotRef v2](https://github.com/yeatu/obsidianGP/pull/127) | Merged | Merge commit `2996e0f6a2cf4e65271d92330138e77899cad692` |
 | [#87 — PinnedSnapshot verifier](https://github.com/yeatu/obsidianGP/pull/87) | Merged | Accepted through #96; no production read activation |
-| [#47, #57, #66, #94](/yeatu/obsidianGP/pulls) | Historical / HOLD | Preserve branches, PRs, reviews and implementation assets. Not runtime dependencies; no deletion |
+| [#47, #57, #66, #94](https://github.com/yeatu/obsidianGP/pulls) | Historical / HOLD | Preserve branches, PRs, reviews and implementation assets. Not runtime dependencies; no deletion |
 
 ## 4. Decisions, gates and open unknowns
 
