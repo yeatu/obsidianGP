@@ -6,7 +6,7 @@ This isolated package implements the approved GitHub Issues â†’ GitHub Actions â
 
 - Fail-closed issues.opened gate: exact repository (yeatu/obsidianGP), owner-authored Issue, matching webhook sender, non-PR Issue and [SFRA] title prefix.
 - Strict 32 KiB UTF-8 body cap and SHA-256 over exact event-body bytes.
-- Comment-backed immutable first-seen digest; only comments authored by the exact github-actions[bot] identity are trusted as ledger markers.
+- Comment-backed immutable first-seen digest; only comments whose author has both the exact login `github-actions[bot]` and GitHub account type `Bot` are trusted as ledger markers.
 - Bounded comment pagination reads at most 10 pages of 100 comments; excess history fails closed.
 - GitHub REST Issue/comment ports with bounded responses, sanitized failures and no request/response logging.
 - Thin handler around the existing V2.2 IssueWorkerCore contract.
