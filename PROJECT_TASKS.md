@@ -89,7 +89,7 @@
 | [#87 — PinnedSnapshot exact-type correction](https://github.com/yeatu/obsidianGP/pull/87) | **Merged** | Main merge `9ba9d0403de0683c97938d0d323d96799157fc57`; A1 and C1 accepted |
 | [#54 / #70 — prior verifier attempts](https://github.com/yeatu/obsidianGP/pulls) | **Closed / superseded** | Their accepted cumulative correction is in merged PR #87; branch/commit/review history preserved |
 | [#85 — earlier W1 implementation branch](https://github.com/yeatu/obsidianGP/pull/85) | **Closed / superseded** | Current W1 delivery is PR #92 |
-| [#44 — previous governance dashboard branch](https://github.com/yeatu/obsidianGP/pull/44) | **Pending supersession** | Previous base became stale after PR #87 merge; new current-base refresh is provided separately |
+| [#44 — previous governance dashboard branch](https://github.com/yeatu/obsidianGP/pull/44) | **Closed / superseded** | Old dashboard PR and review #99 are closed; branch, commits and review history remain preserved |
 
 
 ## 4. Действующие ограничения и решения
@@ -98,7 +98,7 @@
 - **Durable source data:** cloud storage/index/snapshot/manifest/sidecar design remains unapproved and is analyzed only in #86. GitHub-hosted runner workspace is ephemeral, not the data store.
 - **Publication:** publication of Vault content and source-derived metadata is allowed by owner preference; do not impose blanket confidentiality redaction. Protect credentials/secrets and preserve provenance/integrity. Select delivery channels based on size, cost, retention and usefulness.
 - **Production boundary:** permission to publish content does not authorize real Vault reads, import, indexing, production Actions execution, write or mutation. The #53 real-Vault workflow remains disabled. Any new cloud-backed real-data path needs #86 design, independent review and explicit C/owner activation decision.
-- **W1 #77 / PR #92:** synthetic-only. The fixture CI event proves 44 tests, not a live Issue round-trip; worker job is skipped for pull_request event. Keep the worker dormant until A review #97 and C acceptance. Then authorize one marked synthetic `issues.opened` round-trip separately.
+- **W1 #77 / PR #92:** synthetic-only. The fixture CI event proves 44 tests, not a live Issue round-trip; worker job is skipped for pull_request event. Keep the worker dormant until E2 rebases PR #92 to current main, exact-head fixture CI passes, a fresh independent A review of that HEAD is accepted, and C separately accepts/merges the synthetic-only workflow. Review #97 is closed as stale and must not be reused. Only then authorize one marked synthetic `issues.opened` round-trip.
 - **PinnedSnapshot:** shared verifier guard is accepted/merged at #87. This does **not** enable production `read_source`. A future Web composition needs its own reviewed source/data-plane path and C/owner decision after #86.
 - **Local MCP legacy work:** Issues #38/#39/#40/#43/#72 and PRs #47/#57/#66/#94 are preserved on HOLD; no new CLAIM, review, implementation or merge without explicit owner re-scope.
 - **Benchmark #42:** synthetic-only. Keep exact corpus schema/digest/reference/span/hash checks. A failed quality gate remains failed; don't weaken forbidden-node or completeness assertions.
