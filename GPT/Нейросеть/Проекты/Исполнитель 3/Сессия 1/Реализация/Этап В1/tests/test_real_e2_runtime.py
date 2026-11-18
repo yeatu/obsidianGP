@@ -5,9 +5,8 @@ import json
 import sqlite3
 
 from sfra_context_builder import TiktokenCounter, parse_search_request
-from sfra_context_integrations.search_adapter import E2SearchAdapter
 from tests.fixtures.pinned_snapshot import make_test_pinned_snapshot
-from sfra_context_integrations.source_reader import E1SourceReader
+from tests.fixtures.consumer_seams import make_test_source_reader, make_test_search_adapter
 from tests.fixtures.source_reader import FixtureE1ScopeAPI, FixtureTokenCounter, sha, snapshot
 
 
@@ -120,8 +119,8 @@ def test_default_adapter_invokes_real_e2_runtime_and_uses_e1_exact_text(tmp_path
         vault_root=vault,
         manifest={"source_commit": ref.vault_commit_sha},
     )
-    reader = E1SourceReader(api, pinned, TiktokenCounter("o200k_base"))
-    adapter = E2SearchAdapter(
+    reader = make_test_source_reader(api, pinned, TiktokenCounter("o200k_base"))
+    adapter = make_test_search_adapter(
         pinned,
         reader,
         search_limit=20,
