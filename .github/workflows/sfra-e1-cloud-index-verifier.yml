@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: sfra-e1-cloud-index-verifier-\${{ github.event.pull_request.number || github.ref }}
+  group: sfra-e1-cloud-index-verifier-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
       - name: Check out exact implementation under test
         uses: actions/checkout@v4
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Set up Python
