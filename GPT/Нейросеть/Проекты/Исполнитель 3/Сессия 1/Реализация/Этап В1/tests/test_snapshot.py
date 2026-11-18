@@ -4,9 +4,9 @@ from dataclasses import FrozenInstanceError
 import hashlib
 import json
 
-import sfra_context_integrations.snapshot as snapshot_module
-
 import pytest
+
+import sfra_context_integrations.snapshot as snapshot_module
 
 from sfra_context_integrations.snapshot import (
     PinnedSnapshot,
