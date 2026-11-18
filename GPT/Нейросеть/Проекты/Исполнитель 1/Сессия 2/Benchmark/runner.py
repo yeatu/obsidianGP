@@ -222,6 +222,7 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
                ORDER BY d.source_path, n.local_key, n.node_pk"""
         ).fetchall()
         id_map: dict[str, str] = {}
+        mapping_records: list[dict[str, Any]] = []
         for row in rows:
             node_pk = int(row["node_pk"])
             old_id = str(row["node_id"])
@@ -257,8 +258,26 @@ def _canonicalize_synthetic_node_ids(database_path: Path) -> dict[str, str]:
                     str(row["source_path"]) + "\\n" + local_key,
                 )
             id_map[old_id] = stable_id
-        if len(set(id_map.values())) != len(id_map):
-            raise BenchmarkError("Synthetic fixture Node ID normalization produced a collision")
+            mapping_records.append({
+                "node_pk": node_pk,
+                "source_path": str(row["source_path"]),
+                "local_key": local_key,
+                "old_node_id": old_id,
+                "stable_node_id": stable_id,
+            })
+        collisions: dict[str, list[dict[str, Any]]] = {}
+        for record in mapping_records:
+            collisions.setdefault(record["stable_node_id"], []).append(record)
+        collision_records = [
+            {"stable_node_id": stable_id, "rows": records}
+            for stable_id, records in collisions.items()
+            if len(records) > 1
+        ]
+        if collision_records:
+            raise BenchmarkError(
+                "Synthetic fixture Node ID normalization produced a collision: "
+                + json.dumps(collision_records, ensure_ascii=False, sort_keys=True)
+            )
 
         with connection:
             for row in rows:
