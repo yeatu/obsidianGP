@@ -6,7 +6,7 @@
 > Этот файл не заменяет Issues и не хранит дублирующие CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Main HEAD before this dashboard update:** `3388e0409a81b5f40c3155674fe33247ce5e044e`  
+**Main HEAD before this dashboard update:** `2051d0ce6cdbceab1fc825c617708f8255266476`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
 ## 1. Текущий этап
@@ -36,10 +36,8 @@
 | [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
-
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | IMPLEMENTATION | End-to-end benchmark runner и метрики Context Pack | #41 |
 | [#43](https://github.com/yeatu/obsidianGP/issues/43) | P2 | IMPLEMENTATION | MCP conformance, read-only/security checks и quickstart | #36–#40 |
-
 | [#61](https://github.com/yeatu/obsidianGP/issues/61) | P1 | COORDINATOR_DECISION | Принять либо вернуть #41 / [PR #58](https://github.com/yeatu/obsidianGP/pull/58) | Нет; координатор |
 
 ## 3. Порядок параллельной работы
