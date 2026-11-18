@@ -777,6 +777,6 @@ def verify_materialized_cloud_index(
 __all__ = [
     "ATTESTATION_FORMAT", "INVENTORY_FORMAT", "CloudIndexAttestation",
     "CloudIndexVerificationError", "CloudIndexVerificationReport",
-    "GitCommitSourceRevision", "ImmutableImportSourceRevision", "IndexerIdentity",
+    "GitCommitSourceRevision", "ImmutableImportSourceRevision", "SourceRevision", "IndexerIdentity",
     "ParserIdentity", "parse_cloud_index_attestation", "verify_materialized_cloud_index",
 ]
