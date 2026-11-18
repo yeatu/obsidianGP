@@ -13,7 +13,7 @@ from .cloud_snapshot_bundle import (
     PreparedBundleObject,
     verify_prepared_cloud_snapshot_bundle,
 )
-from .cloud_snapshot_v2 import BuiltCloudSnapshotV2, CloudSnapshotContractError
+from .cloud_snapshot_v2 import BuiltCloudSnapshotV2
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -62,8 +62,13 @@ class ObjectWriteReceipt:
     def __post_init__(self) -> None:
         if not isinstance(self.key, str) or not self.key:
             raise ObjectStoreWriteContractError("receipt key must be non-empty")
-        if not isinstance(self.version_id, str) or not self.version_id or self.version_id != self.version_id.strip():
-            raise ObjectStoreWriteContractError("receipt version_id must be an exact non-empty opaque value")
+        if (
+            not isinstance(self.version_id, str)
+            or not self.version_id
+            or self.version_id != self.version_id.strip()
+            or self.version_id.casefold() in {"latest", "current", "head", "*"}
+        ):
+            raise ObjectStoreWriteContractError("receipt version_id must be an immutable opaque value, not a mutable alias")
         if not isinstance(self.sha256, str) or not _SHA256_RE.fullmatch(self.sha256):
             raise ObjectStoreWriteContractError("receipt sha256 must be lowercase sha256:<64 hex>")
         if type(self.byte_size) is not int or self.byte_size <= 0:
@@ -212,7 +217,7 @@ def write_prepared_cloud_snapshot_bundle(
             source_version_id=source_receipt.version_id,
             index_version_id=index_receipt.version_id,
         )
-    except (CloudSnapshotContractError, Exception) as exc:
+    except Exception as exc:
         raise ObjectStoreWriteContractError("verified object receipts could not be bound to CloudSnapshotRef v2") from exc
     return UploadedCloudSnapshotBundle(
         prepared_bundle=bundle,
