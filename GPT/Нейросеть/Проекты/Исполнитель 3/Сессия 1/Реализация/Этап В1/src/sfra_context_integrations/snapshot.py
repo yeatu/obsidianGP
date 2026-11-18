@@ -391,3 +391,22 @@ def _create_pinned_snapshot_api():
 
 PinnedSnapshot, bind_pinned_snapshot = _create_pinned_snapshot_api()
 del _create_pinned_snapshot_api, _bind_pinned_snapshot_impl
+
+
+def require_pinned_snapshot(snapshot: object, *, consumer: str) -> PinnedSnapshot:
+    """Require the exact factory-created production type and an active binding.
+
+    The verifier is a trusted-process integrity check, not a sandbox against
+    hostile Python introspection in the same interpreter (see decision #81).
+    Subclasses and test-only fixture objects are deliberately rejected at
+    production E1/E2/E3 consumer boundaries.
+    """
+    if type(snapshot) is not PinnedSnapshot:
+        raise TypeError(
+            f"{consumer} requires the exact factory-created PinnedSnapshot type; "
+            "subclasses and test fixtures are not accepted"
+        )
+    # Dispatch through the exact class implementation after the exact-type
+    # check, so a caller-supplied instance override is never invoked.
+    PinnedSnapshot.verify_current(snapshot)
+    return snapshot
