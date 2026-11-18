@@ -14,7 +14,7 @@ import unicodedata
 from typing import Any
 
 from .lookup import (
-    NodeLookupStatus, _LookupFailure, _check_db_snapshot, _decode_json,
+    _LookupFailure, _check_db_snapshot, _decode_json,
     _read_only_connection, _read_source_file, _resolve_db_status,
     _safe_source_components, _validate_events, _verify_database,
     _verify_document_bytes, _verify_node_from_source, _valid_hash,
@@ -247,7 +247,7 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
         try:
             revision = _revision(obj["source_revision"])
         except Exception as exc:
-            raise CloudIndexVerificationError("source_revision_invalid") from exc
+            raise CloudIndexVerificationError("source_revision_invalid") from None
 
         inventory = _exact(obj["markdown_inventory"], {"format", "path", "sha256", "document_count"})
         if (inventory["format"] != INVENTORY_FORMAT or inventory["path"] != INVENTORY_PATH
@@ -303,7 +303,7 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
     except CloudIndexVerificationError:
         raise
     except Exception as exc:
-        raise CloudIndexVerificationError("attestation_invalid") from exc
+        raise CloudIndexVerificationError("attestation_invalid") from None
 
 
 def _safe_path(value: Any) -> str:
@@ -322,7 +322,11 @@ def _read_regular(path: Path) -> bytes:
     before = path.lstat()
     if not stat.S_ISREG(before.st_mode):
         raise CloudIndexVerificationError("filesystem_unsafe")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0))
+    fd = os.open(
+        path,
+        os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+    )
     try:
         opened = os.fstat(fd)
         if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
@@ -342,7 +346,7 @@ def _read_regular(path: Path) -> bytes:
         try:
             path_after = path.lstat()
         except OSError as exc:
-            raise CloudIndexVerificationError("filesystem_race") from exc
+            raise CloudIndexVerificationError("filesystem_race") from None
         if (path_after.st_dev, path_after.st_ino) != (opened.st_dev, opened.st_ino):
             raise CloudIndexVerificationError("filesystem_race")
         return raw
@@ -357,7 +361,7 @@ def _collect_source_files(source_root: str | Path) -> tuple[tuple[str, bytes], .
     try:
         root = requested.resolve(strict=True)
     except (OSError, RuntimeError, ValueError) as exc:
-        raise CloudIndexVerificationError("filesystem_unsafe") from exc
+        raise CloudIndexVerificationError("filesystem_unsafe") from None
     if not root.is_dir():
         raise CloudIndexVerificationError("filesystem_unsafe")
     files: list[tuple[str, bytes]] = []
@@ -369,7 +373,7 @@ def _collect_source_files(source_root: str | Path) -> tuple[tuple[str, bytes], .
                 entries = list(scan)
             entries.sort(key=lambda item: item.name.encode("utf-8", errors="strict"))
         except (OSError, UnicodeError) as exc:
-            raise CloudIndexVerificationError("filesystem_unsafe") from exc
+            raise CloudIndexVerificationError("filesystem_unsafe") from None
         for entry in entries:
             relative = f"{prefix}/{entry.name}" if prefix else entry.name
             try:
@@ -389,7 +393,7 @@ def _collect_source_files(source_root: str | Path) -> tuple[tuple[str, bytes], .
             except CloudIndexVerificationError:
                 raise
             except (OSError, UnicodeError, ValueError) as exc:
-                raise CloudIndexVerificationError("filesystem_unsafe") from exc
+                raise CloudIndexVerificationError("filesystem_unsafe") from None
 
     walk(root, "")
     files.sort(key=lambda item: item[0].encode("utf-8", errors="strict"))
@@ -443,7 +447,7 @@ def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation)
     except CloudIndexVerificationError:
         raise
     except Exception as exc:
-        raise CloudIndexVerificationError("inventory_invalid") from exc
+        raise CloudIndexVerificationError("inventory_invalid") from None
 
 
 def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int, int, int]]:
@@ -464,7 +468,7 @@ def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int,
     except CloudIndexVerificationError:
         raise
     except (OSError, RuntimeError, ValueError) as exc:
-        raise CloudIndexVerificationError("database_invalid") from exc
+        raise CloudIndexVerificationError("database_invalid") from None
 
 
 def _required_schema(connection: sqlite3.Connection) -> None:
@@ -482,7 +486,7 @@ def _required_schema(connection: sqlite3.Connection) -> None:
     except CloudIndexVerificationError:
         raise
     except sqlite3.Error as exc:
-        raise CloudIndexVerificationError("schema_mismatch") from exc
+        raise CloudIndexVerificationError("schema_mismatch") from None
 
 
 def _verify_database_consistency(
@@ -676,11 +680,11 @@ def _verify_database_consistency(
             "read_transaction_missing": "sqlite_integrity_failure",
             "node_lookup_failed": "sqlite_integrity_failure",
         }.get(exc.code, "node_integrity_failure")
-        raise CloudIndexVerificationError(code) from exc
+        raise CloudIndexVerificationError(code) from None
     except sqlite3.Error as exc:
-        raise CloudIndexVerificationError("sqlite_integrity_failure") from exc
+        raise CloudIndexVerificationError("sqlite_integrity_failure") from None
     except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
-        raise CloudIndexVerificationError("node_integrity_failure") from exc
+        raise CloudIndexVerificationError("node_integrity_failure") from None
     finally:
         if connection is not None:
             connection.close()
@@ -690,7 +694,7 @@ def _installed_indexer_version() -> str:
     try:
         return importlib.metadata.version("sfra-structural-indexer")
     except importlib.metadata.PackageNotFoundError as exc:
-        raise CloudIndexVerificationError("indexer_identity_mismatch") from exc
+        raise CloudIndexVerificationError("indexer_identity_mismatch") from None
 
 
 def verify_materialized_cloud_index(
@@ -715,7 +719,12 @@ def verify_materialized_cloud_index(
         root = Path(source_root).expanduser()
         if root.is_symlink():
             raise CloudIndexVerificationError("filesystem_unsafe")
-        root = root.resolve(strict=True)
+        try:
+            root = root.resolve(strict=True)
+        except (OSError, RuntimeError, ValueError):
+            raise CloudIndexVerificationError("filesystem_unsafe") from None
+        if not root.is_dir():
+            raise CloudIndexVerificationError("filesystem_unsafe")
         files = _collect_source_files(root)
         _validate_inventory(markdown_inventory, _expected_inventory(files), parsed)
 
@@ -759,9 +768,9 @@ def verify_materialized_cloud_index(
     except CloudIndexVerificationError:
         raise
     except _LookupFailure as exc:
-        raise CloudIndexVerificationError("node_integrity_failure") from exc
+        raise CloudIndexVerificationError("node_integrity_failure") from None
     except Exception as exc:
-        raise CloudIndexVerificationError("verification_failed") from exc
+        raise CloudIndexVerificationError("verification_failed") from None
 
 
 __all__ = [
