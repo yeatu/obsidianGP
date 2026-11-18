@@ -65,7 +65,7 @@
 | PR | Current state / exact target | Gate |
 |---|---|---|
 | [#92 — W1 Web adapter](https://github.com/yeatu/obsidianGP/pull/92) | OPEN / non-Draft. HEAD `42cecfef...`, base `f665ae7...`; direct compare 99/0; 14 W1 paths | A review #218, then C acceptance. Do not merge or run worker/round-trip before C gate |
-| [#209 — integrated bundle #162/#184/#204](https://github.com/yeatu/obsidianGP/pull/209) | OPEN / Draft. HEAD `4839d218...`; direct current-main compare `f665ae7...` → HEAD: 24/0, exactly five bundle paths; current merge-ref CI `441bb826...` | #215 E2 is finishing handoff; fresh A review required, then C3 #208 Gate A |
+| [#209 — integrated bundle #162/#184/#204](https://github.com/yeatu/obsidianGP/pull/209) | OPEN / Draft. HEAD `4839d218...`; direct current-main compare `f665ae7...` → HEAD: 24/0, exactly five bundle paths; merge-ref `441bb826...` | #215 E2-CLAIMED; all four exact workflows green (bundle 58; C1 183/42 skips; V2.1 19; V2.2 55). Fresh A review handoff pending, then C3 #208 Gate A |
 | [#162 — bundle parent](https://github.com/yeatu/obsidianGP/pull/162) | OPEN / unmerged. Feature HEAD `c5f84cd...` | Preserve until #208 branch-only propagation after Gate A |
 | [#184 — accepted key correction](https://github.com/yeatu/obsidianGP/pull/184) | OPEN / Draft / stacked on #162. HEAD `8169827...` | Correction branch preserved; branch-only merge under #208 only |
 | [#170 — immutable writer](https://github.com/yeatu/obsidianGP/pull/170) | OPEN / unmerged / partial parent refresh. HEAD `b0bcf7a...`, four writer-owned files | Hold under #196 until final bundle acceptance |
