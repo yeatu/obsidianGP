@@ -25,6 +25,14 @@ from .application import (
     ReadSourceApplication,
     ReadSourceService,
 )
+from .snapshot_resolver import (
+    CloudSnapshotResolver,
+    MaterializedCloudSnapshotHandle,
+    ObjectStoreReadPort,
+    ObjectVersionNotFoundError,
+    ObjectVersionRead,
+    SnapshotResolverError,
+)
 
 __all__ = [
     "E1PublicSourceAPI",
@@ -55,4 +63,10 @@ __all__ = [
     "ReadSourceResult",
     "ReadSourceApplication",
     "ReadSourceService",
+    "CloudSnapshotResolver",
+    "MaterializedCloudSnapshotHandle",
+    "ObjectStoreReadPort",
+    "ObjectVersionNotFoundError",
+    "ObjectVersionRead",
+    "SnapshotResolverError",
 ]
