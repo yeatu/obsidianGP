@@ -50,7 +50,7 @@ def test_v2_2_core_runs_search_through_injected_synthetic_application_port():
 
 def test_v2_2_core_keeps_read_source_on_synthetic_injected_port():
     corpus = SyntheticGoldCorpus.load_default()
-    node = corpus.node("manual_intro")
+    node = corpus.node("gate_rule")
     assert node is not None
     body = request_body("read_source", {
         "node_id": node.node_id,
@@ -81,7 +81,7 @@ def test_synthetic_applications_expose_bounded_gold_corpus_projection():
     request = SimpleNamespace(node_id=node.node_id, expected_hash=node.content_hash)
     result = read.read(request)
     assert result.status == "ok"
-    assert read.last_projection["case_id"] == "gq-005-emergency-exception"
+    assert read.last_projection["case_id"] == "gq-004-exception-pair"
     assert read.last_projection["evidence"][0]["excerpt"] == node.raw_text
 
 class BotComments:
