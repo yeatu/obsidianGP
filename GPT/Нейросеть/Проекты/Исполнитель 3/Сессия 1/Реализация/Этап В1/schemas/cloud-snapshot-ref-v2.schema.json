@@ -84,13 +84,13 @@
       "additionalProperties": false,
       "required": [
         "engine",
-        "user_version"
+        "schema_info_version"
       ],
       "properties": {
         "engine": {
           "const": "sqlite"
         },
-        "user_version": {
+        "schema_info_version": {
           "type": "integer",
           "minimum": 1
         }

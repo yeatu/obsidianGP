@@ -203,28 +203,28 @@ def _indexer_identity(value: Any) -> IndexerIdentity:
 
 @dataclass(frozen=True, slots=True)
 class SqliteSchemaIdentity:
-    """SQLite file format/schema identity; independent of object-store version."""
+    """E1 application schema identity stored in schema_info.schema_version."""
 
     engine: str
-    user_version: int
+    schema_info_version: int
 
     def __post_init__(self) -> None:
         if self.engine != "sqlite":
             raise CloudSnapshotContractError("sqlite_schema_identity.engine must be 'sqlite'")
-        _positive_int(self.user_version, "sqlite_schema_identity.user_version")
+        _positive_int(self.schema_info_version, "sqlite_schema_identity.schema_info_version")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"engine": self.engine, "user_version": self.user_version}
+        return {"engine": self.engine, "schema_info_version": self.schema_info_version}
 
 
 def _sqlite_schema_identity(value: Any) -> SqliteSchemaIdentity:
     obj = _mapping(value, "sqlite_schema_identity")
     _exact_keys(
         obj,
-        required={"engine", "user_version"},
+        required={"engine", "schema_info_version"},
         name="sqlite_schema_identity",
     )
-    return SqliteSchemaIdentity(engine=obj["engine"], user_version=obj["user_version"])
+    return SqliteSchemaIdentity(engine=obj["engine"], schema_info_version=obj["schema_info_version"])
 
 
 @dataclass(frozen=True, slots=True)

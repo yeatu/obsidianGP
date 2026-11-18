@@ -50,12 +50,14 @@ The canonical UTF-8 JSON manifest has exactly these fields:
   },
   "sqlite_schema_identity": {
     "engine": "sqlite",
-    "user_version": 7
+    "schema_info_version": 2
   }
 }
 \`\`\`
 
 The import variant replaces \`commit_sha\` with \`import_id\`. Both object identities are required and each includes key, immutable version ID, full-payload SHA-256 and positive byte size. Mutable aliases such as \`latest\`, \`current\`, \`head\` and \`*\` are rejected.
+
+For `sqlite_schema_identity`, `schema_info_version` is the value stored in E1's singleton `schema_info.schema_version` row. It is not SQLite `PRAGMA user_version`: current E1 writers/readers do not set or read that PRAGMA, and the two metadata locations must not be treated as aliases. A cloud E1 verifier must require exact equality with the schema version supported by E1 read APIs (`SCHEMA_VERSION`, currently `2`); the legacy restore verifier's permissive `<=` rule is not valid for this contract. The old `user_version` property is rejected as unknown.
 
 Canonical serialization uses UTF-8, Unicode NFC strings, lexicographically sorted object keys, compact separators, no NaN/Infinity, no duplicate JSON keys and no trailing whitespace. Parsers reject non-canonical encodings even if they are semantically equivalent JSON. The JSON Schema Draft 2020-12 files are a structural preflight layer: they reject empty/space-wrapped immutable identifiers and exact mutable aliases where expressible. Python runtime parsing remains the fail-closed authority for Unicode NFC and control/surrogate character checks that JSON Schema cannot portably express. Opaque IDs are never trimmed or normalized; accepted values are preserved exactly.
 
@@ -71,7 +73,7 @@ The identity tuple binds:
 4. exact index bundle object key, opaque version ID, SHA-256 and byte size;
 5. detached canonical manifest SHA-256;
 6. indexer name/version;
-7. SQLite engine/user_version.
+7. SQLite engine and the E1 application schema version stored in `schema_info.schema_version`, named `schema_info_version`.
 
 \`snapshot_id\` is derived as \`sha256:<hex>\` from canonical UTF-8 JSON serialization of the complete tuple above, excluding only the \`snapshot_id\` field itself. The tuple is deterministic and any change to any bound value changes the ID.
 

@@ -33,14 +33,14 @@ def _object(key: str, version: str, content: bytes) -> ImmutableObjectVersion:
     )
 
 
-def _manifest(*, source_revision=None, index_version="idx-v4", sqlite_user_version=7):
+def _manifest(*, source_revision=None, index_version="idx-v4", schema_info_version=2):
     return CloudSnapshotManifestV1(
         source_revision=source_revision or GitCommitSourceRevision("a" * 40),
         source_bundle=_object("snapshots/source.tar", "src-ver-01", b"synthetic source archive"),
         index_bundle=_object("snapshots/index.sqlite3", "idx-ver-01", b"synthetic sqlite bundle"),
         indexer_identity=IndexerIdentity(name="sfra-indexer", version=index_version),
         sqlite_schema_identity=SqliteSchemaIdentity(
-            engine="sqlite", user_version=sqlite_user_version
+            engine="sqlite", schema_info_version=schema_info_version
         ),
     )
 
@@ -132,7 +132,7 @@ def test_builds_deterministic_snapshot_id_and_round_trips_reference() -> None:
             source_bundle=m.source_bundle,
             index_bundle=m.index_bundle,
             indexer_identity=m.indexer_identity,
-            sqlite_schema_identity=SqliteSchemaIdentity("sqlite", 8),
+            sqlite_schema_identity=SqliteSchemaIdentity("sqlite", 3),
         ),
     ],
 )
@@ -269,6 +269,31 @@ def test_indexer_and_sqlite_schema_identity_are_required_and_typed() -> None:
         SqliteSchemaIdentity("sqlite", True)
 
 
+def test_sqlite_schema_identity_binds_e1_schema_info_version_and_snapshot_id() -> None:
+    base = build_cloud_snapshot_v2(_manifest(schema_info_version=2)).ref
+    changed = build_cloud_snapshot_v2(_manifest(schema_info_version=3)).ref
+
+    expected = {"engine": "sqlite", "schema_info_version": 2}
+    assert base.sqlite_schema_identity.to_dict() == expected
+    assert base.identity_dict()["sqlite_schema_identity"] == expected
+    assert base.to_dict()["sqlite_schema_identity"] == expected
+    assert changed.snapshot_id != base.snapshot_id
+
+
+def test_legacy_user_version_field_is_rejected_by_manifest_and_ref_parser() -> None:
+    manifest_data = _manifest().to_dict()
+    manifest_identity = manifest_data["sqlite_schema_identity"]
+    manifest_identity["user_version"] = manifest_identity.pop("schema_info_version")
+    with pytest.raises(CloudSnapshotContractError, match="unsupported field"):
+        cloud_snapshot_manifest_from_dict(manifest_data)
+
+    ref_data = build_cloud_snapshot_v2(_manifest()).ref.to_dict()
+    ref_identity = ref_data["sqlite_schema_identity"]
+    ref_identity["user_version"] = ref_identity.pop("schema_info_version")
+    with pytest.raises(CloudSnapshotContractError, match="unsupported field"):
+        cloud_snapshot_ref_v2_from_dict(ref_data)
+
+
 def test_snapshot_reference_rejects_unknown_fields_and_forged_id() -> None:
     built = build_cloud_snapshot_v2(_manifest())
     mapping = built.ref.to_dict()
@@ -329,12 +354,44 @@ def test_published_json_schemas_are_versioned_and_closed() -> None:
         assert set(object_schema["required"]) == {"key", "version_id", "sha256", "byte_size"}
         assert object_schema["properties"]["byte_size"]["minimum"] == 1
     assert manifest_schema["properties"]["sqlite_schema_identity"]["properties"]["engine"]["const"] == "sqlite"
+    for schema in (manifest_schema, ref_schema):
+        sqlite_identity_schema = schema["properties"]["sqlite_schema_identity"]
+        assert sqlite_identity_schema["required"] == ["engine", "schema_info_version"]
+        assert sqlite_identity_schema["properties"]["schema_info_version"]["type"] == "integer"
+        assert sqlite_identity_schema["properties"]["schema_info_version"]["minimum"] == 1
+        assert "user_version" not in sqlite_identity_schema["properties"]
 
     assert ref_schema["$schema"].endswith("/2020-12/schema")
     assert ref_schema["properties"]["snapshot_schema_version"]["const"] == 2
     assert ref_schema["additionalProperties"] is False
     assert "manifest_sha256" in ref_schema["required"]
     assert ref_schema["properties"]["snapshot_id"]["$ref"] == "#/$defs/sha256"
+
+
+def test_published_schemas_reject_legacy_user_version_property():
+    from copy import deepcopy
+    from jsonschema import Draft202012Validator
+
+    schema_dir = Path(__file__).resolve().parents[1] / "schemas"
+    manifest_schema = json.loads(
+        (schema_dir / "cloud-snapshot-manifest-v1.schema.json").read_text(encoding="utf-8")
+    )
+    ref_schema = json.loads(
+        (schema_dir / "cloud-snapshot-ref-v2.schema.json").read_text(encoding="utf-8")
+    )
+    manifest_validator = Draft202012Validator(manifest_schema)
+    ref_validator = Draft202012Validator(ref_schema)
+    git_manifest, _, git_ref, _ = _schema_instances()
+
+    old_manifest = deepcopy(git_manifest)
+    identity = old_manifest["sqlite_schema_identity"]
+    identity["user_version"] = identity.pop("schema_info_version")
+    assert not manifest_validator.is_valid(old_manifest)
+
+    old_ref = deepcopy(git_ref)
+    identity = old_ref["sqlite_schema_identity"]
+    identity["user_version"] = identity.pop("schema_info_version")
+    assert not ref_validator.is_valid(old_ref)
 
 
 def _schema_instances():
