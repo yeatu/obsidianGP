@@ -31,7 +31,6 @@ from sfra_context_integrations.snapshot_resolver import (
     ObjectVersionNotFoundError,
     ObjectVersionRead,
     SnapshotBundleIntegrityError,
-    SnapshotNotVerifiedError,
     SnapshotUnavailableError,
 )
 
@@ -228,14 +227,25 @@ def test_catalogue_entry_is_looked_up_exactly_once_when_active_pointer_changes(t
     shutil.rmtree(handle.workspace_path)
 
 
-def test_staged_or_retired_catalogue_entries_fail_closed(tmp_path: Path):
-    _source, _database, _revision, _prepared, built = _fixture(tmp_path)
+def test_staged_snapshot_is_materialized_for_e1_verification_without_state_change(tmp_path: Path):
+    _source, _database, _revision, prepared, built = _fixture(tmp_path)
     staged = InMemorySnapshotCatalogue()
-    staged.stage(built.ref)
-    with pytest.raises(SnapshotNotVerifiedError):
-        CloudSnapshotResolver(staged, FakeObjectStore()).resolve(
-            built.ref.snapshot_id, workspace=tmp_path / "staged-workspace"
-        )
+    staged_entry = staged.stage(built.ref)
+    assert staged_entry.state is SnapshotLifecycleState.STAGED
+
+    handle, _store, _workspace = _resolve(
+        tmp_path,
+        prepared,
+        built.ref,
+        catalogue=staged,
+    )
+
+    assert handle.snapshot == built.ref
+    assert handle.attestation_bytes == prepared.attestation_bytes
+    assert handle.markdown_inventory_bytes == prepared.markdown_inventory_bytes
+    assert staged.get_exact(built.ref.snapshot_id).state is SnapshotLifecycleState.STAGED
+    assert staged.read_state().active_snapshot_id is None
+    shutil.rmtree(handle.workspace_path)
 
     retired = _catalogue_with_snapshot(built.ref)
     state = retired.read_state()

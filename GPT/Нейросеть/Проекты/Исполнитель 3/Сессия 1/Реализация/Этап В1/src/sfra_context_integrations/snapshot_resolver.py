@@ -89,12 +89,6 @@ class SnapshotUnavailableError(SnapshotResolverError):
     code = "snapshot_unavailable"
 
 
-class SnapshotNotVerifiedError(SnapshotResolverError):
-    """The exact catalogue entry has not reached a readable verified state."""
-
-    code = "snapshot_not_verified"
-
-
 class SnapshotCatalogueReadError(SnapshotResolverError):
     """The catalogue returned an invalid or unavailable lookup outcome."""
 
@@ -566,8 +560,16 @@ class CloudSnapshotResolver:
         if type(entry) is not SnapshotCatalogueEntry or type(entry.snapshot) is not CloudSnapshotRefV2:
             raise SnapshotCatalogueReadError("catalogue returned an invalid exact snapshot entry")
         state = entry.state
-        if state not in (SnapshotLifecycleState.VERIFIED, SnapshotLifecycleState.ACTIVE):
-            raise SnapshotNotVerifiedError("snapshot must be VERIFIED or ACTIVE before materialization")
+        if state not in (
+            SnapshotLifecycleState.STAGED,
+            SnapshotLifecycleState.VERIFIED,
+            SnapshotLifecycleState.ACTIVE,
+        ):
+            raise SnapshotCatalogueReadError("catalogue entry has an unsupported lifecycle state")
+        # STAGED is intentionally readable for materialization only: the raw E1
+        # attestation/database are inputs to the separate deep verifier #240.
+        # This method never marks the entry VERIFIED or ACTIVE; downstream query
+        # binding remains gated on successful E1 verification.
         try:
             snapshot = cloud_snapshot_ref_v2_from_dict(entry.snapshot.to_dict())
         except (CloudSnapshotContractError, AttributeError, TypeError, ValueError) as exc:
@@ -662,7 +664,6 @@ __all__ = [
     "SnapshotBundleIntegrityError",
     "SnapshotCatalogueReadError",
     "SnapshotManifestIntegrityError",
-    "SnapshotNotVerifiedError",
     "SnapshotResolverError",
     "SnapshotUnavailableError",
     "SnapshotCatalogueReadPort",

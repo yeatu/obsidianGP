@@ -7,8 +7,9 @@ returned immutable reference for the entire operation.
 ## Trust and data flow
 
 1. CloudSnapshotResolver.resolve(snapshot_id, workspace=...) performs one
-   get_exact(snapshot_id) catalogue lookup. Only VERIFIED and ACTIVE entries
-   are readable; STAGED and RETIRED entries fail closed.
+   get_exact(snapshot_id) catalogue lookup. STAGED, VERIFIED and ACTIVE entries
+   are materializable; RETIRED or absent entries fail closed. STAGED materialization
+   is preparation for the separate E1 deep verifier #240, not a trust promotion.
 2. The canonical manifest is reconstructed from the immutable v2 identity and
    checked against its detached manifest digest and derived snapshot ID.
 3. The resolver calls only ObjectStoreReadPort.get_exact(key, version_id) for
@@ -29,7 +30,11 @@ returned immutable reference for the entire operation.
 The E1 deep verifier in Issue #240 is intentionally separate. This resolver
 verifies the complete outer #119 bundle and prepares exact materialized inputs
 for #240; it does not claim E1 whole-index attestation acceptance, source-origin
-authenticity, provider immutability, or historical UUID assignment.
+authenticity, provider immutability, or historical UUID assignment. In particular,
+a STAGED entry remains STAGED after materialization. This resolver never calls
+mark_verified(), activate(), or any other catalogue mutation. Downstream query
+binding must remain unavailable until #240 accepts the deep E1 report and the
+separate E3 binding boundary #136 accepts it.
 
 ## Ports
 
