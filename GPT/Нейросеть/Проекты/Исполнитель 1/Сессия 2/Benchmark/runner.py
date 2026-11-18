@@ -44,6 +44,14 @@ def sha256_bytes(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
+def _stable_synthetic_node_id(purpose: str, identity: str) -> str:
+    """Return a deterministic, corpus-scoped E1 ID for disposable fixture records."""
+    if not isinstance(purpose, str) or not purpose or not isinstance(identity, str) or not identity:
+        raise BenchmarkError("Synthetic fixture identity inputs must be non-empty strings")
+    name = f"sfra-gold-benchmark:{CORPUS_VERSION}:{purpose}:{identity}"
+    return "node_" + str(uuid.uuid5(uuid.NAMESPACE_URL, name))
+
+
 def git(root: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", "-C", str(root), *args],
@@ -257,7 +265,7 @@ def _patch_gold_metadata(
                     source_path = document["source_path"]
                     node_type = "paragraph"
                     local_key = "__gold_" + gold_node["node_id"]
-                    node_id = "node_" + str(uuid.uuid4())
+                    node_id = _stable_synthetic_node_id("gold-node", gold_node["node_id"])
                     heading_path_json = json.dumps(
                         gold_node["heading_path"], ensure_ascii=False, separators=(",", ":")
                     )
@@ -638,7 +646,7 @@ def _source_read_for_case(
     elif case_id == "gq-028-ambiguous-source":
         node_id, content_hash = fixture["ambiguous"]
     elif case_id == "gq-029-not-found-source":
-        node_id = "node_" + str(uuid.uuid4())
+        node_id = _stable_synthetic_node_id("not-found-source", case_id)
         content_hash = "sha256:" + ("0" * 64)
     elif case_id == "gq-031-neighbor-scope":
         gold_id = "sequence_signal"
@@ -1377,6 +1385,8 @@ def run_benchmark(output_dir: Path) -> dict[str, Any]:
         },
         "environment": {
             "python": platform.python_version(),
+            "python_hash_seed": os.environ.get("PYTHONHASHSEED", "unset"),
+            "synthetic_fixture_id_strategy": "uuid5:NAMESPACE_URL:sfra-gold-benchmark:<corpus_version>:<purpose>:<stable_identity>",
             "jsonschema": __import__("jsonschema").__version__,
             "tiktoken": counter.metadata()["version"],
             "e2_package": "sfra-search",

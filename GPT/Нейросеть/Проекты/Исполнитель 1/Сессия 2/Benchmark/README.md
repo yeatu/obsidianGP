@@ -26,10 +26,10 @@ python -m pip install -e "GPT/Нейросеть/Проекты/Исполнит
 python -m pip install -e "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
 python -m pip install -e "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
 python -m pip install -e "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
-python "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark/runner.py" --output-dir benchmark-output
+PYTHONHASHSEED=0 python "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark/runner.py" --output-dir benchmark-output
 ```
 
-The runner requires Git and creates only temporary repositories below the operating-system temporary directory. Both the Vault and sidecar Git checkouts are destroyed automatically after the run.
+The runner requires Git and creates only temporary repositories below the operating-system temporary directory. Both the Vault and sidecar Git checkouts are destroyed automatically after the run. Set PYTHONHASHSEED=0 for cross-process repeatability; the report records the effective seed. Synthetic E1 Node IDs created for corpus spans use UUIDv5 derived from the corpus version and gold Node ID, never random UUIDv4.
 
 ## Preflight
 
@@ -87,11 +87,10 @@ The dedicated workflow `.github/workflows/sfra-gold-benchmark.yml` runs on pull 
 
 The report records the PR head, the effective PR base verified from the checked-out merge-commit parents, the raw webhook event base, the actual checkout SHA and workflow checkout SHA separately. This avoids reporting a stale webhook base as the tree actually tested after a current-main synchronization. If the merge-ref graph cannot prove the base/head pairing, the report retains the event base and leaves the verified parent fields unavailable.\n\nThe merge parents are read from the raw commit object with `git cat-file -p`, not `git rev-list --parents`. This matters for the default depth-one GitHub Actions checkout: shallow boundaries can hide parents from revision traversal even though the checked-out merge commit object still contains both parent headers. The first parent is reported as the tested base only when the commit has exactly two parents and the second parent matches the exact PR head; otherwise the raw event base is retained and the verified parent fields remain unavailable.
 
+## Final correction handoff — cross-process fixture identity
 
-## Final implementation handoff — 18 November 2026
+The final two independent CI attempts on PR #84 HEAD `62466d1abacc4b77730fb4a5f6e728117ae54d59` reproduced the same 40/42 gate count, but four cases had different precision/token-efficiency values. The root cause was benchmark-local random UUIDv4 assignment to synthetic E1 Node IDs. B1's documented deterministic rank tie-breaker includes Node ID, so different disposable fixture UUIDs could change tie outcomes. Correction #156 replaces those IDs with UUIDv5 derived from corpus version + purpose + stable gold identity, also stabilizes the expected-not-found fixture ID, pins `PYTHONHASHSEED=0` in CI/local instructions, and records both settings in report environment. No shared runtime or corpus is changed.
 
-The sequential benchmark corrections #113, #114 and #121 are implemented on PR #84. Task #121 has been RELEASED by E1; independent exact-head review is requested in Issue #151. The final synchronized implementation HEAD is `f9b12dcab26965b5d94f30d9194dde01184ef4b2`, based on current main `2996e0f6a2cf4e65271d92330138e77899cad692` (17 ahead / 0 behind).
+The correction is being implemented on PR #84 under [Issue #156](https://github.com/yeatu/obsidianGP/issues/156). Previous review request #151 is superseded; it was released by A3 without verdict because its target changed. Fresh A review will be requested only after two new independent full runs on the final exact HEAD produce byte-identical JSON and Markdown reports.
 
-The complete 42-case synthetic corpus was run twice on that same implementation HEAD. Both runs produced identical JSON and Markdown reports: 40 cases passed and 2 E2 forbidden-node findings (gq-010, gq-036) remained failed as required by coordinator decision #115. The three gq-025/gq-028/gq-029 legacy corpus expectation mismatches and 11 other ContextPack status mismatches remain visible diagnostics; explicit SourceRead status mismatches are zero. Corpus v1.0.0 bytes and digest are unchanged. Run IDs, artifacts and SHA-256 values are recorded in #121 and review request #151.
-
-No retrieval/ranking/token-budget runtime, corpus, production state, Vault, SQLite, sidecar or provider integration was changed. PR #84 remains Draft/unmerged pending independent A review and C acceptance.
+The accepted quality findings remain unchanged: 42 corpus cases, 40 pass, 2 preserved E2 failed gates (gq-010, gq-036), three legacy ContextPack expectation diagnostics and 11 other visible status mismatches. Corpus v1.0.0 digest remains unchanged.

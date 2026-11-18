@@ -23,6 +23,16 @@ def test_sha256_uses_exact_utf8_bytes():
     assert runner.sha256_text("строка") != runner.sha256_text("строка\n")
 
 
+def test_synthetic_fixture_node_ids_are_stable_and_purpose_scoped():
+    first = runner._stable_synthetic_node_id("gold-node", "torch_location")
+    repeated = runner._stable_synthetic_node_id("gold-node", "torch_location")
+
+    assert first == repeated
+    assert first.startswith("node_")
+    assert first != runner._stable_synthetic_node_id("gold-node", "gate_rule")
+    assert first != runner._stable_synthetic_node_id("not-found-source", "torch_location")
+
+
 def test_metric_average_ignores_undefined_cases():
     assert runner._metric_average([0.5, None, 1.0]) == 0.75
     assert runner._metric_average([None, None]) is None
