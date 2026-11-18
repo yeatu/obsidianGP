@@ -15,11 +15,38 @@ def body_sha256(body: bytes) -> str:
     return hashlib.sha256(body).hexdigest()
 
 @dataclass(frozen=True, slots=True)
+class MarkerRecord:
+    issue_number: int
+    body_sha256: str
+    state: str
+
+@dataclass(frozen=True, slots=True)
 class LedgerDecision:
     action: str
     body_sha256: str
     marker: str | None
     reason: str
+
+def authenticated_markers(issue_number: int,
+                          comments: Iterable[Mapping[str, object]]) -> tuple[MarkerRecord, ...]:
+    """Parse only markers authored by the exact GitHub Actions bot identity."""
+    records: list[MarkerRecord] = []
+    for comment in comments:
+        user = comment.get("user")
+        if not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR:
+            continue
+        text = comment.get("body")
+        if not isinstance(text, str):
+            continue
+        for line in text.splitlines():
+            match = _MARKER.fullmatch(line.strip())
+            if match and int(match.group("issue")) == issue_number:
+                records.append(MarkerRecord(
+                    issue_number=issue_number,
+                    body_sha256=match.group("digest"),
+                    state=match.group("state"),
+                ))
+    return tuple(records)
 
 class MarkerLedger:
     """Interpret only bot-authored durable markers; serialize each Issue in caller."""
@@ -28,26 +55,15 @@ class MarkerLedger:
         if isinstance(issue_number, bool) or not isinstance(issue_number, int) or issue_number < 1:
             raise ValueError("issue_number must be a positive integer")
         digest = body_sha256(body)
-        observed: list[tuple[str, str]] = []
-        for comment in comments:
-            user = comment.get("user")
-            if not isinstance(user, Mapping) or user.get("login") != MARKER_AUTHOR:
-                continue
-            text = comment.get("body")
-            if not isinstance(text, str):
-                continue
-            for line in text.splitlines():
-                match = _MARKER.fullmatch(line.strip())
-                if match and int(match.group("issue")) == issue_number:
-                    observed.append((match.group("digest"), match.group("state")))
+        observed = authenticated_markers(issue_number, comments)
         if not observed:
             return LedgerDecision("START", digest, self._marker(issue_number, digest, "STARTED"), "first_observation")
-        first_digest = observed[0][0]
-        if any(item[0] != first_digest for item in observed):
+        first_digest = observed[0].body_sha256
+        if any(item.body_sha256 != first_digest for item in observed):
             return LedgerDecision("REJECT", digest, None, "ledger_conflict")
         if first_digest != digest:
             return LedgerDecision("REJECT", digest, self._marker(issue_number, digest, "REJECTED"), "request_body_changed")
-        states = [state for _, state in observed]
+        states = [item.state for item in observed]
         if "COMPLETED" in states:
             return LedgerDecision("SKIP", digest, None, "already_completed")
         if "REJECTED" in states or "FAILED" in states:
