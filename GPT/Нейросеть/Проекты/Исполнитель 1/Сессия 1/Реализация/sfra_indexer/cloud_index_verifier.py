@@ -599,15 +599,16 @@ def _verify_database_consistency(
         for version in versions:
             row = dict(version)
             doc_pk = node_pk_to_doc.get(row["node_pk"])
-            if (doc_pk is None or row["source_path"] != doc_by_pk[doc_pk]["source_path"]
-                    or not _valid_hash(row["content_hash"]) or not isinstance(row["raw_text"], str)
+            if doc_pk is None or row["source_path"] != doc_by_pk[doc_pk]["source_path"]:
+                raise CloudIndexVerificationError("node_reference_mismatch")
+            if (not _valid_hash(row["content_hash"]) or not isinstance(row["raw_text"], str)
                     or "sha256:" + hashlib.sha256(row["raw_text"].encode("utf-8", errors="strict")).hexdigest()
                     != row["content_hash"]):
-                raise CloudIndexVerificationError("node_integrity_failure")
-            _decode_json(row["heading_path_json"], list, "node_integrity_failure", "Invalid version data.")
-            _decode_json(row["content_spans_json"], list, "node_integrity_failure", "Invalid version data.")
-            _decode_json(row["metadata_json"], dict, "node_integrity_failure", "Invalid version data.")
-            _decode_json(row["warnings_json"], list, "node_integrity_failure", "Invalid version data.")
+                raise CloudIndexVerificationError("node_version_mismatch")
+            _decode_json(row["heading_path_json"], list, "node_version_mismatch", "Invalid version data.")
+            _decode_json(row["content_spans_json"], list, "node_version_mismatch", "Invalid version data.")
+            _decode_json(row["metadata_json"], dict, "node_version_mismatch", "Invalid version data.")
+            _decode_json(row["warnings_json"], list, "node_version_mismatch", "Invalid version data.")
 
         counts = (
             len(documents),
