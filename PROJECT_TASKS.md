@@ -68,6 +68,7 @@
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | P1 | `IMPLEMENTATION` | **E** | Исправить benchmark integrity/completeness failures, повторить 42 synthetic cases и приложить exact-head reports | E1 CLAIM; PR #84 Draft; run #44237776930: 40/42 gates; forbidden-node и source-budget completeness findings обязательны |
 | [#86](https://github.com/yeatu/obsidianGP/issues/86) | P1 | `ANALYSIS` | **A** | Спроектировать cloud data plane, computer-independent import/sync и варианты каналов публикации | A1 CLAIM; анализ-only; no real Vault access/migration |
 | [#97](https://github.com/yeatu/obsidianGP/issues/97) | P1 | `REVIEW_REQUEST` | **A** | Независимая exact-head проверка W1 #77 / PR #92 | PR #92 HEAD `e78576f483c688aa01f633e9293257416bc0778f`; 44 fixture tests passed on merge-ref `18f8e586...`; recheck integration against current main after PR #87 merge |
+| [#106](https://github.com/yeatu/obsidianGP/issues/106) | P2 | `REVIEW_REQUEST` | **A** | Независимый аудит cloud-only panel PR #105 | C1 обновил панель после merge #87; exact-head review обязателен до merge |
 | [#91](https://github.com/yeatu/obsidianGP/issues/91) | P2 | `COORDINATOR_DECISION` | **C** | Exact-head fixture CI bootstrap disposition | C2 claimed; C2 reports completion in comment #6969671557; Issue remains open pending its owner-side closure/reconciliation |
 
 **Временно приостановленная линия:** Local adapter-only Issues #38/#39/#40/#43/#72 не брать в работу и не продолжать их merge/review без нового прямого решения владельца. Их код и история сохранены; shared-core результаты остаются пригодными для переиспользования.
@@ -83,6 +84,7 @@
 | PR | Состояние | Трактовка |
 |---|---|---|
 | [#92 — synthetic Web adapter W1](https://github.com/yeatu/obsidianGP/pull/92) | Открыт / Ready for review | HEAD `e78576f483c688aa01f633e9293257416bc0778f`; run #44240799599 — 44 fixture tests passed on base `2051d0ce...`; A review #97. Current main advanced through #87; verify updated integration/base before acceptance |
+| [#105 — cloud-only governance panel](https://github.com/yeatu/obsidianGP/pull/105) | Открыт / Ready for review | Exact HEAD will be recorded after this panel handoff; base main `9ba9d0403de0683c97938d0d323d96799157fc57`; only PROJECT_TASKS.md; independent review #106 |
 | [#84 — synthetic gold benchmark runner](https://github.com/yeatu/obsidianGP/pull/84) | Открыт / Draft | HEAD `a16698266f5ceafa27ef4174a067517ca346663e`; run #44237776930: 40/42 gates; E1 corrections pending; do not weaken failed gates |
 | [#47 — preserved local adapter bootstrap](https://github.com/yeatu/obsidianGP/pull/47) | Открыт / Draft / HOLD | Preserved history and code; no target path; no merge without explicit owner re-scope |
 | [#57 — preserved local search adapter](https://github.com/yeatu/obsidianGP/pull/57) | Открыт / Draft / HOLD | Preserved; no local adapter work/merge under current scope |
