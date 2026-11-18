@@ -12,6 +12,7 @@ from sfra_indexer import (
     CloudIndexVerificationError,
     GitCommitSourceRevision,
     ImmutableImportSourceRevision,
+    SourceRevision,
     index_vault,
     parse_cloud_index_attestation,
     verify_materialized_cloud_index,
@@ -538,3 +539,23 @@ def test_rejects_corrupt_historical_node_version(tmp_path):
     with pytest.raises(CloudIndexVerificationError) as error:
         _verify(root, db_path, inventory, attestation)
     assert error.value.code in {"node_content_mismatch", "node_version_mismatch"}
+
+
+def test_public_source_revision_union_is_exported():
+    assert SourceRevision == (GitCommitSourceRevision | ImmutableImportSourceRevision)
+
+
+def test_rejects_traversal_path_in_canonical_inventory(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    obj = json.loads(inventory)
+    obj["documents"][0]["path"] = "../outside.md"
+    forged_inventory = _canonical(obj)
+    attestation["markdown_inventory"]["sha256"] = _sha(forged_inventory)
+    attestation["markdown_inventory"]["document_count"] = len(obj["documents"])
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        verify_materialized_cloud_index(
+            db_path, root, attestation=_canonical(attestation),
+            markdown_inventory=forged_inventory,
+        )
+    assert error.value.code == "inventory_invalid"
