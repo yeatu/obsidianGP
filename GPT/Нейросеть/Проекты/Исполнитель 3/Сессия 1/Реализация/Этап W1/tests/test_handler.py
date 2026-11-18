@@ -1,7 +1,7 @@
 from __future__ import annotations
 from sfra_web_adapter import handle_opened_event
 
-BOT = {"login": "github-actions[bot]"}
+BOT = {"login": "github-actions[bot]", "type": "Bot"}
 
 def payload(body='{"protocol_version":"sfra.issue.v1"}'):
     return {"repository": {"full_name": "yeatu/obsidianGP"},
