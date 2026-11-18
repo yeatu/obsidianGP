@@ -119,8 +119,14 @@ def test_pr_report_uses_verified_checkout_base_when_event_base_is_stale(monkeypa
     stale_event_base = "a" * 40
 
     def fake_git(root, *args):
-        assert args == ("rev-list", "--parents", "-n", "1", checkout)
-        return f"{checkout} {current_base} {pr_head}"
+        assert args == ("cat-file", "-p", checkout)
+        # Raw commit headers remain readable in a depth-one/shallow checkout.
+        return (
+            f"tree {'f' * 40}\\n"
+            f"parent {current_base}\\n"
+            f"parent {pr_head}\\n\\n"
+            "Merge PR head into current main\\n"
+        )
 
     monkeypatch.setattr(runner, "git", fake_git)
     effective_base, checkout_base, checkout_head = runner._resolve_pr_checkout_identity(
@@ -143,7 +149,12 @@ def test_pr_report_keeps_event_base_when_merge_ref_parent_does_not_match_pr_head
     monkeypatch.setattr(
         runner,
         "git",
-        lambda root, *args: f"{checkout} {'b' * 40} {'e' * 40}",
+        lambda root, *args: (
+            f"tree {'f' * 40}\\n"
+            f"parent {'b' * 40}\\n"
+            f"parent {'e' * 40}\\n\\n"
+            "Merge ref whose second parent is not the requested PR head\\n"
+        ),
     )
     effective_base, checkout_base, checkout_head = runner._resolve_pr_checkout_identity(
         tmp_path,

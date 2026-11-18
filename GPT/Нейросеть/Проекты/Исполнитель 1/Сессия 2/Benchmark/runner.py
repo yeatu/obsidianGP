@@ -767,10 +767,16 @@ def _resolve_pr_checkout_identity(
     checked-out tree. Otherwise the event base is retained as unverified.
     """
     try:
-        record = git(root, "rev-list", "--parents", "-n", "1", actual_checkout_sha).split()
+        # Read the raw commit object. Unlike rev-list, cat-file retains parent
+        # headers even when actions/checkout has marked the merge ref shallow.
+        commit_object = git(root, "cat-file", "-p", actual_checkout_sha)
     except Exception:
         return event_base_sha, None, None
-    parents = record[1:]
+    parents = [
+        line.split(" ", 1)[1]
+        for line in commit_object.splitlines()
+        if line.startswith("parent ")
+    ]
     if (
         pr_head_sha not in {"", "not-a-pull-request"}
         and len(parents) == 2
