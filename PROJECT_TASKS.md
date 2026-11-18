@@ -100,13 +100,17 @@ PR #84 remains open/Draft at HEAD `64924c204f006bf9d41a42ca0724d8e026325014`. Th
 
 ## 8. Trust and production boundaries
 
-1. Prepared bundle must pass the public bundle verifier before immutable write.
-2. Writer verifies exact immutable receipts/read-back; it does not prove E1 state consistency.
-3. Catalogue `stage()` records STAGED. `mark_verified()` is trusted-caller only.
-4. The orchestrator may call `mark_verified()` only after bundle verification and applicable E1 verification for the same exact identity.
-5. For `immutable_import`, skipping the Git-shaped E1 v1 verifier is not success. Until #240 is implemented, independently reviewed and C-accepted, keep the candidate STAGED and do not activate.
-6. Any verification failure/unavailable verifier must not advance VERIFIED/ACTIVE or mutate the previous ACTIVE pointer.
-7. All current bundle/writer/resolver/lifecycle work remains synthetic/disposable with fake/in-memory stores. No provider, credentials, real Vault/SQLite/sidecar/`sfra-state`, production sync/import/read/write, real `read_source` or activation is authorized.
+1. Prepared bundle must pass the public #119 bundle verifier before immutable write or verification materialization.
+2. Writer #125 verifies exact immutable receipts/read-back; it does not prove E1 state consistency.
+3. Catalogue #118 `stage()` records STAGED. `mark_verified()` is caller-enforced and does not become proof merely because a bundle was written or materialized.
+4. The orchestrator may call `mark_verified(snapshot_id)` only after outer #119 bundle verification and inner #240 E1 whole-index verification succeed for the same exact snapshot ID and complete CloudSnapshotRefV2 identity.
+5. For `immutable_import`, skipping the Git-shaped E1 v1 verifier is not success. Until #240 is independently reviewed and C3-accepted, the candidate remains STAGED; no VERIFIED/ACTIVE transition.
+6. Per C3 decision #254, #120 may materialize an exact STAGED entry only through a distinct verification-only output bound to the full snapshot identity, tagged source revision, exact immutable object versions, outer bundle descriptor, materialized source-root/SQLite paths, raw #119 attestation/inventory bytes and the observed STAGED catalogue state. This object is input to #240 only.
+7. The verification-only STAGED materialization is not a query capability. It must expose no E1 read_source, E2 search, B1 Context Pack or V2.2 methods; query adapters must reject it by type/factory boundary. #120/#240 must not call `mark_verified()`, `activate()` or mutate the catalogue.
+8. The caller verifies #240's result against the same exact snapshot ID/full ref and outer bundle digest, then may call #118 `mark_verified()`. Activation remains a separate compare-and-swap decision. Any failure, mismatch, unavailable verifier or catalogue change leaves the entry STAGED.
+9. Request-visible query binding is permitted only through #136 for an ACTIVE exact snapshot. STAGED, VERIFIED-but-not-active and RETIRED entries are not queryable; an A→B catalogue change cannot rebind an in-flight request from A to B.
+10. Any verification failure/unavailable verifier must not advance VERIFIED/ACTIVE or mutate the previous ACTIVE pointer.
+11. All current bundle/writer/resolver/lifecycle work remains synthetic/disposable with fake/in-memory stores. No provider, credentials, real Vault/SQLite/sidecar/`sfra-state`, production sync/import/read/write, real `read_source`, workflow_dispatch or activation is authorized.
 
 ## 9. Parallelism and coordination rules
 
