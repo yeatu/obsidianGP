@@ -9,7 +9,7 @@ from typing import Any
 
 from sfra_context_builder.models import SnapshotRef, TokenCounterProtocol
 
-from .snapshot import PinnedSnapshot, SnapshotBindingError
+from .snapshot import PinnedSnapshot, SnapshotBindingError, require_pinned_snapshot
 from .source_protocol import E1PublicSourceAPI
 
 
@@ -66,8 +66,7 @@ class E1SourceReader:
             raise TypeError("source_api must implement read_source_scope")
         if not callable(getattr(source_api, "resolve_current_node", None)):
             raise TypeError("source_api must implement resolve_current_node")
-        if not isinstance(pinned_snapshot, PinnedSnapshot):
-            raise TypeError("pinned_snapshot must be a PinnedSnapshot")
+        require_pinned_snapshot(pinned_snapshot, consumer="E1SourceReader")
         if not callable(getattr(token_counter, "count", None)):
             raise TypeError("token_counter must implement TokenCounterProtocol.count")
         self._source_api = source_api
