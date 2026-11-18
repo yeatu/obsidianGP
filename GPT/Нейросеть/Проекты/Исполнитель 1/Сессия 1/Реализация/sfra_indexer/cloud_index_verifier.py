@@ -63,7 +63,8 @@ class CloudIndexVerificationError(ValueError):
         "database_invalid": "The SQLite database file is missing, unsafe or unreadable.",
         "database_digest_mismatch": "The SQLite database digest does not match the attestation.",
         "database_size_mismatch": "The SQLite database size does not match the attestation.",
-        "sqlite_integrity_failure": "The SQLite database failed integrity or foreign-key validation.",
+        "sqlite_integrity_failure": "The SQLite database failed its physical integrity check.",
+        "foreign_key_failure": "The SQLite database contains foreign-key violations.",
         "schema_mismatch": "The SQLite database does not match the supported E1 schema.",
         "document_mismatch": "The active E1 documents do not match the Markdown inventory.",
         "parser_identity_mismatch": "The active document parser identities do not match the attestation.",
@@ -236,7 +237,10 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
             raise ValueError("unsupported version")
         if obj["format"] != ATTESTATION_FORMAT:
             raise ValueError("unsupported format")
-        revision = _revision(obj["source_revision"])
+        try:
+            revision = _revision(obj["source_revision"])
+        except Exception as exc:
+            raise CloudIndexVerificationError("source_revision_invalid") from exc
 
         inventory = _exact(obj["markdown_inventory"], {"format", "path", "sha256", "document_count"})
         if (inventory["format"] != INVENTORY_FORMAT or inventory["path"] != INVENTORY_PATH
@@ -451,11 +455,11 @@ def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int,
 def _required_schema(connection: sqlite3.Connection) -> None:
     try:
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if not set(_REQUIRED_COLUMNS).issubset(tables):
+        if tables != set(_REQUIRED_COLUMNS):
             raise CloudIndexVerificationError("schema_mismatch")
         for table, required in _REQUIRED_COLUMNS.items():
             actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
-            if not required.issubset(actual):
+            if actual != required:
                 raise CloudIndexVerificationError("schema_mismatch")
         rows = connection.execute("SELECT schema_version FROM schema_info WHERE singleton=1").fetchall()
         if len(rows) != 1 or type(rows[0][0]) is not int or rows[0][0] != SUPPORTED_SCHEMA_VERSION:
@@ -520,6 +524,7 @@ def _verify_database_consistency(
                 source_text[doc_pk] = _verify_document_bytes(doc, raw)
 
         node_ids: set[str] = set()
+        node_ids_by_doc: dict[int, set[str]] = {}
         node_pk_to_doc = {node["node_pk"]: node["document_pk"] for node in nodes}
         if len(node_pk_to_doc) != len(nodes):
             raise CloudIndexVerificationError("node_integrity_failure")
@@ -532,6 +537,7 @@ def _verify_database_consistency(
             if not _valid_node_id(node_id) or node_id in node_ids:
                 raise CloudIndexVerificationError("node_integrity_failure")
             node_ids.add(node_id)
+            node_ids_by_doc.setdefault(doc["document_pk"], set()).add(node_id)
             events = events_by_doc[doc["document_pk"]]
             heading_path, parent_id, latest_event = _check_db_snapshot(connection, node, doc, events)
             status = _resolve_db_status(node, doc, latest_event)
@@ -555,10 +561,11 @@ def _verify_database_consistency(
             elif status is None:
                 raise CloudIndexVerificationError("node_integrity_failure")
 
-        for events in events_by_doc.values():
+        for doc_pk, events in events_by_doc.items():
+            document_node_ids = node_ids_by_doc.get(doc_pk, set())
             for event in events:
-                if event["node_id"] not in node_ids or any(
-                    candidate not in node_ids for candidate in event["candidate_node_ids"]
+                if event["node_id"] not in document_node_ids or any(
+                    candidate not in document_node_ids for candidate in event["candidate_node_ids"]
                 ):
                     raise CloudIndexVerificationError("node_integrity_failure")
 
@@ -596,7 +603,15 @@ def _verify_database_consistency(
     except CloudIndexVerificationError:
         raise
     except _LookupFailure as exc:
-        raise CloudIndexVerificationError("node_integrity_failure") from exc
+        code = {
+            "foreign_key_failure": "foreign_key_failure",
+            "sqlite_integrity_failure": "sqlite_integrity_failure",
+            "schema_incomplete": "schema_mismatch",
+            "schema_version_unsupported": "schema_mismatch",
+            "db_path_invalid": "database_invalid",
+            "sqlite_open_failed": "database_invalid",
+        }.get(exc.code, "node_integrity_failure")
+        raise CloudIndexVerificationError(code) from exc
     except sqlite3.Error as exc:
         raise CloudIndexVerificationError("sqlite_integrity_failure") from exc
     except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
@@ -651,6 +666,8 @@ def verify_materialized_cloud_index(
         after_signature = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
         if after_signature != signature:
             raise CloudIndexVerificationError("database_invalid")
+        if parsed.markdown_document_count != parsed.active_document_count:
+            raise CloudIndexVerificationError("document_mismatch")
         if counts != (
             parsed.document_count, parsed.active_document_count, parsed.node_count,
             parsed.active_node_count, parsed.passage_count,
