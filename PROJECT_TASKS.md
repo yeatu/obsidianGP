@@ -6,7 +6,7 @@
 > Этот файл не является журналом исполнения, не заменяет Issues и не хранит повторные копии CLAIM, review или CI evidence.
 
 **Снимок проверен:** 2026-11-18  
-**Проверенный main HEAD:** `4b3e40a889a46c5bed2fce7825e210a58a857a9c`  
+**Исходный main HEAD перед этой миграцией:** `4b3e40a889a46c5bed2fce7825e210a58a857a9c`  
 **Последний кодовый baseline:** `bb2275ece19f3d7cf1aa655b89d8d037803976c6`
 
 Шесть коммитов между последним кодовым baseline и проверенным main HEAD изменяли только `PROJECT_TASKS.md` и реестр сессии координатора; runtime-файлы не менялись ([compare](https://github.com/yeatu/obsidianGP/compare/bb2275ece19f3d7cf1aa655b89d8d037803976c6...4b3e40a889a46c5bed2fce7825e210a58a857a9c)).
