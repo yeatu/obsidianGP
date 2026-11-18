@@ -32,7 +32,7 @@ class SyntheticSearchApplication:
         case = self.corpus.case_for_query(request.query)
         nodes = tuple(self.corpus.node(node_id) for node_id in case.node_ids) if case else ()
         nodes = tuple(node for node in nodes if node is not None)
-        self.last_projection = self.corpus.evidence(case) if case is not None and nodes else None
+        self.last_projection = self.corpus.evidence(case, operation="search_vault") if case is not None and nodes else None
         included = [{"node_id": node.node_id, "raw_text": node.raw_text} for node in nodes]
         candidates = tuple(SimpleNamespace(
             node_id=node.node_id,
@@ -78,7 +78,7 @@ class SyntheticReadSourceApplication:
             raw_text=node.raw_text,
             index_generation=1,
         )
-        self.last_projection = self.corpus.evidence(case, (node.node_id,))
+        self.last_projection = self.corpus.evidence(case, (node.node_id,), operation="read_source")
         return ReadSourceResult(request=request, status="ok", fragments=(fragment,))
 
 def main() -> int:
