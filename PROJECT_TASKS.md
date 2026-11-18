@@ -33,7 +33,7 @@
 | [#34](https://github.com/yeatu/obsidianGP/issues/34) | P2 | REVIEW_REQUEST | Независимый post-merge audit Governance Protocol v2 | Нет; параллельно |
 | [#36](https://github.com/yeatu/obsidianGP/issues/36) | P1 | IMPLEMENTATION | Обязательный активный verifier для PinnedSnapshot до любого E1 read | Нет |
 | [#37](https://github.com/yeatu/obsidianGP/issues/37) | P1 | ANALYSIS | Shared MCP tool contracts и SnapshotRef continuity для stateless вызовов | Нет |
-| [#38](https://github.com/yeatu/obsidianGP/issues/38) | P2 | IMPLEMENTATION | Локальный MCP stdio scaffold, конфигурация и composition root | Общий tool contract фиксируется по #37 |
+| [#71](https://github.com/yeatu/obsidianGP/issues/71) | P2 | IMPLEMENTATION | Correction: schemas `search_vault` / `read_source` должны полностью соответствовать контракту #37; тестировать JSON Schema от MCP SDK | #65 REVIEW_CHANGES_REQUESTED; затем A re-review #38 и C acceptance |
 | [#39](https://github.com/yeatu/obsidianGP/issues/39) | P2 | IMPLEMENTATION | `search_vault` adapter поверх SearchVaultService | #37, #38 |
 | [#40](https://github.com/yeatu/obsidianGP/issues/40) | P2 | IMPLEMENTATION | `read_source` adapter поверх ReadSourceService | #36, #37, #38 |
 | [#41](https://github.com/yeatu/obsidianGP/issues/41) | P1 | ANALYSIS | Корпус v1: 42 cases, 32 synthetic docs, 69 nodes; [PR #58](https://github.com/yeatu/obsidianGP/pull/58), ждёт решения #61 | Координаторская приёмка #61 |
@@ -45,7 +45,7 @@
 ## 3. Порядок параллельной работы
 
 **Можно начинать сразу и независимо:** #36 и #34 (если соблюдены их владельцы/зависимости). #37 закрыта и принята координатором. #41 ожидает решения #61; #42 может начинаться после приёмки корпуса.  
-**Bootstrap lane:** #38 может начать базовый stdio lifecycle и конфигурацию, пока #37 фиксирует public signatures.  
+**Bootstrap lane:** #38 handoff reviewed by A1; correction #71 addresses missing schema-level constraints. PR #47 remains open; handler integration awaits correction and C acceptance.  
 **Tool handlers:** #39 после #37/#38; #40 после #36/#37/#38.  
 **Quality runner:** #42 после утверждения gold corpus #41.  
 **Финальная интеграция:** #43 после двух handlers и snapshot guard.
