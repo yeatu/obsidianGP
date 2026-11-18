@@ -408,13 +408,15 @@ def test_verifier_has_no_provider_or_e3_import_dependency():
 def test_detects_source_file_replacement_during_read(tmp_path, monkeypatch):
     root, db_path, inventory, attestation = _fixture(tmp_path)
     target = root / "nested" / "note.md"
-    original_read = __import__("os").read
+    os_module = __import__("os")
+    original_read = os_module.read
+    target_inode = target.stat().st_ino
     replaced = False
 
     def racing_read(fd, size):
         nonlocal replaced
         chunk = original_read(fd, size)
-        if not replaced:
+        if not replaced and os_module.fstat(fd).st_ino == target_inode:
             replaced = True
             target.unlink()
             target.write_bytes(b"replacement after open\n")
