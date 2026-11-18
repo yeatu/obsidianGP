@@ -1,9 +1,11 @@
 from __future__ import annotations
+import hashlib
 import json
 from types import SimpleNamespace
 
 from sfra_issue_core import InMemoryTransportStatusStore, IssueRecord, IssueWorkerCore
 from sfra_web_adapter import MarkerLedger, handle_opened_event
+from sfra_web_adapter.ledger import authenticated_markers
 from sfra_web_adapter.ports import GitHubCommentStatusStore
 from sfra_web_adapter.corpus import SyntheticGoldCorpus
 from sfra_web_adapter.runner import (
@@ -173,3 +175,42 @@ def test_canonical_search_and_read_are_the_only_projected_nodes():
         ))
         assert result.status == "ok"
         assert [item["node_id"] for item in read.last_projection["evidence"]] == [node_id]
+
+
+def test_unchanged_issue_body_completes_through_real_comment_status_store():
+    event_body = request_body()
+    comments = BotComments()
+    search_app = SyntheticSearchApplication()
+    read_app = SyntheticReadSourceApplication()
+    status_store = GitHubCommentStatusStore(comments)
+    worker = IssueWorkerCore(
+        issue_reader=Reader(event_body),
+        status_store=status_store,
+        search_application=search_app,
+        read_source_application=read_app,
+    )
+    event = {
+        "repository": {"full_name": "yeatu/obsidianGP"},
+        "sender": {"login": "yeatu"},
+        "issue": {"number": 29, "title": "[SFRA] synthetic", "body": event_body,
+                  "user": {"login": "yeatu"}},
+    }
+
+    outcome = handle_opened_event(
+        event, event_name="issues", action="opened", comments=comments,
+        worker=worker, snapshot=SNAPSHOT, worker_commit_sha=WORKER_SHA,
+    )
+
+    expected_bare_digest = hashlib.sha256(event_body.encode("utf-8")).hexdigest()
+    expected_v2_digest = "sha256:" + expected_bare_digest
+    status = status_store.get_status(29)
+    marker_records = authenticated_markers(29, comments.items)
+
+    assert outcome == "COMPLETED"
+    assert status is not None and status.transport_status == "COMPLETED"
+    assert status.request_body_sha256 == expected_v2_digest
+    assert search_app.calls == 1
+    assert read_app.calls == 0
+    assert len(marker_records) == 2
+    assert {record.state for record in marker_records} == {"STARTED", "COMPLETED"}
+    assert {record.body_sha256 for record in marker_records} == {expected_bare_digest}
