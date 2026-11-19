@@ -779,11 +779,15 @@ class SFRAIndex:
             ) -> set[int]:
                 """Keep tier-6 candidates only when a local structural group carries query evidence.
 
-                A multi-token fallback requires at least two distinct informative query
-                terms in one source-document group, plus an anchor term found in no more
-                than 2% of active documents (with a one-document floor). A candidate
+                Normally a multi-token fallback requires at least two distinct informative
+                query terms in one source-document group, plus an anchor term found in no
+                more than 2% of active documents (with a one-document floor). A candidate
                 must itself match a contributing term. Groups are limited to the same
                 source document and an explicit parent/child or sibling relationship.
+
+                The legacy exact partial-search case is retained only when exactly one
+                distinct query term has any hit in the active index; a lone morphology hit
+                is never sufficient for a multi-token request.
                 """
                 raw_terms = _non_numeric_query_tokens(query)
                 if channel == "morphology":
