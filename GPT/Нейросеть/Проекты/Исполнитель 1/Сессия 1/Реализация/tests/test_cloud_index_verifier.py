@@ -959,3 +959,182 @@ def test_rejects_historical_node_type_when_digest_is_recomputed(tmp_path):
     with pytest.raises(CloudIndexVerificationError) as error:
         _verify(root, db_path, inventory, attestation)
     assert error.value.code == "node_reference_mismatch"
+
+
+@pytest.mark.parametrize("mutation", ["out_of_node", "overlap", "reversed"])
+def test_rejects_inconsistent_current_content_spans_after_digest_recompute(
+    tmp_path, mutation
+):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        candidates = connection.execute(
+            """
+            SELECT * FROM structural_nodes
+            WHERE status IN ('active', 'ambiguous') AND stale_generation IS NULL
+            ORDER BY node_pk
+            """
+        ).fetchall()
+        selected = None
+        spans = None
+        for candidate in candidates:
+            parsed = json.loads(candidate["content_spans_json"])
+            if parsed and parsed[0]["char_end"] > parsed[0]["char_start"]:
+                selected = dict(candidate)
+                spans = parsed
+                break
+        assert selected is not None and spans
+        first = dict(spans[0])
+        if mutation == "out_of_node":
+            first["char_start"] = selected["char_end"] + 1
+            first["char_end"] = selected["char_end"] + 1
+            first["byte_start"] = selected["byte_end"] + 1
+            first["byte_end"] = selected["byte_end"] + 1
+            spans = [first]
+        elif mutation == "overlap":
+            spans = [first, dict(first)]
+        else:
+            first["char_start"] = first["char_end"] + 1
+            first["byte_start"] = first["byte_end"] + 1
+            spans = [first]
+        connection.execute(
+            "UPDATE structural_nodes SET content_spans_json=? WHERE node_pk=?",
+            (_canonical(spans).decode("utf-8"), selected["node_pk"]),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    inventory = _refresh_attestation(root, db_path, attestation)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_span_mismatch"
+
+
+@pytest.mark.parametrize(
+    "mutation", ["out_of_node", "overlap", "reversed", "raw_text_extent"]
+)
+def test_rejects_inconsistent_historical_content_spans_after_digest_recompute(
+    tmp_path, mutation
+):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text(
+        "# Заголовок\\r\\n\\r\\nИзменённый исторический текст 🧪.\\r\\n",
+        encoding="utf-8",
+    )
+    index_vault(root, tmp_path / "sidecar")
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        candidates = connection.execute(
+            """
+            SELECT old.* FROM node_versions AS old
+            WHERE old.version_no=1
+              AND EXISTS (
+                  SELECT 1 FROM node_versions AS newer
+                  WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
+              )
+            ORDER BY old.node_version_pk
+            """
+        ).fetchall()
+        selected = None
+        spans = None
+        for candidate in candidates:
+            parsed = json.loads(candidate["content_spans_json"])
+            if parsed and parsed[0]["char_end"] > parsed[0]["char_start"]:
+                selected = dict(candidate)
+                spans = parsed
+                break
+        assert selected is not None and spans
+        first = dict(spans[0])
+        if mutation == "out_of_node":
+            first["char_start"] = selected["char_end"] + 1
+            first["char_end"] = selected["char_end"] + 1
+            first["byte_start"] = selected["byte_end"] + 1
+            first["byte_end"] = selected["byte_end"] + 1
+            spans = [first]
+            connection.execute(
+                "UPDATE node_versions SET content_spans_json=? WHERE node_version_pk=?",
+                (_canonical(spans).decode("utf-8"), selected["node_version_pk"]),
+            )
+        elif mutation == "overlap":
+            spans = [first, dict(first)]
+            connection.execute(
+                "UPDATE node_versions SET content_spans_json=? WHERE node_version_pk=?",
+                (_canonical(spans).decode("utf-8"), selected["node_version_pk"]),
+            )
+        elif mutation == "reversed":
+            first["char_start"] = first["char_end"] + 1
+            first["byte_start"] = first["byte_end"] + 1
+            connection.execute(
+                "UPDATE node_versions SET content_spans_json=? WHERE node_version_pk=?",
+                (_canonical([first]).decode("utf-8"), selected["node_version_pk"]),
+            )
+        else:
+            connection.execute(
+                "UPDATE node_versions SET char_end=char_end+1 WHERE node_version_pk=?",
+                (selected["node_version_pk"],),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+    inventory = _refresh_attestation(root, db_path, attestation)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_span_mismatch"
+
+
+def test_rejects_extra_schema_info_row_in_rebuilt_schema_after_digest_recompute(
+    tmp_path,
+):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("ALTER TABLE schema_info RENAME TO schema_info_original")
+        # This preserves the column names and SQLite types but drops the
+        # singleton primary-key/CHECK contract, allowing an extra row.
+        connection.execute(
+            "CREATE TABLE schema_info (singleton INTEGER, schema_version INTEGER NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO schema_info(singleton, schema_version) VALUES (1, 2), (2, 2)"
+        )
+        connection.execute("DROP TABLE schema_info_original")
+        connection.commit()
+    finally:
+        connection.close()
+
+    inventory = _refresh_attestation(root, db_path, attestation)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "schema_mismatch"
+
+
+def test_rejects_extra_schema_info_row_even_when_singleton_is_unique(
+    tmp_path,
+):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("ALTER TABLE schema_info RENAME TO schema_info_original")
+        # A PRIMARY KEY prevents duplicate singleton values, but without the
+        # accepted singleton CHECK another row can still be added and must not
+        # be hidden by filtering WHERE singleton=1.
+        connection.execute(
+            "CREATE TABLE schema_info (singleton INTEGER PRIMARY KEY, schema_version INTEGER NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO schema_info(singleton, schema_version) VALUES (1, 2), (2, 2)"
+        )
+        connection.execute("DROP TABLE schema_info_original")
+        connection.commit()
+    finally:
+        connection.close()
+
+    inventory = _refresh_attestation(root, db_path, attestation)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "schema_mismatch"
