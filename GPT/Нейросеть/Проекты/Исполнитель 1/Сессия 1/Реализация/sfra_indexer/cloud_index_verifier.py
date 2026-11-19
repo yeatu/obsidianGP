@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import codecs
 import hashlib
 import importlib.metadata
 import json
@@ -26,6 +27,15 @@ INVENTORY_FORMAT = "sfra.e1.markdown-inventory.v1"
 SUPPORTED_SCHEMA_VERSION = 2
 DATABASE_PATH = "state/structure.sqlite3"
 INVENTORY_PATH = "markdown-inventory.json"
+MAX_ATTESTATION_BYTES = 2 * 1024 * 1024
+MAX_INVENTORY_BYTES = 64 * 1024 * 1024
+MAX_MARKDOWN_DOCUMENTS = 100_000
+MAX_PARSER_IDENTITIES = 256
+MAX_SOURCE_TREE_ENTRIES = 500_000
+MAX_MARKDOWN_DOCUMENT_BYTES = 32 * 1024 * 1024
+MAX_AGGREGATE_MARKDOWN_BYTES = 2 * 1024 * 1024 * 1024
+MAX_RELATIVE_PATH_CHARS = 4096
+_READ_CHUNK_BYTES = 1024 * 1024
 _SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _GIT_SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 _MUTABLE_IMPORT_ALIASES = frozenset({"latest", "current", "head", "*"})
@@ -55,6 +65,8 @@ class CloudIndexVerificationError(ValueError):
     """Stable failure code with a safe, non-sensitive message."""
     _MESSAGES = {
         "attestation_invalid": "The E1 cloud-index attestation is malformed or unsupported.",
+        "resource_limit_exceeded": "The materialized snapshot exceeds the E1 verifier resource envelope.",
+        "source_revision_mismatch": "The E1 attestation source revision differs from the expected outer revision.",
         "source_revision_invalid": "The attested source revision is invalid.",
         "inventory_invalid": "The canonical Markdown inventory is malformed or unsupported.",
         "inventory_mismatch": "The materialized Markdown tree does not match its attested inventory.",
@@ -181,22 +193,101 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _canonical_object(raw: bytes) -> dict[str, Any]:
-    if not isinstance(raw, bytes):
-        raise ValueError("payload must be bytes")
-    value = json.loads(
-        raw.decode("utf-8", errors="strict"),
+class _ResourceLimitExceeded(ValueError):
+    """Internal signal for one of the coordinator-approved resource ceilings."""
+
+
+def _limited_top_level_object(
+    text: str,
+    *,
+    limited_arrays: dict[str, int],
+) -> dict[str, Any]:
+    """Decode one canonical object, stopping top-level bounded arrays at limit + 1."""
+    decoder = json.JSONDecoder(
         object_pairs_hook=_reject_duplicate_pairs,
         parse_constant=lambda _v: (_ for _ in ()).throw(ValueError("invalid JSON constant")),
     )
-    if not isinstance(value, dict):
+    index = 0
+    length = len(text)
+
+    def skip_space(position: int) -> int:
+        while position < length and text[position] in " \t\r\n":
+            position += 1
+        return position
+
+    index = skip_space(index)
+    if index >= length or text[index] != "{":
         raise ValueError("JSON root must be an object")
-    canonical = json.dumps(value, ensure_ascii=False, allow_nan=False,
-                           sort_keys=True, separators=(",", ":")).encode("utf-8", errors="strict")
+    index += 1
+    result: dict[str, Any] = {}
+    index = skip_space(index)
+    if index < length and text[index] == "}":
+        index += 1
+    else:
+        while True:
+            index = skip_space(index)
+            key, index = decoder.raw_decode(text, index)
+            if not isinstance(key, str) or key in result:
+                raise ValueError("invalid or duplicate JSON key")
+            index = skip_space(index)
+            if index >= length or text[index] != ":":
+                raise ValueError("missing JSON object separator")
+            index = skip_space(index + 1)
+            if key in limited_arrays and index < length and text[index] == "[":
+                value: list[Any] = []
+                index += 1
+                index = skip_space(index)
+                if index < length and text[index] == "]":
+                    index += 1
+                else:
+                    while True:
+                        item, index = decoder.raw_decode(text, index)
+                        value.append(item)
+                        if len(value) > limited_arrays[key]:
+                            raise _ResourceLimitExceeded()
+                        index = skip_space(index)
+                        if index < length and text[index] == ",":
+                            index = skip_space(index + 1)
+                            continue
+                        if index < length and text[index] == "]":
+                            index += 1
+                            break
+                        raise ValueError("invalid JSON array separator")
+            else:
+                value, index = decoder.raw_decode(text, index)
+            result[key] = value
+            index = skip_space(index)
+            if index < length and text[index] == ",":
+                index += 1
+                continue
+            if index < length and text[index] == "}":
+                index += 1
+                break
+            raise ValueError("invalid JSON object separator")
+    if skip_space(index) != length:
+        raise ValueError("trailing JSON data")
+    return result
+
+
+def _canonical_object(
+    raw: bytes,
+    *,
+    max_bytes: int,
+    limited_arrays: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Parse bounded canonical UTF-8 JSON without materializing oversized arrays."""
+    if not isinstance(raw, bytes):
+        raise ValueError("payload must be bytes")
+    if len(raw) > max_bytes:
+        raise _ResourceLimitExceeded()
+    text = raw.decode("utf-8", errors="strict")
+    value = _limited_top_level_object(text, limited_arrays=limited_arrays or {})
+    canonical = json.dumps(
+        value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8", errors="strict")
     if canonical != raw:
         raise ValueError("JSON is not canonical")
     return value
-
 
 def _exact(value: Any, keys: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != keys:
@@ -236,7 +327,11 @@ def _revision(value: Any) -> SourceRevision:
 def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
     """Parse exact canonical attestation bytes into immutable E1-owned types."""
     try:
-        obj = _exact(_canonical_object(raw), {
+        obj = _exact(_canonical_object(
+            raw,
+            max_bytes=MAX_ATTESTATION_BYTES,
+            limited_arrays={"parser_identities": MAX_PARSER_IDENTITIES},
+        ), {
             "attestation_version", "format", "source_revision", "markdown_inventory",
             "indexer_identity", "parser_identities", "sqlite_schema_identity", "database", "counts",
         })
@@ -302,6 +397,8 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
         )
     except CloudIndexVerificationError:
         raise
+    except _ResourceLimitExceeded:
+        raise CloudIndexVerificationError("resource_limit_exceeded") from None
     except Exception as exc:
         raise CloudIndexVerificationError("attestation_invalid") from None
 
@@ -312,6 +409,8 @@ def _safe_path(value: Any) -> str:
     if not isinstance(value, str) or not value or value.startswith("/") or "\\" in value or "\x00" in value:
         raise ValueError("unsafe path")
     value.encode("utf-8", errors="strict")
+    if len(value) > MAX_RELATIVE_PATH_CHARS:
+        raise _ResourceLimitExceeded()
     parts = value.split("/")
     if any(part in {"", ".", ".."} for part in parts) or PurePosixPath(value).is_absolute():
         raise ValueError("unsafe path")
