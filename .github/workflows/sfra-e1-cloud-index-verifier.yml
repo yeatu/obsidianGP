@@ -3,7 +3,6 @@ name: SFRA E1 cloud-index verifier fixture tests
 on:
   push:
     branches:
-      - executor-4/issue-240-cloud-index-verifier
       - executor-3/issue-257-cloud-verifier-corrections
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
