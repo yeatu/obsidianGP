@@ -114,6 +114,16 @@ def _fixture(tmp_path, source_revision=None):
     return root, db_path, inventory, attestation
 
 
+def _expected_revision(value):
+    """Convert fixture wire data to the independent E1-owned tagged value."""
+    if isinstance(value, dict):
+        if value.get("kind") == "git_commit":
+            return GitCommitSourceRevision(value.get("commit_sha"))
+        if value.get("kind") == "immutable_import":
+            return ImmutableImportSourceRevision(value.get("import_id"))
+    return value
+
+
 def _verify(root, db_path, inventory, attestation, expected_source_revision=None):
     if expected_source_revision is None:
         expected_source_revision = attestation["source_revision"]
@@ -122,7 +132,7 @@ def _verify(root, db_path, inventory, attestation, expected_source_revision=None
         root,
         attestation=_canonical(attestation),
         markdown_inventory=inventory,
-        expected_source_revision=expected_source_revision,
+        expected_source_revision=_expected_revision(expected_source_revision),
     )
 
 
@@ -379,7 +389,7 @@ def test_rejects_malformed_inventory_bytes_without_partial_report(tmp_path):
     with pytest.raises(CloudIndexVerificationError) as error:
         verify_materialized_cloud_index(
             db_path, root, attestation=_canonical(attestation), markdown_inventory=b"\xff",
-            expected_source_revision=attestation["source_revision"],
+            expected_source_revision=_expected_revision(attestation["source_revision"]),
         )
     assert error.value.code == "inventory_invalid"
     assert str(root) not in str(error.value)
