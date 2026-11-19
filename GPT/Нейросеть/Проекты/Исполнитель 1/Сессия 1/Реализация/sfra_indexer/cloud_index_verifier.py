@@ -1122,11 +1122,26 @@ def _verify_database_consistency(
             versions_by_node.setdefault(node_pk, []).append(row)
 
         nodes_by_pk = {node["node_pk"]: node for node in nodes}
+        node_pk_by_id = {node["node_id"]: node["node_pk"] for node in nodes}
         for node_pk, node_versions in versions_by_node.items():
             numbers = [row["version_no"] for row in node_versions]
             generations = [row["generation"] for row in node_versions]
             node = nodes_by_pk[node_pk]
-            doc = doc_by_pk[node["document_pk"]]
+            doc_pk = node["document_pk"]
+            doc = doc_by_pk[doc_pk]
+            for historical_version in node_versions:
+                historical_parent_id = historical_version["parent_node_id"]
+                if historical_parent_id is None:
+                    continue
+                parent_pk = node_pk_by_id.get(historical_parent_id)
+                if parent_pk is None or node_pk_to_doc.get(parent_pk) != doc_pk:
+                    raise CloudIndexVerificationError("node_reference_mismatch")
+                parent_history = versions_by_node.get(parent_pk, [])
+                if not any(
+                    parent_version["generation"] <= historical_version["generation"]
+                    for parent_version in parent_history
+                ):
+                    raise CloudIndexVerificationError("node_generation_mismatch")
             if (
                 numbers != list(range(1, len(node_versions) + 1))
                 or generations != sorted(generations)

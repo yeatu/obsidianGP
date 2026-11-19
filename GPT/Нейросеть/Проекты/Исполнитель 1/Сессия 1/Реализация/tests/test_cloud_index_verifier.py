@@ -874,6 +874,60 @@ def test_rejects_historical_node_version_coordinates_when_digest_is_recomputed(t
     assert error.value.code == "node_span_mismatch"
 
 
+def test_rejects_historical_parent_created_after_child_version(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text(
+        "# Заголовок\n\nТекст второго поколения.\n\n"
+        "# Более поздний раздел\n\nПоздний текст.\n",
+        encoding="utf-8",
+    )
+    index_vault(root, tmp_path / "sidecar")
+    inventory = _refresh_attestation(root, db_path, attestation)
+
+    connection = sqlite3.connect(db_path)
+    try:
+        child = connection.execute(
+            """
+            SELECT old.node_version_pk, old.generation, current.document_pk
+            FROM node_versions AS old
+            JOIN structural_nodes AS current ON current.node_pk=old.node_pk
+            WHERE old.version_no=1 AND old.parent_node_id IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM node_versions AS newer
+                  WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
+              )
+            ORDER BY old.node_version_pk
+            LIMIT 1
+            """
+        ).fetchone()
+        assert child is not None
+        future_parent = connection.execute(
+            """
+            SELECT node_id FROM structural_nodes
+            WHERE document_pk=? AND node_type='heading' AND created_generation > ?
+            ORDER BY created_generation, node_pk
+            LIMIT 1
+            """,
+            (child[2], child[1]),
+        ).fetchone()
+        assert future_parent is not None
+        connection.execute(
+            "UPDATE node_versions SET parent_node_id=? WHERE node_version_pk=?",
+            (future_parent[0], child[0]),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_generation_mismatch"
+
+
 def test_rejects_historical_node_type_when_digest_is_recomputed(tmp_path):
     root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
     note = root / "nested" / "note.md"
