@@ -55,3 +55,8 @@ This writer parent now consumes the independently accepted and merged bundle/ver
 - Current main and accepted #162 merge: 8d1d3c937abf1e6f651d077c409d1b3dfad1a9cb (tree 7b516530ad2f10fd10967fb84087fdf6a3946042).
 - Writer refresh merge: 123de3771cc2aab1664bbecdfc5533df90696c6a, with current main as first parent and former writer HEAD b0bcf7ae587c3613b80ef811264bdd4437eedc93 as second.
 - This note records ancestry only; writer runtime behavior and test semantics are unchanged by the baseline refresh.
+
+
+## Current-main refresh after exact-version resolver acceptance (2026-11-19)
+
+The accepted E2 resolver/materializer PR #250 was merged into main at 372c1b854a39c436969d3835d0656c46a4758677 (tree b1612bd11d71f2a4a6563b39a4d119c2371e1f40). This parent writer branch now includes that accepted resolver history as part of its main-first refresh merge 08c2720f67bfcfb1a84ae0b0d98bf910dfa1af5f, whose second parent is the former writer HEAD 5612a70520c91efcb9d4ccdd955f207c63bef641. The effective writer delta remains restricted to the four writer-owned files. This note records ancestry only; no writer runtime/test semantics change.
