@@ -808,7 +808,19 @@ class SFRAIndex:
                         term_document_frequency[term] = len({hit["source_path"] for hit in hits})
 
                 if len(term_hits) < 2:
-                    return set()
+                    # Preserve legacy exact partial search only when this is the
+                    # sole query term with any hit in the complete active index.
+                    # A lone morphology lemma is deliberately insufficient.
+                    if channel != "exact" or len(term_hits) != 1:
+                        return set()
+                    only_term_hits = {
+                        int(hit["version_id"]) for hit in next(iter(term_hits.values()))
+                    }
+                    return {
+                        int(candidate["version_id"])
+                        for candidate in fallback_rows
+                        if int(candidate["version_id"]) in only_term_hits
+                    }
 
                 active_document_count = int(
                     conn.execute("SELECT COUNT(*) FROM documents WHERE state='active'").fetchone()[0]

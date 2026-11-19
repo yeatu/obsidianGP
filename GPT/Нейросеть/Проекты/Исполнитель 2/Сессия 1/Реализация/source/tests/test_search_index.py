@@ -583,7 +583,7 @@ def test_exact_number_control_remains_independent_of_partial_fallback(index):
 
     assert {item["node_id"] for item in results(index, "18518")} == {"target_18518"}
 
-def test_partial_fallback_preserves_single_rare_exact_anchor(index):
+def test_partial_fallback_preserves_single_exact_hit_when_other_terms_are_absent(index):
     index.import_nodes([
         node("bench_partial_target", "synthetic/partial/target.md",
              "Маяк был виден издалека, даже во время сильного снегопада.")
