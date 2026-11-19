@@ -921,6 +921,62 @@ def _verify_database_consistency(
         node_id_by_pk = {node["node_pk"]: node["node_id"] for node in nodes}
         if len(node_pk_to_doc) != len(nodes) or len(node_id_by_pk) != len(nodes):
             raise CloudIndexVerificationError("node_integrity_failure")
+        # Build same-document identity sets first, then classify historical
+        # parent/type/span failures before the legacy current-node preflight can
+        # collapse them into its generic version-history error code.
+        for node in nodes:
+            node_ids_by_doc.setdefault(node["document_pk"], set()).add(node["node_id"])
+
+        historical_links = connection.execute(
+            """SELECT node_pk, source_path, node_type, parent_node_id, version_no,
+                      generation, line_start, line_end, char_start, char_end,
+                      byte_start, byte_end
+               FROM node_versions ORDER BY node_pk, version_no"""
+        ).fetchall()
+        coordinate_fields = (
+            "line_start", "line_end", "char_start", "char_end", "byte_start", "byte_end"
+        )
+        for raw_version in historical_links:
+            version = dict(raw_version)
+            version_node_pk = version.get("node_pk")
+            doc_pk = node_pk_to_doc.get(version_node_pk)
+            doc = doc_by_pk.get(doc_pk)
+            if doc is None or version.get("source_path") != doc["source_path"]:
+                raise CloudIndexVerificationError("node_reference_mismatch")
+            if version.get("node_type") not in _ALLOWED_NODE_TYPES:
+                raise CloudIndexVerificationError("node_reference_mismatch")
+            parent_id = version.get("parent_node_id")
+            if parent_id is not None and (
+                not _valid_node_id(parent_id)
+                or parent_id not in node_ids_by_doc.get(doc_pk, set())
+                or parent_id == node_id_by_pk.get(version_node_pk)
+            ):
+                raise CloudIndexVerificationError("node_reference_mismatch")
+            if any(type(version.get(field)) is not int for field in coordinate_fields):
+                raise CloudIndexVerificationError("node_span_mismatch")
+            if (
+                version["line_start"] < 1
+                or version["line_end"] < 0
+                or version["line_end"] < version["line_start"] - 1
+                or (
+                    version["line_end"] == version["line_start"] - 1
+                    and version["char_start"] != version["char_end"]
+                )
+                or version["char_start"] < 0
+                or version["char_end"] < version["char_start"]
+                or version["byte_start"] < 0
+                or version["byte_end"] < version["byte_start"]
+            ):
+                raise CloudIndexVerificationError("node_span_mismatch")
+            if (
+                type(version.get("version_no")) is not int
+                or version["version_no"] < 1
+                or type(version.get("generation")) is not int
+                or version["generation"] < 1
+                or version["generation"] > doc["generation"]
+            ):
+                raise CloudIndexVerificationError("node_generation_mismatch")
+
         nodes_by_doc: dict[int, list[tuple[dict[str, Any], str | None, list[str]]]] = {}
         active_node_count = 0
 
