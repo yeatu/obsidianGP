@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import codecs
 import hashlib
 import importlib.metadata
 import json
@@ -16,10 +15,10 @@ from typing import Any
 
 from .lookup import (
     _LookupFailure, _check_db_snapshot, _decode_json,
-    _read_only_connection, _read_source_file, _resolve_db_status,
-    _safe_source_components, _validate_events, _verify_database,
-    _verify_document_bytes, _verify_node_from_source, _valid_hash,
-    _valid_node_id,
+    _open_beneath, _open_canonical_root, _read_only_connection,
+    _resolve_db_status, _safe_source_components, _stat_signature,
+    _validate_events, _verify_database, _verify_document_bytes,
+    _verify_node_from_source, _valid_hash, _valid_node_id,
 )
 
 ATTESTATION_FORMAT = "sfra.e1.cloud-index-attestation.v1"
@@ -27,18 +26,21 @@ INVENTORY_FORMAT = "sfra.e1.markdown-inventory.v1"
 SUPPORTED_SCHEMA_VERSION = 2
 DATABASE_PATH = "state/structure.sqlite3"
 INVENTORY_PATH = "markdown-inventory.json"
+_SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_GIT_SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
+_MUTABLE_IMPORT_ALIASES = frozenset({"latest", "current", "head", "*"})
 MAX_ATTESTATION_BYTES = 2 * 1024 * 1024
 MAX_INVENTORY_BYTES = 64 * 1024 * 1024
 MAX_MARKDOWN_DOCUMENTS = 100_000
 MAX_PARSER_IDENTITIES = 256
 MAX_SOURCE_TREE_ENTRIES = 500_000
 MAX_MARKDOWN_DOCUMENT_BYTES = 32 * 1024 * 1024
-MAX_AGGREGATE_MARKDOWN_BYTES = 2 * 1024 * 1024 * 1024
-MAX_RELATIVE_PATH_CHARS = 4096
-_READ_CHUNK_BYTES = 1024 * 1024
-_SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
-_GIT_SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
-_MUTABLE_IMPORT_ALIASES = frozenset({"latest", "current", "head", "*"})
+MAX_TOTAL_MARKDOWN_BYTES = 2 * 1024 * 1024 * 1024
+MAX_SOURCE_PATH_CHARS = 4096
+_ALLOWED_NODE_TYPES = frozenset({
+    "document", "heading", "paragraph", "list", "list_item", "quote",
+    "callout", "table", "code_block", "html_block", "thematic_break",
+})
 _REQUIRED_COLUMNS = {
     "schema_info": {"singleton", "schema_version"},
     "documents": {"document_pk", "source_path", "source_size_bytes", "parser_name",
@@ -65,9 +67,9 @@ class CloudIndexVerificationError(ValueError):
     """Stable failure code with a safe, non-sensitive message."""
     _MESSAGES = {
         "attestation_invalid": "The E1 cloud-index attestation is malformed or unsupported.",
-        "resource_limit_exceeded": "The materialized snapshot exceeds the E1 verifier resource envelope.",
-        "source_revision_mismatch": "The E1 attestation source revision differs from the expected outer revision.",
         "source_revision_invalid": "The attested source revision is invalid.",
+        "source_revision_mismatch": "The attested source revision does not match the outer verified source revision.",
+        "resource_limit_exceeded": "The materialized snapshot exceeds the approved E1 verifier resource limits.",
         "inventory_invalid": "The canonical Markdown inventory is malformed or unsupported.",
         "inventory_mismatch": "The materialized Markdown tree does not match its attested inventory.",
         "filesystem_unsafe": "The materialized source tree contains an unsafe or unreadable entry.",
@@ -193,101 +195,24 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-class _ResourceLimitExceeded(ValueError):
-    """Internal signal for one of the coordinator-approved resource ceilings."""
-
-
-def _limited_top_level_object(
-    text: str,
-    *,
-    limited_arrays: dict[str, int],
-) -> dict[str, Any]:
-    """Decode one canonical object, stopping top-level bounded arrays at limit + 1."""
-    decoder = json.JSONDecoder(
+def _canonical_object(raw: bytes, *, max_bytes: int) -> dict[str, Any]:
+    if type(raw) is not bytes:
+        raise ValueError("payload must be bytes")
+    if len(raw) > max_bytes:
+        raise CloudIndexVerificationError("resource_limit_exceeded")
+    value = json.loads(
+        raw.decode("utf-8", errors="strict"),
         object_pairs_hook=_reject_duplicate_pairs,
         parse_constant=lambda _v: (_ for _ in ()).throw(ValueError("invalid JSON constant")),
     )
-    index = 0
-    length = len(text)
-
-    def skip_space(position: int) -> int:
-        while position < length and text[position] in " \t\r\n":
-            position += 1
-        return position
-
-    index = skip_space(index)
-    if index >= length or text[index] != "{":
+    if not isinstance(value, dict):
         raise ValueError("JSON root must be an object")
-    index += 1
-    result: dict[str, Any] = {}
-    index = skip_space(index)
-    if index < length and text[index] == "}":
-        index += 1
-    else:
-        while True:
-            index = skip_space(index)
-            key, index = decoder.raw_decode(text, index)
-            if not isinstance(key, str) or key in result:
-                raise ValueError("invalid or duplicate JSON key")
-            index = skip_space(index)
-            if index >= length or text[index] != ":":
-                raise ValueError("missing JSON object separator")
-            index = skip_space(index + 1)
-            if key in limited_arrays and index < length and text[index] == "[":
-                value: list[Any] = []
-                index += 1
-                index = skip_space(index)
-                if index < length and text[index] == "]":
-                    index += 1
-                else:
-                    while True:
-                        item, index = decoder.raw_decode(text, index)
-                        value.append(item)
-                        if len(value) > limited_arrays[key]:
-                            raise _ResourceLimitExceeded()
-                        index = skip_space(index)
-                        if index < length and text[index] == ",":
-                            index = skip_space(index + 1)
-                            continue
-                        if index < length and text[index] == "]":
-                            index += 1
-                            break
-                        raise ValueError("invalid JSON array separator")
-            else:
-                value, index = decoder.raw_decode(text, index)
-            result[key] = value
-            index = skip_space(index)
-            if index < length and text[index] == ",":
-                index += 1
-                continue
-            if index < length and text[index] == "}":
-                index += 1
-                break
-            raise ValueError("invalid JSON object separator")
-    if skip_space(index) != length:
-        raise ValueError("trailing JSON data")
-    return result
-
-
-def _canonical_object(
-    raw: bytes,
-    *,
-    max_bytes: int,
-    limited_arrays: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """Parse bounded canonical UTF-8 JSON without materializing oversized arrays."""
-    if not isinstance(raw, bytes):
-        raise ValueError("payload must be bytes")
-    if len(raw) > max_bytes:
-        raise _ResourceLimitExceeded()
-    text = raw.decode("utf-8", errors="strict")
-    value = _limited_top_level_object(text, limited_arrays=limited_arrays or {})
-    canonical = json.dumps(
-        value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8", errors="strict")
+    canonical = json.dumps(value, ensure_ascii=False, allow_nan=False,
+                           sort_keys=True, separators=(",", ":")).encode("utf-8", errors="strict")
     if canonical != raw:
         raise ValueError("JSON is not canonical")
     return value
+
 
 def _exact(value: Any, keys: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != keys:
@@ -327,11 +252,7 @@ def _revision(value: Any) -> SourceRevision:
 def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
     """Parse exact canonical attestation bytes into immutable E1-owned types."""
     try:
-        obj = _exact(_canonical_object(
-            raw,
-            max_bytes=MAX_ATTESTATION_BYTES,
-            limited_arrays={"parser_identities": MAX_PARSER_IDENTITIES},
-        ), {
+        obj = _exact(_canonical_object(raw, max_bytes=MAX_ATTESTATION_BYTES), {
             "attestation_version", "format", "source_revision", "markdown_inventory",
             "indexer_identity", "parser_identities", "sqlite_schema_identity", "database", "counts",
         })
@@ -349,6 +270,8 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
                 or not isinstance(inventory["sha256"], str) or not _SHA256_RE.fullmatch(inventory["sha256"])):
             raise ValueError("invalid inventory descriptor")
         inventory_count = _uint(inventory["document_count"])
+        if inventory_count > MAX_MARKDOWN_DOCUMENTS:
+            raise CloudIndexVerificationError("resource_limit_exceeded")
 
         indexer = _exact(obj["indexer_identity"], {"name", "version"})
         indexer_identity = IndexerIdentity(_text(indexer["name"], 256), _text(indexer["version"], 128))
@@ -358,6 +281,8 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
         raw_parsers = obj["parser_identities"]
         if not isinstance(raw_parsers, list):
             raise ValueError("parser identities must be an array")
+        if len(raw_parsers) > MAX_PARSER_IDENTITIES:
+            raise CloudIndexVerificationError("resource_limit_exceeded")
         parsers = []
         for raw_parser in raw_parsers:
             parser = _exact(raw_parser, {"name", "version"})
@@ -397,8 +322,6 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
         )
     except CloudIndexVerificationError:
         raise
-    except _ResourceLimitExceeded:
-        raise CloudIndexVerificationError("resource_limit_exceeded") from None
     except Exception as exc:
         raise CloudIndexVerificationError("attestation_invalid") from None
 
@@ -408,230 +331,267 @@ def _safe_path(value: Any) -> str:
     # normalization or whitespace restrictions that its producer does not use.
     if not isinstance(value, str) or not value or value.startswith("/") or "\\" in value or "\x00" in value:
         raise ValueError("unsafe path")
+    if len(value) > MAX_SOURCE_PATH_CHARS:
+        raise CloudIndexVerificationError("resource_limit_exceeded")
     value.encode("utf-8", errors="strict")
-    if len(value) > MAX_RELATIVE_PATH_CHARS:
-        raise _ResourceLimitExceeded()
     parts = value.split("/")
     if any(part in {"", ".", ".."} for part in parts) or PurePosixPath(value).is_absolute():
         raise ValueError("unsafe path")
     return value
 
 
-def _stat_signature(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
-    return (
-        value.st_dev, value.st_ino, value.st_mode, value.st_size,
-        value.st_mtime_ns, value.st_ctime_ns,
-    )
-
-
-def _open_source_root(source_root: str | Path) -> tuple[Path, int]:
-    requested = Path(source_root).expanduser()
+def _assert_fd_beneath(fd: int, root: Path) -> None:
+    """Fail closed unless the open descriptor still resolves beneath the pinned root."""
+    proc_root = Path("/proc/self/fd")
+    if not proc_root.is_dir():
+        raise CloudIndexVerificationError("filesystem_unsafe")
     try:
-        requested_stat = requested.lstat()
-        if stat.S_ISLNK(requested_stat.st_mode) or not stat.S_ISDIR(requested_stat.st_mode):
-            raise CloudIndexVerificationError("filesystem_unsafe")
-        root = requested.resolve(strict=True)
-        before = root.lstat()
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-        flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(root, flags)
-        opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISDIR(opened.st_mode)
-            or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
-        ):
-            os.close(descriptor)
+        target_text = os.readlink(proc_root / str(fd))
+        if target_text.endswith(" (deleted)"):
             raise CloudIndexVerificationError("filesystem_race")
-        return root, descriptor
+        target = Path(target_text).resolve(strict=True)
+        target.relative_to(root)
     except CloudIndexVerificationError:
         raise
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise CloudIndexVerificationError("filesystem_unsafe") from None
-
-
-def _open_child_directory(
-    parent_fd: int,
-    name: str,
-    before: os.stat_result,
-) -> int:
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-    flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(name, flags, dir_fd=parent_fd)
-    except OSError:
-        # The entry was observed as a directory but could not be pinned without
-        # following a link or accepting a replaced directory component.
+    except (OSError, RuntimeError, ValueError):
         raise CloudIndexVerificationError("filesystem_race") from None
-    opened = os.fstat(descriptor)
-    if (
-        not stat.S_ISDIR(opened.st_mode)
-        or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
-    ):
-        os.close(descriptor)
-        raise CloudIndexVerificationError("filesystem_race")
-    return descriptor
 
 
-def _read_markdown_at(
-    parent_fd: int,
-    name: str,
-    before: os.stat_result,
-    *,
-    retain_bytes: bool,
-) -> tuple[int, str, bytes | None]:
-    if not stat.S_ISREG(before.st_mode):
-        raise CloudIndexVerificationError("filesystem_unsafe")
-    if before.st_size > MAX_MARKDOWN_DOCUMENT_BYTES:
-        raise CloudIndexVerificationError("resource_limit_exceeded")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-    flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+def _read_markdown_digest(
+    root_fd: int,
+    root: Path,
+    components: tuple[str, ...],
+    expected_stat: os.stat_result,
+) -> tuple[int, str]:
+    """Hash one Markdown file beneath the pinned root without retaining its payload."""
     try:
-        descriptor = os.open(name, flags, dir_fd=parent_fd)
-    except OSError:
+        descriptor = _open_beneath(root_fd, components)
+    except Exception:
         raise CloudIndexVerificationError("filesystem_race") from None
     try:
-        opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(opened.st_mode)
-            or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
-            or _stat_signature(before) != _stat_signature(opened)
-        ):
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise CloudIndexVerificationError("filesystem_unsafe")
+        if (before.st_dev, before.st_ino) != (expected_stat.st_dev, expected_stat.st_ino):
             raise CloudIndexVerificationError("filesystem_race")
-
+        if before.st_size > MAX_MARKDOWN_DOCUMENT_BYTES:
+            raise CloudIndexVerificationError("resource_limit_exceeded")
+        _assert_fd_beneath(descriptor, root)
         digest = hashlib.sha256()
-        decoder = codecs.getincrementaldecoder("utf-8")("strict")
-        chunks: list[bytes] | None = [] if retain_bytes else None
         total = 0
         while True:
-            chunk = os.read(descriptor, _READ_CHUNK_BYTES)
+            chunk = os.read(descriptor, 1024 * 1024)
             if not chunk:
                 break
             total += len(chunk)
             if total > MAX_MARKDOWN_DOCUMENT_BYTES:
                 raise CloudIndexVerificationError("resource_limit_exceeded")
-            decoder.decode(chunk, final=False)
             digest.update(chunk)
-            if chunks is not None:
-                chunks.append(chunk)
-        decoder.decode(b"", final=True)
         after = os.fstat(descriptor)
-        try:
-            path_after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
-        except OSError:
-            raise CloudIndexVerificationError("filesystem_race") from None
-        if (
-            _stat_signature(opened) != _stat_signature(after)
-            or _stat_signature(after) != _stat_signature(path_after)
-            or total != after.st_size
-        ):
+        if _stat_signature(before) != _stat_signature(after) or total != after.st_size:
             raise CloudIndexVerificationError("filesystem_race")
-        raw = b"".join(chunks) if chunks is not None else None
-        return total, "sha256:" + digest.hexdigest(), raw
-    except UnicodeDecodeError:
-        raise CloudIndexVerificationError("filesystem_unsafe") from None
+        _assert_fd_beneath(descriptor, root)
+        try:
+            verify_fd = _open_beneath(root_fd, components)
+        except Exception:
+            raise CloudIndexVerificationError("filesystem_race") from None
+        try:
+            verified = os.fstat(verify_fd)
+            if (verified.st_dev, verified.st_ino) != (after.st_dev, after.st_ino):
+                raise CloudIndexVerificationError("filesystem_race")
+            _assert_fd_beneath(verify_fd, root)
+        finally:
+            os.close(verify_fd)
+        return total, "sha256:" + digest.hexdigest()
+    except CloudIndexVerificationError:
+        raise
+    except OSError:
+        raise CloudIndexVerificationError("filesystem_race") from None
     finally:
         os.close(descriptor)
 
 
-def _scan_source_inventory(root_fd: int) -> tuple[list[dict[str, Any]], int]:
-    """Descriptor-relative tree walk; non-Markdown payload bytes are never read."""
-    documents: list[dict[str, Any]] = []
-    total_entries = 0
-    aggregate_markdown_bytes = 0
-
-    def walk(directory_fd: int, prefix: str) -> None:
-        nonlocal total_entries, aggregate_markdown_bytes
+def _read_markdown_bytes(
+    root_fd: int,
+    root: Path,
+    components: tuple[str, ...],
+    expected_size: int,
+    expected_digest: str,
+) -> bytes:
+    """Read one bounded Markdown file securely for source-coordinate verification."""
+    if type(expected_size) is not int or expected_size < 0 or expected_size > MAX_MARKDOWN_DOCUMENT_BYTES:
+        raise CloudIndexVerificationError("resource_limit_exceeded")
+    try:
+        descriptor = _open_beneath(root_fd, components)
+    except Exception:
+        raise CloudIndexVerificationError("filesystem_race") from None
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size != expected_size:
+            raise CloudIndexVerificationError("filesystem_race")
+        _assert_fd_beneath(descriptor, root)
+        chunks: list[bytes] = []
+        total = 0
+        digest = hashlib.sha256()
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_MARKDOWN_DOCUMENT_BYTES:
+                raise CloudIndexVerificationError("resource_limit_exceeded")
+            chunks.append(chunk)
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        if _stat_signature(before) != _stat_signature(after) or total != after.st_size:
+            raise CloudIndexVerificationError("filesystem_race")
+        if total != expected_size or "sha256:" + digest.hexdigest() != expected_digest:
+            raise CloudIndexVerificationError("inventory_mismatch")
+        _assert_fd_beneath(descriptor, root)
         try:
-            names = os.listdir(directory_fd)
-            names.sort(key=lambda item: item.encode("utf-8", errors="strict"))
-        except (OSError, UnicodeError):
-            raise CloudIndexVerificationError("filesystem_unsafe") from None
+            verify_fd = _open_beneath(root_fd, components)
+        except Exception:
+            raise CloudIndexVerificationError("filesystem_race") from None
+        try:
+            verified = os.fstat(verify_fd)
+            if (verified.st_dev, verified.st_ino) != (after.st_dev, after.st_ino):
+                raise CloudIndexVerificationError("filesystem_race")
+            _assert_fd_beneath(verify_fd, root)
+        finally:
+            os.close(verify_fd)
+        return b"".join(chunks)
+    except CloudIndexVerificationError:
+        raise
+    except OSError:
+        raise CloudIndexVerificationError("filesystem_race") from None
+    finally:
+        os.close(descriptor)
 
-        for name in names:
-            try:
-                relative = f"{prefix}/{name}" if prefix else name
-                relative = _safe_path(relative)
-                total_entries += 1
-                if total_entries > MAX_SOURCE_TREE_ENTRIES:
-                    raise CloudIndexVerificationError("resource_limit_exceeded")
-                before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-                if stat.S_ISLNK(before.st_mode):
-                    raise CloudIndexVerificationError("filesystem_unsafe")
-                if stat.S_ISDIR(before.st_mode):
-                    child_fd = _open_child_directory(directory_fd, name, before)
+
+def _open_directory_at(directory_fd: int, name: str) -> int:
+    """Open one child directory relative to a pinned parent without following links."""
+    flags = (
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    )
+    return os.open(name, flags, dir_fd=directory_fd)
+
+
+def _collect_source_files(source_root: str | Path) -> tuple[tuple[str, int, str], ...]:
+    """Enumerate and hash only Markdown files using pinned descriptor-relative access.
+
+    All tree entries count toward the 500,000-entry limit. Non-Markdown entries
+    are inspected with metadata only; their payload bytes are never opened/read.
+    """
+    requested = Path(source_root).expanduser()
+    if requested.is_symlink():
+        raise CloudIndexVerificationError("filesystem_unsafe")
+    try:
+        root = requested.resolve(strict=True)
+        root_fd = _open_canonical_root(root)
+    except Exception:
+        raise CloudIndexVerificationError("filesystem_unsafe") from None
+    if not root.is_dir():
+        os.close(root_fd)
+        raise CloudIndexVerificationError("filesystem_unsafe")
+
+    budget = {"entries": 1, "documents": 0, "markdown_bytes": 0}
+    documents: list[tuple[str, int, str]] = []
+
+    def walk(directory_fd: int, prefix: str, components: tuple[str, ...]) -> None:
+        _assert_fd_beneath(directory_fd, root)
+        scan_fd = os.dup(directory_fd)
+        names: list[str] = []
+        try:
+            with os.scandir(scan_fd) as entries:
+                for entry in entries:
+                    budget["entries"] += 1
+                    if budget["entries"] > MAX_SOURCE_TREE_ENTRIES:
+                        raise CloudIndexVerificationError("resource_limit_exceeded")
+                    name = entry.name
                     try:
-                        walk(child_fd, relative)
-                    finally:
-                        os.close(child_fd)
-                elif stat.S_ISREG(before.st_mode):
-                    if PurePosixPath(relative).suffix.lower() != ".md":
-                        # Count and type-check attachments, but deliberately do
-                        # not open, hash, decode, or retain their payload bytes.
-                        continue
-                    if len(documents) >= MAX_MARKDOWN_DOCUMENTS:
+                        name.encode("utf-8", errors="strict")
+                    except UnicodeEncodeError:
+                        raise CloudIndexVerificationError("filesystem_unsafe") from None
+                    names.append(name)
+        except CloudIndexVerificationError:
+            raise
+        except (OSError, UnicodeError, ValueError):
+            raise CloudIndexVerificationError("filesystem_unsafe") from None
+        finally:
+            os.close(scan_fd)
+
+        names.sort(key=lambda item: item.encode("utf-8", errors="strict"))
+        for name in names:
+            relative = f"{prefix}/{name}" if prefix else name
+            relative = _safe_path(relative)
+            child_components = components + (name,)
+            try:
+                before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except OSError:
+                raise CloudIndexVerificationError("filesystem_race") from None
+            mode = before.st_mode
+            if stat.S_ISLNK(mode):
+                raise CloudIndexVerificationError("filesystem_unsafe")
+
+            if stat.S_ISDIR(mode):
+                try:
+                    child_fd = _open_directory_at(directory_fd, name)
+                except OSError:
+                    raise CloudIndexVerificationError("filesystem_race") from None
+                try:
+                    opened = os.fstat(child_fd)
+                    if (
+                        not stat.S_ISDIR(opened.st_mode)
+                        or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+                    ):
+                        raise CloudIndexVerificationError("filesystem_race")
+                    _assert_fd_beneath(child_fd, root)
+                    walk(child_fd, relative, child_components)
+                    try:
+                        after = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    except OSError:
+                        raise CloudIndexVerificationError("filesystem_race") from None
+                    if (after.st_dev, after.st_ino) != (opened.st_dev, opened.st_ino):
+                        raise CloudIndexVerificationError("filesystem_race")
+                finally:
+                    os.close(child_fd)
+            elif stat.S_ISREG(mode):
+                if PurePosixPath(relative).suffix.lower() == ".md":
+                    budget["documents"] += 1
+                    if budget["documents"] > MAX_MARKDOWN_DOCUMENTS:
                         raise CloudIndexVerificationError("resource_limit_exceeded")
                     if before.st_size > MAX_MARKDOWN_DOCUMENT_BYTES:
                         raise CloudIndexVerificationError("resource_limit_exceeded")
-                    aggregate_markdown_bytes += before.st_size
-                    if aggregate_markdown_bytes > MAX_AGGREGATE_MARKDOWN_BYTES:
-                        raise CloudIndexVerificationError("resource_limit_exceeded")
-                    size, digest, _ = _read_markdown_at(
-                        directory_fd, name, before, retain_bytes=False
-                    )
+                    size, digest = _read_markdown_digest(root_fd, root, child_components, before)
                     if size != before.st_size:
                         raise CloudIndexVerificationError("filesystem_race")
-                    documents.append({
-                        "path": relative,
-                        "byte_size": size,
-                        "sha256": digest,
-                    })
+                    budget["markdown_bytes"] += size
+                    if budget["markdown_bytes"] > MAX_TOTAL_MARKDOWN_BYTES:
+                        raise CloudIndexVerificationError("resource_limit_exceeded")
+                    documents.append((relative, size, digest))
                 else:
-                    raise CloudIndexVerificationError("filesystem_unsafe")
-            except CloudIndexVerificationError:
-                raise
-            except _ResourceLimitExceeded:
-                raise CloudIndexVerificationError("resource_limit_exceeded") from None
-            except (OSError, UnicodeError, ValueError, TypeError):
-                raise CloudIndexVerificationError("filesystem_unsafe") from None
-
-    walk(root_fd, "")
-    documents.sort(key=lambda item: item["path"].encode("utf-8", errors="strict"))
-    return documents, total_entries
-
-
-def _read_markdown_beneath(root_fd: int, relative_path: str) -> bytes:
-    """Open one Markdown file below the pinned root without following components."""
-    components = _safe_path(relative_path).split("/")
-    current_fd = os.dup(root_fd)
-    try:
-        for component in components[:-1]:
-            try:
-                before = os.stat(component, dir_fd=current_fd, follow_symlinks=False)
-            except OSError:
-                raise CloudIndexVerificationError("filesystem_race") from None
-            if stat.S_ISLNK(before.st_mode) or not stat.S_ISDIR(before.st_mode):
+                    # Metadata-only: never open or retain arbitrary attachment bytes.
+                    try:
+                        after = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    except OSError:
+                        raise CloudIndexVerificationError("filesystem_race") from None
+                    if _stat_signature(before) != _stat_signature(after):
+                        raise CloudIndexVerificationError("filesystem_race")
+            else:
                 raise CloudIndexVerificationError("filesystem_unsafe")
-            child_fd = _open_child_directory(current_fd, component, before)
-            os.close(current_fd)
-            current_fd = child_fd
-        try:
-            before = os.stat(components[-1], dir_fd=current_fd, follow_symlinks=False)
-        except OSError:
-            raise CloudIndexVerificationError("filesystem_race") from None
-        size, _digest, raw = _read_markdown_at(
-            current_fd, components[-1], before, retain_bytes=True
-        )
-        if raw is None or len(raw) != size:
-            raise CloudIndexVerificationError("filesystem_race")
-        return raw
+        _assert_fd_beneath(directory_fd, root)
+
+    try:
+        walk(root_fd, "", ())
+        documents.sort(key=lambda item: item[0].encode("utf-8", errors="strict"))
+        return tuple(documents)
     except CloudIndexVerificationError:
         raise
-    except _ResourceLimitExceeded:
-        raise CloudIndexVerificationError("resource_limit_exceeded") from None
-    except (OSError, UnicodeError, ValueError, TypeError):
+    except (OSError, RuntimeError, UnicodeError, ValueError, TypeError):
         raise CloudIndexVerificationError("filesystem_unsafe") from None
     finally:
-        os.close(current_fd)
+        os.close(root_fd)
 
 
 def _canonical_bytes(value: dict[str, Any]) -> bytes:
@@ -639,26 +599,34 @@ def _canonical_bytes(value: dict[str, Any]) -> bytes:
                       sort_keys=True, separators=(",", ":")).encode("utf-8", errors="strict")
 
 
-def _expected_inventory(documents: list[dict[str, Any]]) -> bytes:
-    return _canonical_bytes({"format": INVENTORY_FORMAT, "documents": documents})
+def _expected_inventory(files: tuple[tuple[str, int, str], ...]) -> bytes:
+    documents: list[dict[str, Any]] = []
+    empty = _canonical_bytes({"format": INVENTORY_FORMAT, "documents": []})
+    projected_size = len(empty) - 2
+    for path, size, digest in files:
+        row = {"path": path, "byte_size": size, "sha256": digest}
+        projected_size += len(_canonical_bytes(row)) + (1 if documents else 0)
+        if projected_size > MAX_INVENTORY_BYTES:
+            raise CloudIndexVerificationError("resource_limit_exceeded")
+        documents.append(row)
+    result = _canonical_bytes({"format": INVENTORY_FORMAT, "documents": documents})
+    if len(result) > MAX_INVENTORY_BYTES:
+        raise CloudIndexVerificationError("resource_limit_exceeded")
+    return result
 
 
-def _validate_inventory(
-    raw: bytes,
-    expected_documents: list[dict[str, Any]],
-    att: CloudIndexAttestation,
-) -> None:
+def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation) -> None:
+    if type(raw) is not bytes or len(raw) > MAX_INVENTORY_BYTES:
+        raise CloudIndexVerificationError("resource_limit_exceeded")
     try:
-        obj = _exact(_canonical_object(
-            raw,
-            max_bytes=MAX_INVENTORY_BYTES,
-            limited_arrays={"documents": MAX_MARKDOWN_DOCUMENTS},
-        ), {"format", "documents"})
+        obj = _exact(_canonical_object(raw, max_bytes=MAX_INVENTORY_BYTES), {"format", "documents"})
         if obj["format"] != INVENTORY_FORMAT or not isinstance(obj["documents"], list):
             raise ValueError("unsupported inventory")
+        if len(obj["documents"]) > MAX_MARKDOWN_DOCUMENTS:
+            raise CloudIndexVerificationError("resource_limit_exceeded")
         seen: set[str] = set()
         previous: bytes | None = None
-        aggregate_bytes = 0
+        total_bytes = 0
         for row in obj["documents"]:
             item = _exact(row, {"path", "byte_size", "sha256"})
             path = _safe_path(item["path"])
@@ -672,21 +640,19 @@ def _validate_inventory(
             byte_size = _uint(item["byte_size"])
             if byte_size > MAX_MARKDOWN_DOCUMENT_BYTES:
                 raise CloudIndexVerificationError("resource_limit_exceeded")
-            aggregate_bytes += byte_size
-            if aggregate_bytes > MAX_AGGREGATE_MARKDOWN_BYTES:
+            total_bytes += byte_size
+            if total_bytes > MAX_TOTAL_MARKDOWN_BYTES:
                 raise CloudIndexVerificationError("resource_limit_exceeded")
             if not isinstance(item["sha256"], str) or not _SHA256_RE.fullmatch(item["sha256"]):
                 raise ValueError("invalid file digest")
         digest = "sha256:" + hashlib.sha256(raw).hexdigest()
         if digest != att.markdown_inventory_sha256 or len(obj["documents"]) != att.markdown_document_count:
             raise CloudIndexVerificationError("inventory_mismatch")
-        if obj["documents"] != expected_documents:
+        if raw != expected:
             raise CloudIndexVerificationError("inventory_mismatch")
     except CloudIndexVerificationError:
         raise
-    except _ResourceLimitExceeded:
-        raise CloudIndexVerificationError("resource_limit_exceeded") from None
-    except Exception as exc:
+    except Exception:
         raise CloudIndexVerificationError("inventory_invalid") from None
 
 
@@ -730,10 +696,17 @@ def _required_schema(connection: sqlite3.Connection) -> None:
 
 
 def _verify_database_consistency(
-    db_path: Path, source_root: Path
+    db_path: Path,
+    source_root: Path,
+    source_files: tuple[tuple[str, int, str], ...],
 ) -> tuple[tuple[int, int, int, int, int], tuple[ParserIdentity, ...]]:
     connection: sqlite3.Connection | None = None
+    root_fd: int | None = None
     try:
+        source_by_path = {path: (size, digest) for path, size, digest in source_files}
+        if len(source_by_path) != len(source_files):
+            raise CloudIndexVerificationError("inventory_mismatch")
+
         connection = _read_only_connection(db_path)
         if (not connection.in_transaction
                 or connection.execute("PRAGMA query_only").fetchone()[0] != 1):
@@ -768,37 +741,33 @@ def _verify_database_consistency(
                 active_docs[path] = doc
                 parser_pairs.add((doc["parser_name"], doc["parser_version"]))
 
-        expected_paths = {
-            path for path, _ in _collect_source_files(source_root)
-            if PurePosixPath(path).suffix.lower() == ".md"
-        }
-        if set(active_docs) != expected_paths:
+        if set(active_docs) != set(source_by_path):
             raise CloudIndexVerificationError("document_mismatch")
+        for path, doc in active_docs.items():
+            expected_size, expected_digest = source_by_path[path]
+            if doc["source_size_bytes"] != expected_size or doc["source_sha256"] != expected_digest:
+                raise CloudIndexVerificationError("document_mismatch")
 
-        source_bytes: dict[int, bytes] = {}
-        source_text: dict[int, str] = {}
         events_by_doc: dict[int, list[dict[str, Any]]] = {}
         for doc_pk, doc in doc_by_pk.items():
             events_by_doc[doc_pk] = _validate_events(connection, doc_pk, doc["generation"])
-            if doc["status"] == "active":
-                components = _safe_source_components(doc["source_path"])
-                raw = _read_source_file(source_root, components)
-                source_bytes[doc_pk] = raw
-                source_text[doc_pk] = _verify_document_bytes(doc, raw)
 
         node_ids: set[str] = set()
         node_ids_by_doc: dict[int, set[str]] = {}
         node_pk_to_doc = {node["node_pk"]: node["document_pk"] for node in nodes}
-        if len(node_pk_to_doc) != len(nodes):
+        node_id_by_pk = {node["node_pk"]: node["node_id"] for node in nodes}
+        if len(node_pk_to_doc) != len(nodes) or len(node_id_by_pk) != len(nodes):
             raise CloudIndexVerificationError("node_integrity_failure")
+        nodes_by_doc: dict[int, list[tuple[dict[str, Any], str | None, list[str]]]] = {}
         active_node_count = 0
+
         for node in nodes:
             doc = doc_by_pk.get(node.get("document_pk"))
             if doc is None:
                 raise CloudIndexVerificationError("node_integrity_failure")
             node_id = node.get("node_id")
             if not _valid_node_id(node_id) or node_id in node_ids:
-                raise CloudIndexVerificationError("node_integrity_failure")
+                raise CloudIndexVerificationError("node_identity_mismatch")
             node_ids.add(node_id)
             node_ids_by_doc.setdefault(doc["document_pk"], set()).add(node_id)
             events = events_by_doc[doc["document_pk"]]
@@ -808,18 +777,8 @@ def _verify_database_consistency(
                 if doc["status"] != "active":
                     raise CloudIndexVerificationError("node_integrity_failure")
                 active_node_count += 1
-                _verify_node_from_source(
-                    node=node,
-                    document=doc,
-                    parent_node_id=parent_id,
-                    heading_path=heading_path,
-                    metadata=_decode_json(
-                        node["metadata_json"], dict, "node_metadata_invalid",
-                        "The stored node metadata is invalid.",
-                    ),
-                    source_bytes=source_bytes[doc["document_pk"]],
-                    source_text=source_text[doc["document_pk"]],
-                    expected_hash=node["content_hash"],
+                nodes_by_doc.setdefault(doc["document_pk"], []).append(
+                    (node, parent_id, heading_path)
                 )
             elif status is None:
                 raise CloudIndexVerificationError("node_integrity_failure")
@@ -832,23 +791,150 @@ def _verify_database_consistency(
                 ):
                     raise CloudIndexVerificationError("node_integrity_failure")
 
+        root_fd = _open_canonical_root(source_root)
+        for path, doc in active_docs.items():
+            expected_size, expected_digest = source_by_path[path]
+            raw = _read_markdown_bytes(
+                root_fd, source_root, _safe_source_components(path),
+                expected_size, expected_digest,
+            )
+            source_text = _verify_document_bytes(doc, raw)
+            for node, parent_id, heading_path in nodes_by_doc.get(doc["document_pk"], []):
+                _verify_node_from_source(
+                    node=node,
+                    document=doc,
+                    parent_node_id=parent_id,
+                    heading_path=heading_path,
+                    metadata=_decode_json(
+                        node["metadata_json"], dict, "node_metadata_invalid",
+                        "The stored node metadata is invalid.",
+                    ),
+                    source_bytes=raw,
+                    source_text=source_text,
+                    expected_hash=node["content_hash"],
+                )
+            del source_text
+            del raw
+
         versions = connection.execute(
-            "SELECT node_pk, source_path, content_hash, raw_text, heading_path_json, "
-            "content_spans_json, metadata_json, warnings_json FROM node_versions"
+            "SELECT node_pk, version_no, generation, content_hash, source_path, node_type, "
+            "parent_node_id, heading_path_json, line_start, line_end, char_start, char_end, "
+            "byte_start, byte_end, content_spans_json, raw_text, metadata_json, warnings_json "
+            "FROM node_versions ORDER BY node_pk, version_no"
         ).fetchall()
-        for version in versions:
-            row = dict(version)
-            doc_pk = node_pk_to_doc.get(row["node_pk"])
+        versions_by_node: dict[int, list[dict[str, Any]]] = {}
+        coordinate_fields = (
+            "line_start", "line_end", "char_start", "char_end", "byte_start", "byte_end"
+        )
+        for version_row in versions:
+            row = dict(version_row)
+            node_pk = row.get("node_pk")
+            doc_pk = node_pk_to_doc.get(node_pk)
             if doc_pk is None or row["source_path"] != doc_by_pk[doc_pk]["source_path"]:
                 raise CloudIndexVerificationError("node_reference_mismatch")
-            if (not _valid_hash(row["content_hash"]) or not isinstance(row["raw_text"], str)
-                    or "sha256:" + hashlib.sha256(row["raw_text"].encode("utf-8", errors="strict")).hexdigest()
-                    != row["content_hash"]):
+            if row["node_type"] not in _ALLOWED_NODE_TYPES:
+                raise CloudIndexVerificationError("node_reference_mismatch")
+            parent_id = row["parent_node_id"]
+            if parent_id is not None and (
+                not _valid_node_id(parent_id)
+                or parent_id not in node_ids_by_doc.get(doc_pk, set())
+                or parent_id == node_id_by_pk.get(node_pk)
+            ):
+                raise CloudIndexVerificationError("node_reference_mismatch")
+
+            if any(type(row[field]) is not int for field in coordinate_fields):
+                raise CloudIndexVerificationError("node_span_mismatch")
+            if (
+                row["line_start"] < 1
+                or row["line_end"] < 0
+                or row["line_end"] < row["line_start"] - 1
+                or (row["line_end"] == row["line_start"] - 1 and row["char_start"] != row["char_end"])
+                or row["char_start"] < 0
+                or row["char_end"] < row["char_start"]
+                or row["byte_start"] < 0
+                or row["byte_end"] < row["byte_start"]
+            ):
+                raise CloudIndexVerificationError("node_span_mismatch")
+
+            if (
+                type(row["version_no"]) is not int or row["version_no"] < 1
+                or type(row["generation"]) is not int or row["generation"] < 1
+                or not _valid_hash(row["content_hash"])
+                or not isinstance(row["raw_text"], str)
+            ):
                 raise CloudIndexVerificationError("node_version_mismatch")
-            _decode_json(row["heading_path_json"], list, "node_version_mismatch", "Invalid version data.")
-            _decode_json(row["content_spans_json"], list, "node_version_mismatch", "Invalid version data.")
+            try:
+                raw_version = row["raw_text"].encode("utf-8", errors="strict")
+            except UnicodeEncodeError:
+                raise CloudIndexVerificationError("node_version_mismatch") from None
+            if "sha256:" + hashlib.sha256(raw_version).hexdigest() != row["content_hash"]:
+                raise CloudIndexVerificationError("node_content_mismatch")
+
+            heading_path = _decode_json(
+                row["heading_path_json"], list, "node_version_mismatch", "Invalid version data."
+            )
+            if any(not isinstance(item, str) for item in heading_path):
+                raise CloudIndexVerificationError("node_version_mismatch")
+            spans = _decode_json(
+                row["content_spans_json"], list, "node_version_mismatch", "Invalid version data."
+            )
+            for span in spans:
+                if type(span) is not dict or set(span) != {
+                    "line_start", "line_end", "char_start", "char_end", "byte_start", "byte_end"
+                }:
+                    raise CloudIndexVerificationError("node_span_mismatch")
+                if any(type(span[field]) is not int for field in coordinate_fields):
+                    raise CloudIndexVerificationError("node_span_mismatch")
+                if (
+                    span["line_start"] < 1
+                    or span["line_end"] < 0
+                    or span["line_end"] < span["line_start"] - 1
+                    or (span["line_end"] == span["line_start"] - 1 and span["char_start"] != span["char_end"])
+                    or span["char_start"] < 0
+                    or span["char_end"] < span["char_start"]
+                    or span["byte_start"] < 0
+                    or span["byte_end"] < span["byte_start"]
+                ):
+                    raise CloudIndexVerificationError("node_span_mismatch")
             _decode_json(row["metadata_json"], dict, "node_version_mismatch", "Invalid version data.")
-            _decode_json(row["warnings_json"], list, "node_version_mismatch", "Invalid version data.")
+            warnings = _decode_json(row["warnings_json"], list, "node_version_mismatch", "Invalid version data.")
+            if any(not isinstance(item, str) for item in warnings):
+                raise CloudIndexVerificationError("node_version_mismatch")
+            versions_by_node.setdefault(node_pk, []).append(row)
+
+        nodes_by_pk = {node["node_pk"]: node for node in nodes}
+        for node_pk, node_versions in versions_by_node.items():
+            numbers = [row["version_no"] for row in node_versions]
+            generations = [row["generation"] for row in node_versions]
+            node = nodes_by_pk[node_pk]
+            doc = doc_by_pk[node["document_pk"]]
+            if (
+                numbers != list(range(1, len(node_versions) + 1))
+                or generations != sorted(generations)
+                or generations[0] < node["created_generation"]
+                or generations[-1] != node["updated_generation"]
+                or generations[-1] > doc["generation"]
+            ):
+                raise CloudIndexVerificationError("node_generation_mismatch")
+            latest = node_versions[-1]
+            parent_id = (
+                node_id_by_pk.get(node["parent_node_pk"])
+                if node["parent_node_pk"] is not None else None
+            )
+            if (
+                latest["parent_node_id"] != parent_id
+                or latest["node_type"] != node["node_type"]
+                or latest["source_path"] != doc["source_path"]
+                or latest["line_start"] != node["line_start"]
+                or latest["line_end"] != node["line_end"]
+                or latest["char_start"] != node["char_start"]
+                or latest["char_end"] != node["char_end"]
+                or latest["byte_start"] != node["byte_start"]
+                or latest["byte_end"] != node["byte_end"]
+            ):
+                raise CloudIndexVerificationError("node_version_mismatch")
+        if set(versions_by_node) != set(nodes_by_pk):
+            raise CloudIndexVerificationError("node_version_mismatch")
 
         counts = (
             len(documents),
@@ -922,11 +1008,13 @@ def _verify_database_consistency(
             "node_lookup_failed": "sqlite_integrity_failure",
         }.get(exc.code, "node_integrity_failure")
         raise CloudIndexVerificationError(code) from None
-    except sqlite3.Error as exc:
+    except sqlite3.Error:
         raise CloudIndexVerificationError("sqlite_integrity_failure") from None
-    except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError):
         raise CloudIndexVerificationError("node_integrity_failure") from None
     finally:
+        if root_fd is not None:
+            os.close(root_fd)
         if connection is not None:
             connection.close()
 
@@ -944,15 +1032,29 @@ def verify_materialized_cloud_index(
     *,
     attestation: bytes,
     markdown_inventory: bytes,
+    expected_source_revision: SourceRevision | dict[str, str],
 ) -> CloudIndexVerificationReport:
     """Verify an already-materialized source tree and SQLite database read-only.
 
-    The two byte arguments must be the exact attestation and inventory payloads
-    from #119. This E1 boundary verifies consistency, not source-origin
-    authenticity, provider immutability or the outer CloudSnapshotRef.
+    The byte arguments must be the exact attestation and inventory payloads
+    from #119. expected_source_revision is the exact tagged revision from the
+    separately verified outer reference, expressed as an E1-owned value or
+    strict tagged mapping. This binds inner attestation to the outer ref
+    without importing E3. The verifier does not access object storage.
     """
     parsed = parse_cloud_index_attestation(attestation)
     try:
+        if type(expected_source_revision) in (GitCommitSourceRevision, ImmutableImportSourceRevision):
+            expected_revision = expected_source_revision
+        elif type(expected_source_revision) is dict:
+            try:
+                expected_revision = _revision(expected_source_revision)
+            except Exception:
+                raise CloudIndexVerificationError("source_revision_invalid") from None
+        else:
+            raise CloudIndexVerificationError("source_revision_invalid")
+        if expected_revision != parsed.source_revision:
+            raise CloudIndexVerificationError("source_revision_mismatch")
         if (parsed.indexer_identity.name != "sfra-structural-indexer"
                 or parsed.indexer_identity.version != _installed_indexer_version()):
             raise CloudIndexVerificationError("indexer_identity_mismatch")
@@ -976,7 +1078,7 @@ def verify_materialized_cloud_index(
         if len(db_bytes) != parsed.database_byte_size:
             raise CloudIndexVerificationError("database_size_mismatch")
 
-        counts, parsers = _verify_database_consistency(db_path, root)
+        counts, parsers = _verify_database_consistency(db_path, root, files)
         after = db_path.stat()
         after_signature = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
         if after_signature != signature:

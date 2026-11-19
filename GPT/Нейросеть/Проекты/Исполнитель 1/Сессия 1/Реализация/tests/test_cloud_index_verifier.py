@@ -17,6 +17,7 @@ from sfra_indexer import (
     parse_cloud_index_attestation,
     verify_materialized_cloud_index,
 )
+import sfra_indexer.cloud_index_verifier as verifier
 
 
 def _canonical(value):
@@ -113,9 +114,15 @@ def _fixture(tmp_path, source_revision=None):
     return root, db_path, inventory, attestation
 
 
-def _verify(root, db_path, inventory, attestation):
+def _verify(root, db_path, inventory, attestation, expected_source_revision=None):
+    if expected_source_revision is None:
+        expected_source_revision = attestation["source_revision"]
     return verify_materialized_cloud_index(
-        db_path, root, attestation=_canonical(attestation), markdown_inventory=inventory
+        db_path,
+        root,
+        attestation=_canonical(attestation),
+        markdown_inventory=inventory,
+        expected_source_revision=expected_source_revision,
     )
 
 
@@ -371,7 +378,8 @@ def test_rejects_malformed_inventory_bytes_without_partial_report(tmp_path):
     root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
     with pytest.raises(CloudIndexVerificationError) as error:
         verify_materialized_cloud_index(
-            db_path, root, attestation=_canonical(attestation), markdown_inventory=b"\xff"
+            db_path, root, attestation=_canonical(attestation), markdown_inventory=b"\xff",
+            expected_source_revision=attestation["source_revision"],
         )
     assert error.value.code == "inventory_invalid"
     assert str(root) not in str(error.value)
@@ -557,5 +565,281 @@ def test_rejects_traversal_path_in_canonical_inventory(tmp_path):
         verify_materialized_cloud_index(
             db_path, root, attestation=_canonical(attestation),
             markdown_inventory=forged_inventory,
+            expected_source_revision=attestation["source_revision"],
         )
     assert error.value.code == "inventory_invalid"
+
+
+@pytest.mark.parametrize(
+    ("attested_revision", "outer_revision"),
+    [
+        (
+            {"kind": "git_commit", "commit_sha": "a" * 40},
+            {"kind": "git_commit", "commit_sha": "b" * 40},
+        ),
+        (
+            {"kind": "immutable_import", "import_id": "vault-import:exact-A"},
+            {"kind": "immutable_import", "import_id": "vault-import:exact-B"},
+        ),
+    ],
+)
+def test_rejects_attestation_revision_not_bound_to_outer_verified_revision(
+    tmp_path, attested_revision, outer_revision
+):
+    root, db_path, inventory, attestation = _fixture(tmp_path, attested_revision)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(
+            root,
+            db_path,
+            inventory,
+            attestation,
+            expected_source_revision=outer_revision,
+        )
+
+    assert error.value.code == "source_revision_mismatch"
+
+
+def test_rejects_malformed_outer_source_revision_argument(tmp_path):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(
+            root,
+            db_path,
+            inventory,
+            attestation,
+            expected_source_revision="not-a-tagged-source-revision",
+        )
+    assert error.value.code == "source_revision_invalid"
+
+
+def test_rejects_directory_symlink_swap_before_outside_markdown_is_opened(
+    tmp_path, monkeypatch
+):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_note = outside / "note.md"
+    outside_note.write_bytes(b"outside must never be opened")
+    nested = root / "nested"
+    moved = root / "nested-original"
+    opened_markdown: list[tuple[str, ...]] = []
+    original_open_directory = verifier._open_directory_at
+    original_read_digest = verifier._read_markdown_digest
+    swapped = False
+
+    def racing_open_directory(parent_fd, name):
+        nonlocal swapped
+        if name == "nested" and not swapped:
+            swapped = True
+            nested.rename(moved)
+            nested.symlink_to(outside, target_is_directory=True)
+        return original_open_directory(parent_fd, name)
+
+    def track_markdown_open(root_fd, canonical_root, components, expected_stat):
+        opened_markdown.append(components)
+        return original_read_digest(root_fd, canonical_root, components, expected_stat)
+
+    monkeypatch.setattr(verifier, "_open_directory_at", racing_open_directory)
+    monkeypatch.setattr(verifier, "_read_markdown_digest", track_markdown_open)
+
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+
+    assert error.value.code == "filesystem_race"
+    assert swapped
+    assert ("nested", "note.md") not in opened_markdown
+    assert outside_note.read_bytes() == b"outside must never be opened"
+
+
+def test_non_markdown_attachments_are_never_opened_or_read(tmp_path, monkeypatch):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    opened: list[tuple[str, ...]] = []
+    original = verifier._open_beneath
+
+    def track_open(root_fd, components):
+        opened.append(components)
+        return original(root_fd, components)
+
+    monkeypatch.setattr(verifier, "_open_beneath", track_open)
+    _verify(root, db_path, inventory, attestation)
+
+    assert ("ignored.txt",) not in opened
+    assert ("nested", "note.md") in opened
+    assert ("empty.MD",) in opened
+
+
+def test_resource_limits_enforce_exact_boundaries_and_one_over(tmp_path, monkeypatch):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    raw_attestation = _canonical(attestation)
+    parsed = parse_cloud_index_attestation(raw_attestation)
+
+    monkeypatch.setattr(verifier, "MAX_ATTESTATION_BYTES", len(raw_attestation))
+    assert parse_cloud_index_attestation(raw_attestation).source_revision == parsed.source_revision
+    monkeypatch.setattr(verifier, "MAX_ATTESTATION_BYTES", len(raw_attestation) - 1)
+    with pytest.raises(CloudIndexVerificationError) as attestation_error:
+        parse_cloud_index_attestation(raw_attestation)
+    assert attestation_error.value.code == "resource_limit_exceeded"
+
+    rows = json.loads(inventory)["documents"]
+    max_document = max(row["byte_size"] for row in rows)
+    total_bytes = sum(row["byte_size"] for row in rows)
+    monkeypatch.setattr(verifier, "MAX_INVENTORY_BYTES", len(inventory))
+    monkeypatch.setattr(verifier, "MAX_MARKDOWN_DOCUMENTS", len(rows))
+    monkeypatch.setattr(verifier, "MAX_MARKDOWN_DOCUMENT_BYTES", max_document)
+    monkeypatch.setattr(verifier, "MAX_TOTAL_MARKDOWN_BYTES", total_bytes)
+    verifier._validate_inventory(inventory, inventory, parsed)
+
+    monkeypatch.setattr(verifier, "MAX_INVENTORY_BYTES", len(inventory) - 1)
+    with pytest.raises(CloudIndexVerificationError) as inventory_error:
+        verifier._validate_inventory(inventory, inventory, parsed)
+    assert inventory_error.value.code == "resource_limit_exceeded"
+
+    monkeypatch.setattr(verifier, "MAX_INVENTORY_BYTES", len(inventory))
+    monkeypatch.setattr(verifier, "MAX_MARKDOWN_DOCUMENTS", len(rows) - 1)
+    with pytest.raises(CloudIndexVerificationError) as row_error:
+        verifier._validate_inventory(inventory, inventory, parsed)
+    assert row_error.value.code == "resource_limit_exceeded"
+
+    monkeypatch.setattr(verifier, "MAX_MARKDOWN_DOCUMENTS", len(rows))
+    monkeypatch.setattr(verifier, "MAX_MARKDOWN_DOCUMENT_BYTES", max_document - 1)
+    with pytest.raises(CloudIndexVerificationError) as document_error:
+        verifier._validate_inventory(inventory, inventory, parsed)
+    assert document_error.value.code == "resource_limit_exceeded"
+
+    monkeypatch.setattr(verifier, "MAX_MARKDOWN_DOCUMENT_BYTES", max_document)
+    monkeypatch.setattr(verifier, "MAX_TOTAL_MARKDOWN_BYTES", total_bytes - 1)
+    with pytest.raises(CloudIndexVerificationError) as aggregate_error:
+        verifier._validate_inventory(inventory, inventory, parsed)
+    assert aggregate_error.value.code == "resource_limit_exceeded"
+
+
+def test_tree_entry_and_markdown_path_limits_are_enforced(tmp_path, monkeypatch):
+    root, db_path, inventory, attestation = _fixture(tmp_path)
+    expected_files = verifier._collect_source_files(root)
+    assert len(expected_files) == 2
+
+    # The tree contains nested/, empty.MD, ignored.txt and nested/note.md.
+    monkeypatch.setattr(verifier, "MAX_SOURCE_TREE_ENTRIES", 5)
+    assert len(verifier._collect_source_files(root)) == 2
+    monkeypatch.setattr(verifier, "MAX_SOURCE_TREE_ENTRIES", 4)
+    with pytest.raises(CloudIndexVerificationError) as tree_error:
+        verifier._collect_source_files(root)
+    assert tree_error.value.code == "resource_limit_exceeded"
+
+    assert verifier._safe_path("p" * 4096) == "p" * 4096
+    with pytest.raises(CloudIndexVerificationError) as path_error:
+        verifier._safe_path("p" * 4097)
+    assert path_error.value.code == "resource_limit_exceeded"
+
+
+def test_parser_identity_count_limit_has_exact_and_over_boundary(tmp_path, monkeypatch):
+    _root, _db_path, _inventory, attestation = _fixture(tmp_path)
+    raw = _canonical(attestation)
+    count = len(attestation["parser_identities"])
+    assert count > 0
+
+    monkeypatch.setattr(verifier, "MAX_PARSER_IDENTITIES", count)
+    assert len(parse_cloud_index_attestation(raw).parser_identities) == count
+    monkeypatch.setattr(verifier, "MAX_PARSER_IDENTITIES", count - 1)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        parse_cloud_index_attestation(raw)
+    assert error.value.code == "resource_limit_exceeded"
+
+
+def test_rejects_historical_node_version_parent_from_another_document(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text("# Revised\n\nA second indexed generation.\n", encoding="utf-8")
+    index_vault(root, tmp_path / "sidecar")
+    inventory = _refresh_attestation(root, db_path, attestation)
+
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute(
+            """
+            SELECT old.node_version_pk, other.node_id
+            FROM node_versions AS old
+            JOIN structural_nodes AS current ON current.node_pk=old.node_pk
+            JOIN structural_nodes AS other ON other.document_pk != current.document_pk
+            WHERE old.version_no=1 AND old.parent_node_id IS NOT NULL
+            ORDER BY old.node_version_pk, other.node_pk
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        connection.execute(
+            "UPDATE node_versions SET parent_node_id=? WHERE node_version_pk=?",
+            (row[1], row[0]),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_reference_mismatch"
+
+
+def test_rejects_historical_node_version_coordinates_when_digest_is_recomputed(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text("# Revised\n\nA second indexed generation.\n", encoding="utf-8")
+    index_vault(root, tmp_path / "sidecar")
+    inventory = _refresh_attestation(root, db_path, attestation)
+
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute(
+            """
+            SELECT node_version_pk, char_end FROM node_versions
+            WHERE version_no=1 ORDER BY node_version_pk LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        connection.execute(
+            "UPDATE node_versions SET char_start=? WHERE node_version_pk=?",
+            (row[1] + 1, row[0]),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_span_mismatch"
+
+
+def test_rejects_historical_node_type_when_digest_is_recomputed(tmp_path):
+    root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    note = root / "nested" / "note.md"
+    note.write_text("# Revised\n\nA second indexed generation.\n", encoding="utf-8")
+    index_vault(root, tmp_path / "sidecar")
+    inventory = _refresh_attestation(root, db_path, attestation)
+
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute(
+            "SELECT node_version_pk FROM node_versions WHERE version_no=1 ORDER BY node_version_pk LIMIT 1"
+        ).fetchone()
+        assert row is not None
+        connection.execute(
+            "UPDATE node_versions SET node_type='not-an-e1-node-type' WHERE node_version_pk=?",
+            (row[0],),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    raw = db_path.read_bytes()
+    attestation["database"]["sha256"] = _sha(raw)
+    attestation["database"]["byte_size"] = len(raw)
+    with pytest.raises(CloudIndexVerificationError) as error:
+        _verify(root, db_path, inventory, attestation)
+    assert error.value.code == "node_reference_mismatch"
