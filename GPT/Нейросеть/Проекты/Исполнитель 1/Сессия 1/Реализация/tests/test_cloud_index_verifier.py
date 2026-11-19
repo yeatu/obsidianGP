@@ -787,7 +787,9 @@ def test_parser_identity_count_limit_has_exact_and_over_boundary(tmp_path, monke
 def test_rejects_historical_node_version_parent_from_another_document(tmp_path):
     root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
     note = root / "nested" / "note.md"
-    note.write_text("# Revised\n\nA second indexed generation.\n", encoding="utf-8")
+    # Keep the heading stable so its child receives a second saved version
+    # while retaining a non-null parent reference in the historical row.
+    note.write_text("# Заголовок\n\nТекст второго поколения.\n", encoding="utf-8")
     index_vault(root, tmp_path / "sidecar")
     inventory = _refresh_attestation(root, db_path, attestation)
 
@@ -795,23 +797,28 @@ def test_rejects_historical_node_version_parent_from_another_document(tmp_path):
     try:
         row = connection.execute(
             """
-            SELECT old.node_version_pk, other.node_id
+            SELECT old.node_version_pk, current.document_pk
             FROM node_versions AS old
             JOIN structural_nodes AS current ON current.node_pk=old.node_pk
-            JOIN structural_nodes AS other ON other.document_pk != current.document_pk
             WHERE old.version_no=1 AND old.parent_node_id IS NOT NULL
               AND EXISTS (
                   SELECT 1 FROM node_versions AS newer
                   WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
               )
-            ORDER BY old.node_version_pk, other.node_pk
+            ORDER BY old.node_version_pk
             LIMIT 1
             """
         ).fetchone()
         assert row is not None
+        other = connection.execute(
+            "SELECT node_id FROM structural_nodes WHERE document_pk != ? "
+            "ORDER BY node_pk LIMIT 1",
+            (row[1],),
+        ).fetchone()
+        assert other is not None
         connection.execute(
             "UPDATE node_versions SET parent_node_id=? WHERE node_version_pk=?",
-            (row[1], row[0]),
+            (other[0], row[0]),
         )
         connection.commit()
     finally:
