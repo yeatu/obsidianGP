@@ -245,15 +245,29 @@ the Git-backed v1 state manifest and restore workflow:
 
 - parse_cloud_index_attestation(raw_bytes) parses the exact canonical
   sfra.e1.cloud-index-attestation.v1 payload into immutable E1-owned types.
-- verify_materialized_cloud_index(database_path, source_root, attestation=...,
-  markdown_inventory=...) verifies the already-materialized Markdown tree,
-  the exact #119 inventory and attestation bytes, and the E1 SQLite database.
+- verify_materialized_cloud_index(database_path, source_root,
+  expected_source_revision=..., attestation=..., markdown_inventory=...)
+  verifies the already-materialized Markdown tree, the exact #119 inventory
+  and attestation bytes, and the E1 SQLite database. The required
+  E1-owned expected_source_revision must be the exact tagged source revision
+  already checked by the caller against the outer immutable snapshot identity;
+  the verifier rejects a type or value mismatch with the attestation.
 - The result is an immutable CloudIndexVerificationReport; failures raise
   CloudIndexVerificationError with a stable code and a safe message.
 
 The verifier opens SQLite read-only, enables query-only mode, checks the exact
 schema_info.schema_version value (currently 2), and never calls the mutating
 database connection or migration path. The public SourceRevision union keeps Git revisions and opaque immutable-import
-IDs as separate tagged variants. The report establishes consistency of the
-materialized snapshot; it does not authenticate source origin or provider
-immutability. All tests use temporary synthetic fixtures only.
+IDs as separate tagged variants. The verifier bounds its execution envelope before decoding or retaining
+payloads: attestation 2 MiB, inventory 64 MiB, 100,000 Markdown rows, 256
+parser identities, 500,000 source-tree entries, 32 MiB per Markdown document,
+2 GiB aggregate Markdown bytes, and 4,096 characters per relative path. It
+pins the source root and uses descriptor-relative no-follow traversal, counts
+but never reads non-Markdown attachment payloads, streams Markdown digests,
+and retains at most one Markdown document while checking node spans. A limit
+breach raises the stable resource_limit_exceeded code; the accepted #119 wire
+format and Markdown inclusion rule are unchanged.
+
+The report establishes consistency of the materialized snapshot; it does not
+authenticate source origin or provider immutability. All tests use temporary
+synthetic fixtures only.
