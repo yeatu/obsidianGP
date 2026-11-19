@@ -43,6 +43,7 @@
 
 - [#119](https://github.com/yeatu/obsidianGP/issues/119) — CLOSED / C3 accepted. Полный synthetic bundle builder/verifier и corrections #173/#204/#228 merged в main через PR #162.
 - [#254](https://github.com/yeatu/obsidianGP/issues/254) — C3 APPROVED: exact STAGED snapshots may be materialized only through a separate verification-only, non-query-capable #120 output for #240; catalogue promotion remains caller-enforced under #225.
+- [#260](https://github.com/yeatu/obsidianGP/issues/260) — CLOSED / C3 APPROVED: initial resource envelope for E1 verifier F-3; larger #119 bundles stay STAGED until a separately measured limit revision.
 - [#241](https://github.com/yeatu/obsidianGP/issues/241) — CLOSED as duplicate of canonical E1 verifier task #240; it has no CLAIM, implementation or verdict.
 - [#208](https://github.com/yeatu/obsidianGP/issues/208) — CLOSED / C3 coordination decision completed. Порядок #235 → #209 → #184 → #162 выполнен; final parent merged.
 - [#232](https://github.com/yeatu/obsidianGP/issues/232) — CLOSED / completed by final PR #162 merge; отдельная синхронизация больше не требуется.
@@ -88,6 +89,7 @@ PR #84 remains open/Draft at HEAD `64924c204f006bf9d41a42ca0724d8e026325014`. Th
   3. **Unbounded resource use:** set documented limits for attestation/inventory/parser/path/tree work; stream hashes and do not retain non-Markdown payload bytes; add exact-boundary and over-limit tests.
   4. **Historical node-version integrity:** independently validate historical same-document parent links, node type and ordered line/character/UTF-8 byte spans; add tamper tests with recomputed DB digest.
 - Keep the five-file E1 ownership boundary and accepted #119 wire formats. Preserve E1 manifest v1, `verify_state_directory()`, `create_state_snapshot()`, legacy callers and workflows. No E3 imports/provider access or production data.
+- C3 decision [#260](https://github.com/yeatu/obsidianGP/issues/260) approves the initial F-3 verifier-only execution envelope: attestation 2 MiB, inventory 64 MiB, 100,000 Markdown rows, 256 parser pairs, 500,000 total source-tree entries, 32 MiB per Markdown file, 2 GiB aggregate Markdown bytes, and 4,096-character paths. Enforce incrementally with streaming/no-follow traversal and typed `resource_limit_exceeded`; bundles outside the E1 execution envelope remain STAGED. This does not change #119 wire format or producer validity.
 - A fresh exact-head A review will be required after #257 is accepted and its new PR/CI target is established. C3 acceptance remains mandatory before #136/#124 or immutable-import verification can consume this report.
 
 ## 7. Принято / завершено / owner decisions
@@ -119,7 +121,7 @@ PR #84 remains open/Draft at HEAD `64924c204f006bf9d41a42ca0724d8e026325014`. Th
 
 - #196 writer handoff is implementation-complete at exact refs and waits for E1 RELEASE + fresh integrated A review.
 - #120 implementation is RELEASED by E2 and is under independent A1 review #258 at exact HEAD `52570ceb...` / merge-ref `5eec2db...`; dedicated 13-test E1-installed suites, C1, V2.1 and V2.2 all pass. PR #250 remains Draft/open/unmerged pending A verdict and separate C acceptance; #254 STAGED-only verification path is implemented.
-- #240 is E4-CLAIMED through PR #248; its exact-head dedicated/E1/B1 checks are green and A1 is reviewing in #255. It owns E1 module/tests only.
+- #240 remains E4-owned through PR #248, but A1 returned REVIEW_CHANGES_REQUESTED in #255; correction #257 is the active P1 work, with numeric F-3 limits approved in C3 decision #260. No fresh A review or downstream #136/#124 use until F-1–F-4 are closed.
 - #120 and #240 remain parallel but their file/API boundaries must stay separate; #120 supplies exact bytes and a verification-only materialization, while #240 verifies it without E3 imports or object-store access.
 - #229 remains gated by panel PR #223 A/C/merge under #234; no parallel benchmark sync.
 - #124 remains gated by #120, #125 and A/C acceptance of #240.
