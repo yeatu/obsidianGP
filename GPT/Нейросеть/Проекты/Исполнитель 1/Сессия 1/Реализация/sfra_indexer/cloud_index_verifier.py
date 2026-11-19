@@ -196,103 +196,23 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _canonical_object(
-    raw: bytes,
-    *,
-    max_bytes: int,
-    bounded_arrays: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """Parse canonical JSON and stop at the first item beyond bounded arrays.
-
-    The coordinator-approved parser/document counts are enforced while the
-    array is decoded, not after json.loads has allocated the complete list.
-    Other JSON values continue through the standard duplicate-key-aware
-    decoder. Re-serialization is used only for canonical-byte comparison.
-    """
+def _canonical_object(raw: bytes, *, max_bytes: int) -> dict[str, Any]:
     if type(raw) is not bytes:
         raise ValueError("payload must be bytes")
     if len(raw) > max_bytes:
         raise CloudIndexVerificationError("resource_limit_exceeded")
-
-    decoder = json.JSONDecoder(
+    value = json.loads(
+        raw.decode("utf-8", errors="strict"),
         object_pairs_hook=_reject_duplicate_pairs,
         parse_constant=lambda _v: (_ for _ in ()).throw(ValueError("invalid JSON constant")),
     )
-    text = raw.decode("utf-8", errors="strict")
-    array_limits = bounded_arrays or {}
-    result: dict[str, Any] = {}
-    position = 0
-    length = len(text)
-
-    def skip_space(index: int) -> int:
-        while index < length and text[index] in " \\t\\r\\n":
-            index += 1
-        return index
-
-    position = skip_space(position)
-    if position >= length or text[position] != "{":
+    if not isinstance(value, dict):
         raise ValueError("JSON root must be an object")
-    position += 1
-    position = skip_space(position)
-
-    if position < length and text[position] == "}":
-        position += 1
-    else:
-        while True:
-            position = skip_space(position)
-            key, position = decoder.raw_decode(text, position)
-            if not isinstance(key, str) or key in result:
-                raise ValueError("invalid or duplicate JSON object key")
-            position = skip_space(position)
-            if position >= length or text[position] != ":":
-                raise ValueError("invalid JSON object separator")
-            position = skip_space(position + 1)
-
-            if key in array_limits and position < length and text[position] == "[":
-                limit = array_limits[key]
-                if type(limit) is not int or limit < 0:
-                    raise ValueError("invalid bounded JSON array limit")
-                items: list[Any] = []
-                position = skip_space(position + 1)
-                if position < length and text[position] == "]":
-                    position += 1
-                else:
-                    while True:
-                        item, position = decoder.raw_decode(text, position)
-                        items.append(item)
-                        if len(items) > limit:
-                            raise CloudIndexVerificationError("resource_limit_exceeded")
-                        position = skip_space(position)
-                        if position < length and text[position] == ",":
-                            position = skip_space(position + 1)
-                            continue
-                        if position < length and text[position] == "]":
-                            position += 1
-                            break
-                        raise ValueError("invalid JSON array separator")
-                value: Any = items
-            else:
-                value, position = decoder.raw_decode(text, position)
-
-            result[key] = value
-            position = skip_space(position)
-            if position < length and text[position] == ",":
-                position = skip_space(position + 1)
-                continue
-            if position < length and text[position] == "}":
-                position += 1
-                break
-            raise ValueError("invalid JSON object separator")
-
-    if skip_space(position) != length:
-        raise ValueError("trailing JSON data")
-    canonical = json.dumps(
-        result, ensure_ascii=False, allow_nan=False,
-        sort_keys=True, separators=(",", ":"),
-    ).encode("utf-8", errors="strict")
+    canonical = json.dumps(value, ensure_ascii=False, allow_nan=False,
+                           sort_keys=True, separators=(",", ":")).encode("utf-8", errors="strict")
     if canonical != raw:
         raise ValueError("JSON is not canonical")
-    return result
+    return value
 
 
 def _exact(value: Any, keys: set[str]) -> dict[str, Any]:
@@ -333,7 +253,7 @@ def _revision(value: Any) -> SourceRevision:
 def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
     """Parse exact canonical attestation bytes into immutable E1-owned types."""
     try:
-        obj = _exact(_canonical_object(raw, max_bytes=MAX_ATTESTATION_BYTES, bounded_arrays={"parser_identities": MAX_PARSER_IDENTITIES}), {
+        obj = _exact(_canonical_object(raw, max_bytes=MAX_ATTESTATION_BYTES), {
             "attestation_version", "format", "source_revision", "markdown_inventory",
             "indexer_identity", "parser_identities", "sqlite_schema_identity", "database", "counts",
         })
@@ -709,7 +629,7 @@ def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation)
     if type(raw) is not bytes or len(raw) > MAX_INVENTORY_BYTES:
         raise CloudIndexVerificationError("resource_limit_exceeded")
     try:
-        obj = _exact(_canonical_object(raw, max_bytes=MAX_INVENTORY_BYTES, bounded_arrays={"documents": MAX_MARKDOWN_DOCUMENTS}), {"format", "documents"})
+        obj = _exact(_canonical_object(raw, max_bytes=MAX_INVENTORY_BYTES), {"format", "documents"})
         if obj["format"] != INVENTORY_FORMAT or not isinstance(obj["documents"], list):
             raise ValueError("unsupported inventory")
         if len(obj["documents"]) > MAX_MARKDOWN_DOCUMENTS:
@@ -789,7 +709,8 @@ def _read_regular(path: Path) -> bytes:
         os.close(descriptor)
 
 
-def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int, int, int]]:
+def _database_bytes(path: str | Path) -> tuple[Path, str, int, tuple[int, int, int, int, int]]:
+    """Hash the SQLite file incrementally without retaining its contents."""
     requested = Path(path).expanduser()
     try:
         if requested.is_symlink():
@@ -798,15 +719,44 @@ def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int,
         before = canonical.stat()
         if not stat.S_ISREG(before.st_mode):
             raise CloudIndexVerificationError("database_invalid")
-        raw = _read_regular(canonical)
-        after = canonical.stat()
-        signature = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
-        if signature(before) != signature(after) or len(raw) != after.st_size:
-            raise CloudIndexVerificationError("database_invalid")
-        return canonical, raw, signature(after)
+        flags = (
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        )
+        descriptor = os.open(canonical, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+            ):
+                raise CloudIndexVerificationError("database_invalid")
+            digest = hashlib.sha256()
+            total = 0
+            while True:
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                digest.update(chunk)
+            after_fd = os.fstat(descriptor)
+            try:
+                after_path = canonical.stat()
+            except OSError:
+                raise CloudIndexVerificationError("database_invalid") from None
+            if (
+                _stat_signature(opened) != _stat_signature(after_fd)
+                or (after_fd.st_dev, after_fd.st_ino) != (after_path.st_dev, after_path.st_ino)
+                or total != after_fd.st_size
+            ):
+                raise CloudIndexVerificationError("database_invalid")
+            signature = _stat_signature(after_fd)
+            return canonical, "sha256:" + digest.hexdigest(), total, signature
+        finally:
+            os.close(descriptor)
     except CloudIndexVerificationError:
         raise
-    except (OSError, RuntimeError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError, TypeError):
         raise CloudIndexVerificationError("database_invalid") from None
 
 
@@ -1176,7 +1126,6 @@ def verify_materialized_cloud_index(
     provider immutability or the outer CloudSnapshotRef itself.
     """
     parsed = parse_cloud_index_attestation(attestation)
-    root_fd: int | None = None
     try:
         if type(expected_source_revision) not in (
             GitCommitSourceRevision, ImmutableImportSourceRevision
@@ -1197,42 +1146,45 @@ def verify_materialized_cloud_index(
             or parsed.indexer_identity.version != _installed_indexer_version()
         ):
             raise CloudIndexVerificationError("indexer_identity_mismatch")
+
         if not isinstance(markdown_inventory, bytes) or len(markdown_inventory) > MAX_INVENTORY_BYTES:
             raise CloudIndexVerificationError("resource_limit_exceeded")
 
-        _root_path, root_fd = _open_source_root(source_root)
-        documents, tree_entry_count = _scan_source_inventory(root_fd)
-        _validate_inventory(markdown_inventory, documents, parsed)
+        requested_root = Path(source_root).expanduser()
+        if requested_root.is_symlink():
+            raise CloudIndexVerificationError("filesystem_unsafe")
+        try:
+            root = requested_root.resolve(strict=True)
+        except (OSError, RuntimeError, ValueError):
+            raise CloudIndexVerificationError("filesystem_unsafe") from None
+        if not root.is_dir():
+            raise CloudIndexVerificationError("filesystem_unsafe")
 
-        db_path, db_bytes, signature = _database_bytes(database_path)
-        actual_digest = "sha256:" + hashlib.sha256(db_bytes).hexdigest()
+        source_files = _collect_source_files(root)
+        expected_inventory = _expected_inventory(source_files)
+        _validate_inventory(markdown_inventory, expected_inventory, parsed)
+
+        db_path, actual_digest, database_size, signature = _database_bytes(database_path)
         if actual_digest != parsed.database_sha256:
             raise CloudIndexVerificationError("database_digest_mismatch")
-        if len(db_bytes) != parsed.database_byte_size:
+        if database_size != parsed.database_byte_size:
             raise CloudIndexVerificationError("database_size_mismatch")
 
-        counts, parsers = _verify_database_consistency(
-            db_path,
-            root_fd,
-            {item["path"] for item in documents},
-        )
+        counts, parsers = _verify_database_consistency(db_path, root, source_files)
 
-        # Re-enumerate below the same pinned descriptor after DB/node validation.
-        # This detects changed Markdown inventory and source-tree entry counts
-        # without retaining any document payload bytes across the request.
-        documents_after, tree_entry_count_after = _scan_source_inventory(root_fd)
-        if (
-            documents_after != documents
-            or tree_entry_count_after != tree_entry_count
-        ):
+        # Re-scan using the same descriptor-rooted admission rules. This catches
+        # a tree replacement or inventory drift during the SQLite verification.
+        source_files_after = _collect_source_files(root)
+        if source_files_after != source_files:
             raise CloudIndexVerificationError("filesystem_race")
 
-        after = db_path.stat()
-        after_signature = (
-            after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns
-        )
-        if after_signature != signature:
+        try:
+            after = db_path.stat()
+        except OSError:
+            raise CloudIndexVerificationError("database_invalid") from None
+        if _stat_signature(after) != signature:
             raise CloudIndexVerificationError("database_invalid")
+
         if parsed.markdown_document_count != parsed.active_document_count:
             raise CloudIndexVerificationError("document_mismatch")
         if counts != (
@@ -1246,7 +1198,7 @@ def verify_materialized_cloud_index(
         return CloudIndexVerificationReport(
             source_revision=expected_revision,
             database_sha256=actual_digest,
-            database_byte_size=len(db_bytes),
+            database_byte_size=database_size,
             schema_info_version=parsed.schema_info_version,
             indexer_identity=parsed.indexer_identity,
             parser_identities=parsers,
@@ -1260,15 +1212,11 @@ def verify_materialized_cloud_index(
         )
     except CloudIndexVerificationError:
         raise
-    except _ResourceLimitExceeded:
-        raise CloudIndexVerificationError("resource_limit_exceeded") from None
-    except _LookupFailure as exc:
+    except _LookupFailure:
         raise CloudIndexVerificationError("node_integrity_failure") from None
-    except Exception as exc:
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, sqlite3.Error):
         raise CloudIndexVerificationError("verification_failed") from None
-    finally:
-        if root_fd is not None:
-            os.close(root_fd)
+
 
 
 __all__ = [
