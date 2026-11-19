@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import codecs
 import importlib.metadata
 import json
 import os
@@ -378,6 +379,7 @@ def _read_markdown_digest(
             raise CloudIndexVerificationError("resource_limit_exceeded")
         _assert_fd_beneath(descriptor, root)
         digest = hashlib.sha256()
+        decoder = codecs.getincrementaldecoder("utf-8")("strict")
         total = 0
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
@@ -386,7 +388,15 @@ def _read_markdown_digest(
             total += len(chunk)
             if total > MAX_MARKDOWN_DOCUMENT_BYTES:
                 raise CloudIndexVerificationError("resource_limit_exceeded")
+            try:
+                decoder.decode(chunk, final=False)
+            except UnicodeDecodeError:
+                raise CloudIndexVerificationError("filesystem_unsafe") from None
             digest.update(chunk)
+        try:
+            decoder.decode(b"", final=True)
+        except UnicodeDecodeError:
+            raise CloudIndexVerificationError("filesystem_unsafe") from None
         after = os.fstat(descriptor)
         if _stat_signature(before) != _stat_signature(after) or total != after.st_size:
             raise CloudIndexVerificationError("filesystem_race")
@@ -654,6 +664,49 @@ def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation)
         raise
     except Exception:
         raise CloudIndexVerificationError("inventory_invalid") from None
+
+
+def _read_regular(path: Path) -> bytes:
+    """Read the explicitly supplied SQLite file without following a final symlink."""
+    try:
+        before = path.lstat()
+    except OSError:
+        raise CloudIndexVerificationError("database_invalid") from None
+    if not stat.S_ISREG(before.st_mode):
+        raise CloudIndexVerificationError("database_invalid")
+    flags = (
+        os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        raise CloudIndexVerificationError("database_invalid") from None
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+            raise CloudIndexVerificationError("database_invalid")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        if _stat_signature(opened) != _stat_signature(after):
+            raise CloudIndexVerificationError("database_invalid")
+        raw = b"".join(chunks)
+        if len(raw) != after.st_size:
+            raise CloudIndexVerificationError("database_invalid")
+        try:
+            path_after = path.lstat()
+        except OSError:
+            raise CloudIndexVerificationError("database_invalid") from None
+        if (path_after.st_dev, path_after.st_ino) != (after.st_dev, after.st_ino):
+            raise CloudIndexVerificationError("database_invalid")
+        return raw
+    finally:
+        os.close(descriptor)
 
 
 def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int, int, int]]:
