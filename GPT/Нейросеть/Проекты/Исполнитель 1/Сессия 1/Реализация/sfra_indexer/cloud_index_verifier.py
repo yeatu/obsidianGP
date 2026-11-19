@@ -217,6 +217,79 @@ def _canonical_object(raw: bytes) -> dict[str, Any]:
     return value
 
 
+def _canonical_attestation_object(raw: bytes) -> dict[str, Any]:
+    """Decode the attestation's parser identity array with an incremental cap."""
+    try:
+        text = raw.decode("utf-8", errors="strict")
+        decoder = json.JSONDecoder(
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=lambda _v: (_ for _ in ()).throw(ValueError("invalid JSON constant")),
+        )
+        cursor = 0
+
+        def skip_space(position: int) -> int:
+            while position < len(text) and text[position] in " \t\r\n":
+                position += 1
+            return position
+
+        cursor = skip_space(cursor)
+        if cursor >= len(text) or text[cursor] != "{":
+            raise ValueError("attestation root must be an object")
+        cursor += 1
+        result: dict[str, Any] = {}
+        while True:
+            cursor = skip_space(cursor)
+            if cursor < len(text) and text[cursor] == "}":
+                cursor += 1
+                break
+            if result:
+                if cursor >= len(text) or text[cursor] != ",":
+                    raise ValueError("attestation object separator is invalid")
+                cursor = skip_space(cursor + 1)
+            key, cursor = decoder.raw_decode(text, cursor)
+            if not isinstance(key, str) or key in result:
+                raise ValueError("attestation contains a duplicate or non-text key")
+            cursor = skip_space(cursor)
+            if cursor >= len(text) or text[cursor] != ":":
+                raise ValueError("attestation object member is malformed")
+            cursor = skip_space(cursor + 1)
+
+            if key == "parser_identities":
+                if cursor >= len(text) or text[cursor] != "[":
+                    raise ValueError("parser identities must be an array")
+                cursor += 1
+                parser_rows: list[Any] = []
+                while True:
+                    cursor = skip_space(cursor)
+                    if cursor >= len(text):
+                        raise ValueError("parser identity array is unterminated")
+                    if text[cursor] == "]":
+                        cursor += 1
+                        break
+                    if parser_rows:
+                        if text[cursor] != ",":
+                            raise ValueError("parser identity separator is invalid")
+                        cursor = skip_space(cursor + 1)
+                    row, cursor = decoder.raw_decode(text, cursor)
+                    if len(parser_rows) >= MAX_PARSER_IDENTITIES:
+                        raise CloudIndexVerificationError("resource_limit_exceeded")
+                    parser_rows.append(row)
+                result[key] = parser_rows
+            else:
+                value, cursor = decoder.raw_decode(text, cursor)
+                result[key] = value
+
+        if skip_space(cursor) != len(text):
+            raise ValueError("trailing attestation bytes")
+        if _canonical_bytes(result) != raw:
+            raise ValueError("attestation bytes are not canonical")
+        return result
+    except CloudIndexVerificationError:
+        raise
+    except Exception:
+        raise ValueError("attestation is not canonical UTF-8 JSON") from None
+
+
 def _exact(value: Any, keys: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != keys:
         raise ValueError("object fields do not match schema")
@@ -259,7 +332,7 @@ def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
     if len(raw) > MAX_ATTESTATION_BYTES:
         raise CloudIndexVerificationError("resource_limit_exceeded")
     try:
-        obj = _exact(_canonical_object(raw), {
+        obj = _exact(_canonical_attestation_object(raw), {
             "attestation_version", "format", "source_revision", "markdown_inventory",
             "indexer_identity", "parser_identities", "sqlite_schema_identity", "database", "counts",
         })
@@ -834,6 +907,8 @@ def _validate_version_content_spans(row: dict[str, Any]) -> None:
         row["content_spans_json"], list, "node_version_mismatch", "Invalid version data."
     )
     previous_char_end: int | None = None
+    previous_byte_end: int | None = None
+    previous_line_start: int | None = None
     for span in spans:
         if type(span) is not dict or set(span) != {
             "line_start", "line_end", "char_start", "char_end", "byte_start", "byte_end"
@@ -844,7 +919,10 @@ def _validate_version_content_spans(row: dict[str, Any]) -> None:
         )):
             raise CloudIndexVerificationError("node_span_mismatch")
         if (
-            span["line_start"] < 1 or span["line_end"] < 0
+            span["line_start"] < row["line_start"]
+            or span["line_start"] < 1
+            or span["line_end"] < span["line_start"] - 1
+            or span["line_end"] > row["line_end"]
             or span["char_start"] < row["char_start"]
             or span["char_end"] < span["char_start"]
             or span["char_end"] > row["char_end"]
@@ -855,9 +933,23 @@ def _validate_version_content_spans(row: dict[str, Any]) -> None:
                 previous_char_end is not None
                 and span["char_start"] < previous_char_end
             )
+            or (
+                previous_byte_end is not None
+                and span["byte_start"] < previous_byte_end
+            )
+            or (
+                previous_line_start is not None
+                and span["line_start"] < previous_line_start
+            )
+            or (
+                span["char_start"] == span["char_end"]
+                and span["byte_start"] != span["byte_end"]
+            )
         ):
             raise CloudIndexVerificationError("node_span_mismatch")
         previous_char_end = span["char_end"]
+        previous_byte_end = span["byte_end"]
+        previous_line_start = span["line_start"]
 
 
 def _validate_historical_node_versions(
