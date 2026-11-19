@@ -1021,7 +1021,7 @@ def test_rejects_inconsistent_historical_content_spans_after_digest_recompute(
     root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
     note = root / "nested" / "note.md"
     note.write_text(
-        "# Заголовок\\r\\n\\r\\nИзменённый исторический текст 🧪.\\r\\n",
+        "# Заголовок\r\n\r\nИзменённый исторический текст 🧪.\r\n",
         encoding="utf-8",
     )
     index_vault(root, tmp_path / "sidecar")
