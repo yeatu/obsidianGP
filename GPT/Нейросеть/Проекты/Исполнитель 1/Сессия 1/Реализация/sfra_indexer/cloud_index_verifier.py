@@ -987,13 +987,11 @@ def _validate_historical_content_spans(row: dict[str, Any]) -> None:
         or row["byte_end"] - row["byte_start"] != len(raw_bytes)
     ):
         raise CloudIndexVerificationError("node_span_mismatch")
-    local_line_start, local_line_end = _line_span_for_chars(
+    _local_line_start, local_line_end = _line_span_for_chars(
         raw_text, 0, len(raw_text)
     )
-    if (
-        row["line_start"] != local_line_start
-        or row["line_end"] != local_line_end
-    ):
+    expected_line_end = row["line_start"] + local_line_end - 1
+    if row["line_end"] != expected_line_end:
         raise CloudIndexVerificationError("node_span_mismatch")
     _validate_content_spans(
         row["content_spans_json"],
@@ -1340,6 +1338,7 @@ def _verify_database_consistency(
             "source_fragment_hash_mismatch": "node_content_mismatch",
             "version_content_hash_mismatch": "node_content_mismatch",
             "source_coordinates_invalid": "node_span_mismatch",
+            "node_span_mismatch": "node_span_mismatch",
             "char_span_mismatch": "node_span_mismatch",
             "byte_span_mismatch": "node_span_mismatch",
             "line_span_mismatch": "node_span_mismatch",
