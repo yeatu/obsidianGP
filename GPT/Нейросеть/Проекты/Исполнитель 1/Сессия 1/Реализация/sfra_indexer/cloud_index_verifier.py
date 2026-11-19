@@ -1030,46 +1030,46 @@ def verify_materialized_cloud_index(
     database_path: str | Path,
     source_root: str | Path,
     *,
+    expected_source_revision: SourceRevision,
     attestation: bytes,
     markdown_inventory: bytes,
-    expected_source_revision: SourceRevision | dict[str, str],
 ) -> CloudIndexVerificationReport:
-    """Verify an already-materialized source tree and SQLite database read-only.
+    """Verify one already-materialized E1 cloud index against its outer revision.
 
-    The byte arguments must be the exact attestation and inventory payloads
-    from #119. expected_source_revision is the exact tagged revision from the
-    separately verified outer reference, expressed as an E1-owned value or
-    strict tagged mapping. This binds inner attestation to the outer ref
-    without importing E3. The verifier does not access object storage.
+    The expected_source_revision must be an exact E1-owned Git/import tagged value
+    supplied by the caller from the independently verified outer snapshot handle.
+    Attestation and inventory are the exact raw #119 bytes. This E1 boundary
+    verifies materialized consistency; it does not authenticate source origin,
+    provider immutability or the outer CloudSnapshotRef itself.
     """
     parsed = parse_cloud_index_attestation(attestation)
+    root_fd: int | None = None
     try:
-        if type(expected_source_revision) in (GitCommitSourceRevision, ImmutableImportSourceRevision):
-            expected_revision = expected_source_revision
-        elif type(expected_source_revision) is dict:
-            try:
-                expected_revision = _revision(expected_source_revision)
-            except Exception:
-                raise CloudIndexVerificationError("source_revision_invalid") from None
-        else:
+        if type(expected_source_revision) not in (
+            GitCommitSourceRevision, ImmutableImportSourceRevision
+        ):
             raise CloudIndexVerificationError("source_revision_invalid")
-        if expected_revision != parsed.source_revision:
-            raise CloudIndexVerificationError("source_revision_mismatch")
-        if (parsed.indexer_identity.name != "sfra-structural-indexer"
-                or parsed.indexer_identity.version != _installed_indexer_version()):
-            raise CloudIndexVerificationError("indexer_identity_mismatch")
-
-        root = Path(source_root).expanduser()
-        if root.is_symlink():
-            raise CloudIndexVerificationError("filesystem_unsafe")
         try:
-            root = root.resolve(strict=True)
-        except (OSError, RuntimeError, ValueError):
-            raise CloudIndexVerificationError("filesystem_unsafe") from None
-        if not root.is_dir():
-            raise CloudIndexVerificationError("filesystem_unsafe")
-        files = _collect_source_files(root)
-        _validate_inventory(markdown_inventory, _expected_inventory(files), parsed)
+            expected_revision = _revision(expected_source_revision.to_dict())
+        except Exception:
+            raise CloudIndexVerificationError("source_revision_invalid") from None
+        if (
+            type(parsed.source_revision) is not type(expected_revision)
+            or parsed.source_revision != expected_revision
+        ):
+            raise CloudIndexVerificationError("source_revision_mismatch")
+
+        if (
+            parsed.indexer_identity.name != "sfra-structural-indexer"
+            or parsed.indexer_identity.version != _installed_indexer_version()
+        ):
+            raise CloudIndexVerificationError("indexer_identity_mismatch")
+        if not isinstance(markdown_inventory, bytes) or len(markdown_inventory) > MAX_INVENTORY_BYTES:
+            raise CloudIndexVerificationError("resource_limit_exceeded")
+
+        _root_path, root_fd = _open_source_root(source_root)
+        documents, tree_entry_count = _scan_source_inventory(root_fd)
+        _validate_inventory(markdown_inventory, documents, parsed)
 
         db_path, db_bytes, signature = _database_bytes(database_path)
         actual_digest = "sha256:" + hashlib.sha256(db_bytes).hexdigest()
@@ -1078,9 +1078,26 @@ def verify_materialized_cloud_index(
         if len(db_bytes) != parsed.database_byte_size:
             raise CloudIndexVerificationError("database_size_mismatch")
 
-        counts, parsers = _verify_database_consistency(db_path, root, files)
+        counts, parsers = _verify_database_consistency(
+            db_path,
+            root_fd,
+            {item["path"] for item in documents},
+        )
+
+        # Re-enumerate below the same pinned descriptor after DB/node validation.
+        # This detects changed Markdown inventory and source-tree entry counts
+        # without retaining any document payload bytes across the request.
+        documents_after, tree_entry_count_after = _scan_source_inventory(root_fd)
+        if (
+            documents_after != documents
+            or tree_entry_count_after != tree_entry_count
+        ):
+            raise CloudIndexVerificationError("filesystem_race")
+
         after = db_path.stat()
-        after_signature = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+        after_signature = (
+            after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns
+        )
         if after_signature != signature:
             raise CloudIndexVerificationError("database_invalid")
         if parsed.markdown_document_count != parsed.active_document_count:
@@ -1094,7 +1111,7 @@ def verify_materialized_cloud_index(
             raise CloudIndexVerificationError("parser_identity_mismatch")
 
         return CloudIndexVerificationReport(
-            source_revision=parsed.source_revision,
+            source_revision=expected_revision,
             database_sha256=actual_digest,
             database_byte_size=len(db_bytes),
             schema_info_version=parsed.schema_info_version,
@@ -1110,10 +1127,15 @@ def verify_materialized_cloud_index(
         )
     except CloudIndexVerificationError:
         raise
+    except _ResourceLimitExceeded:
+        raise CloudIndexVerificationError("resource_limit_exceeded") from None
     except _LookupFailure as exc:
         raise CloudIndexVerificationError("node_integrity_failure") from None
     except Exception as exc:
         raise CloudIndexVerificationError("verification_failed") from None
+    finally:
+        if root_fd is not None:
+            os.close(root_fd)
 
 
 __all__ = [
