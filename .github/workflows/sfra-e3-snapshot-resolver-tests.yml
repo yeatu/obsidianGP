@@ -1,0 +1,49 @@
+name: SFRA E3 exact-version snapshot materializer fixture tests
+
+on:
+  push:
+    branches:
+      - "executor-2/issue-120-exact-version-materializer"
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/src/sfra_context_integrations/snapshot_materializer.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/test_cloud_snapshot_materializer.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/CLOUD_SNAPSHOT_MATERIALIZER.md"
+      - ".github/workflows/sfra-e3-snapshot-resolver-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/src/sfra_context_integrations/snapshot_materializer.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/tests/test_cloud_snapshot_materializer.py"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/CLOUD_SNAPSHOT_MATERIALIZER.md"
+      - ".github/workflows/sfra-e3-snapshot-resolver-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot-materializer-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/pyproject.toml"
+      - name: Install synthetic fixture dependencies
+        shell: bash
+        run: |
+          E1_DIR="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация"
+          B1_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1"
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          E2_DIR="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$E1_DIR"
+          python -m pip install -e "$B1_DIR"
+          python -m pip install -e "$E3_DIR[test]"
+          python -m pip install -e "$E2_DIR"
+      - name: Run exact-version materializer fixtures
+        run: |
+          E3_DIR="GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pytest -q "$E3_DIR/tests/test_cloud_snapshot_materializer.py"
