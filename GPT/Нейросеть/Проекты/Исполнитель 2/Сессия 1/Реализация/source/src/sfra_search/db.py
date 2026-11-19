@@ -736,11 +736,20 @@ class SFRAIndex:
                          FROM node_fts JOIN node_versions v ON v.version_id=node_fts.rowid
                          JOIN nodes n ON n.node_id=v.node_id AND n.current_version_id=v.version_id AND n.state='active'
                          WHERE node_fts MATCH ?"""
+            term_fts_sql = """SELECT v.version_id,v.node_id,v.source_path,v.parent_node_id
+                              FROM node_fts JOIN node_versions v ON v.version_id=node_fts.rowid
+                              JOIN nodes n ON n.node_id=v.node_id AND n.current_version_id=v.version_id AND n.state='active'
+                              WHERE node_fts MATCH ?"""
 
             def fetch_fts_rows(match_query: str) -> list[sqlite3.Row]:
                 if not match_query:
                     return []
                 return conn.execute(fts_sql, (match_query,)).fetchall()
+
+            def fetch_term_rows(match_query: str) -> list[sqlite3.Row]:
+                if not match_query:
+                    return []
+                return conn.execute(term_fts_sql, (match_query,)).fetchall()
 
             def collect_fts(
                 match_query: str,
@@ -793,7 +802,7 @@ class SFRAIndex:
                         if channel == "morphology"
                         else build_fts_query(term)
                     )
-                    hits = fetch_fts_rows(term_query)
+                    hits = fetch_term_rows(term_query)
                     if hits:
                         term_hits[term] = hits
                         term_document_frequency[term] = len({hit["source_path"] for hit in hits})
