@@ -613,6 +613,39 @@ def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation)
 
 
 
+def _read_regular(path: Path) -> bytes:
+    """Read one regular file without following a final symlink and detect replacement."""
+    before = path.lstat()
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise OSError("database path is not a regular file")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or _stat_identity(before) != _stat_identity(opened):
+            raise OSError("database file identity changed before read")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        current = path.lstat()
+        signature = lambda value: (
+            value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns
+        )
+        if (
+            signature(opened) != signature(after)
+            or _stat_identity(current) != _stat_identity(after)
+            or sum(map(len, chunks)) != after.st_size
+        ):
+            raise OSError("database file changed while being read")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
 def _database_bytes(path: str | Path) -> tuple[Path, bytes, tuple[int, int, int, int, int]]:
     requested = Path(path).expanduser()
     try:
