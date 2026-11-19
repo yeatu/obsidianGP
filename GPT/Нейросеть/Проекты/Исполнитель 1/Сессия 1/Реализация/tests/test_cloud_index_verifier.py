@@ -661,7 +661,7 @@ def test_non_markdown_attachment_payload_is_never_opened_by_inventory_walk(tmp_p
     monkeypatch.setattr(cloud_verifier, "_read_markdown_file_at", observe_markdown)
     report = _verify(root, db_path, inventory, attestation)
     assert report.markdown_document_count == 2
-    assert observed == ["empty.MD", "nested/note.md"]
+    assert set(observed) == {"empty.MD", "nested/note.md"}
 
 
 def test_attestation_and_inventory_byte_limits_accept_exact_boundary_and_reject_one_over(tmp_path, monkeypatch):

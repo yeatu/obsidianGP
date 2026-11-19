@@ -1089,10 +1089,8 @@ def verify_materialized_cloud_index(
         raise
     except _LookupFailure:
         raise CloudIndexVerificationError("node_integrity_failure") from None
-    except Exception as exc:
-        raise CloudIndexVerificationError("verification_failed") from RuntimeError(
-            str(type(exc).__name__) + ":" + str(getattr(exc, "name", ""))
-        )
+    except Exception:
+        raise CloudIndexVerificationError("verification_failed") from None
 
 
 
