@@ -872,13 +872,11 @@ def test_rejects_historical_node_type_when_digest_is_recomputed(tmp_path):
     connection = sqlite3.connect(db_path)
     try:
         row = connection.execute(
-            "SELECT node_version_pk FROM node_versions AS old
-            WHERE version_no=1
-              AND EXISTS (
-                  SELECT 1 FROM node_versions AS newer
-                  WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
-              )
-            ORDER BY node_version_pk LIMIT 1"
+            "SELECT node_version_pk FROM node_versions AS old "
+            "WHERE version_no=1 "
+            "AND EXISTS (SELECT 1 FROM node_versions AS newer "
+            "WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no) "
+            "ORDER BY node_version_pk LIMIT 1"
         ).fetchone()
         assert row is not None
         connection.execute(
