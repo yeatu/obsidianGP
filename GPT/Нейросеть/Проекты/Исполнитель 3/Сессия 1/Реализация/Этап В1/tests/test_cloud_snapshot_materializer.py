@@ -353,6 +353,9 @@ def test_catalogue_a_to_b_switch_keeps_request_on_pinned_a_snapshot(tmp_path: Pa
         workspace,
     )
 
+    assert type(result) is MaterializedCloudSnapshot
+    assert not isinstance(result, VerificationMaterialization)
+
     # The request stays pinned to A even after the active pointer switches to B.
     # It never resolves or reads B, and it does not mutate the catalogue.
     assert result.snapshot_ref == built_a.ref
@@ -425,11 +428,11 @@ def test_verification_materialization_rejects_non_staged_entry(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
+    materializer = CloudSnapshotMaterializer(catalogue, store)
     with pytest.raises(SnapshotMaterializationStateError):
-        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
-            built.ref.snapshot_id,
-            workspace,
-        )
+        materializer.materialize_for_verification(built.ref.snapshot_id, workspace)
+    with pytest.raises(SnapshotMaterializationStateError):
+        materializer.materialize(built.ref.snapshot_id, workspace)
     assert list(workspace.iterdir()) == []
     assert catalogue.get_exact(built.ref.snapshot_id).state is SnapshotLifecycleState.VERIFIED
 
