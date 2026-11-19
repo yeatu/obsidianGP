@@ -932,10 +932,10 @@ def _validate_content_spans(
             or span["line_end"] < 0
             or span["line_end"] < span["line_start"] - 1
             or char_start < container["char_start"]
-            or char_end < char_start
+            or char_end <= char_start
             or char_end > container["char_end"]
             or byte_start < container["byte_start"]
-            or byte_end < byte_start
+            or byte_end <= byte_start
             or byte_end > container["byte_end"]
             or char_start < previous_char_end
             or byte_start < previous_byte_end

@@ -961,7 +961,25 @@ def test_rejects_historical_node_type_when_digest_is_recomputed(tmp_path):
     assert error.value.code == "node_reference_mismatch"
 
 
-@pytest.mark.parametrize("mutation", ["out_of_node", "overlap", "reversed"])
+def test_accepts_empty_content_span_list_for_node_without_own_spans():
+    # A node may legitimately own no content spans. Empty lists remain valid;
+    # only an individual zero-width span entry is rejected.
+    verifier._validate_content_spans(
+        "[]",
+        {
+            "char_start": 0,
+            "char_end": 5,
+            "byte_start": 0,
+            "byte_end": 5,
+        },
+        coordinate_text="hello",
+        base_char=0,
+        base_byte=0,
+        base_line=1,
+    )
+
+
+@pytest.mark.parametrize("mutation", ["out_of_node", "overlap", "reversed", "zero_width"])
 def test_rejects_inconsistent_current_content_spans_after_digest_recompute(
     tmp_path, mutation
 ):
@@ -994,9 +1012,15 @@ def test_rejects_inconsistent_current_content_spans_after_digest_recompute(
             spans = [first]
         elif mutation == "overlap":
             spans = [first, dict(first)]
-        else:
+        elif mutation == "reversed":
             first["char_start"] = first["char_end"] + 1
             first["byte_start"] = first["byte_end"] + 1
+            spans = [first]
+        else:
+            # Empty half-open interval with the parser's former empty-line convention.
+            first["char_end"] = first["char_start"]
+            first["byte_end"] = first["byte_start"]
+            first["line_end"] = first["line_start"] - 1
             spans = [first]
         encoded_spans = _canonical(spans).decode("utf-8")
         connection.execute(
@@ -1026,7 +1050,7 @@ def test_rejects_inconsistent_current_content_spans_after_digest_recompute(
 
 
 @pytest.mark.parametrize(
-    "mutation", ["out_of_node", "overlap", "reversed", "raw_text_extent"]
+    "mutation", ["out_of_node", "overlap", "reversed", "zero_width", "raw_text_extent"]
 )
 def test_rejects_inconsistent_historical_content_spans_after_digest_recompute(
     tmp_path, mutation
@@ -1081,6 +1105,14 @@ def test_rejects_inconsistent_historical_content_spans_after_digest_recompute(
         elif mutation == "reversed":
             first["char_start"] = first["char_end"] + 1
             first["byte_start"] = first["byte_end"] + 1
+            connection.execute(
+                "UPDATE node_versions SET content_spans_json=? WHERE node_version_pk=?",
+                (_canonical([first]).decode("utf-8"), selected["node_version_pk"]),
+            )
+        elif mutation == "zero_width":
+            first["char_end"] = first["char_start"]
+            first["byte_end"] = first["byte_start"]
+            first["line_end"] = first["line_start"] - 1
             connection.execute(
                 "UPDATE node_versions SET content_spans_json=? WHERE node_version_pk=?",
                 (_canonical([first]).decode("utf-8"), selected["node_version_pk"]),
