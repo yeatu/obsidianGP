@@ -786,6 +786,11 @@ def test_parser_identity_count_limit_has_exact_and_over_boundary(tmp_path, monke
 
 def test_rejects_historical_node_version_parent_from_another_document(tmp_path):
     root, db_path, _inventory_bytes, attestation = _fixture(tmp_path)
+    # Add a second document in generation 2 so the corruption target can be
+    # replaced with a real Node ID belonging to a different document.
+    (root / "other.md").write_text(
+        "# Other document\n\nSeparate identity.\n", encoding="utf-8"
+    )
     note = root / "nested" / "note.md"
     # Keep the heading stable so its child receives a second saved version
     # while retaining a non-null parent reference in the historical row.
