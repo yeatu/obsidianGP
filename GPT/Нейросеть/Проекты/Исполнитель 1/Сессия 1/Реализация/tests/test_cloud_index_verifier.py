@@ -679,6 +679,33 @@ def test_non_markdown_attachments_are_never_opened_or_read(tmp_path, monkeypatch
     assert ("empty.MD",) in opened
 
 
+@pytest.mark.parametrize(
+    ("array_key", "array_limit", "raw"),
+    [
+        (
+            "parser_identities",
+            1,
+            b'{"parser_identities":[{"name":"a","version":"1"},{"name":"b","version":"2"}, !]}',
+        ),
+        (
+            "documents",
+            1,
+            b'{"documents":[{"path":"a.md"},{"path":"b.md"}, !]}',
+        ),
+    ],
+)
+def test_bounded_json_arrays_stop_at_first_item_over_limit(array_key, array_limit, raw):
+    # The third token is deliberately malformed. An incremental parser must
+    # report the resource ceiling on item two without parsing the malformed tail.
+    with pytest.raises(CloudIndexVerificationError) as error:
+        verifier._canonical_object(
+            raw,
+            max_bytes=verifier.MAX_ATTESTATION_BYTES,
+            bounded_arrays={array_key: array_limit},
+        )
+    assert error.value.code == "resource_limit_exceeded"
+
+
 def test_resource_limits_enforce_exact_boundaries_and_one_over(tmp_path, monkeypatch):
     root, db_path, inventory, attestation = _fixture(tmp_path)
     raw_attestation = _canonical(attestation)
