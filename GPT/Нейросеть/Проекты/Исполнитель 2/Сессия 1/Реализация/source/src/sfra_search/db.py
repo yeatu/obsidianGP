@@ -732,40 +732,167 @@ class SFRAIndex:
         try:
             candidates: dict[int, dict[str, Any]] = {}
 
-            def collect_fts(match_query: str, reason: str, tier: int) -> int:
-                if not match_query:
-                    return 0
-                sql = """SELECT v.*, bm25(node_fts,8.0,2.0,6.0,1.0,6.0,4.0,1.0) AS bm25_rank
+            fts_sql = """SELECT v.*, bm25(node_fts,8.0,2.0,6.0,1.0,6.0,4.0,1.0) AS bm25_rank
                          FROM node_fts JOIN node_versions v ON v.version_id=node_fts.rowid
                          JOIN nodes n ON n.node_id=v.node_id AND n.current_version_id=v.version_id AND n.state='active'
                          WHERE node_fts MATCH ?"""
-                rows = conn.execute(sql, (match_query,)).fetchall()
-                for row in rows:
+            term_fts_sql = """SELECT v.version_id,v.node_id,v.source_path,v.parent_node_id
+                              FROM node_fts JOIN node_versions v ON v.version_id=node_fts.rowid
+                              JOIN nodes n ON n.node_id=v.node_id AND n.current_version_id=v.version_id AND n.state='active'
+                              WHERE node_fts MATCH ?"""
+
+            def fetch_fts_rows(match_query: str) -> list[sqlite3.Row]:
+                if not match_query:
+                    return []
+                return conn.execute(fts_sql, (match_query,)).fetchall()
+
+            def fetch_term_rows(match_query: str) -> list[sqlite3.Row]:
+                if not match_query:
+                    return []
+                return conn.execute(term_fts_sql, (match_query,)).fetchall()
+
+            def collect_fts(
+                match_query: str,
+                reason: str,
+                tier: int,
+                *,
+                rows: list[sqlite3.Row] | None = None,
+                allowed_version_ids: set[int] | None = None,
+            ) -> int:
+                if not match_query:
+                    return 0
+                matched_rows = fetch_fts_rows(match_query) if rows is None else rows
+                if allowed_version_ids is not None:
+                    matched_rows = [row for row in matched_rows if row["version_id"] in allowed_version_ids]
+                for row in matched_rows:
                     vid = row["version_id"]
                     item = candidates.setdefault(vid, {"row": row, "reasons": set(), "tiers": [], "bm25": row["bm25_rank"], "entities": set(), "aliases": set()})
                     item["reasons"].add(reason)
                     item["tiers"].append(tier)
                     if item["bm25"] is None or row["bm25_rank"] < item["bm25"]:
                         item["bm25"] = row["bm25_rank"]
-                return len(rows)
+                return len(matched_rows)
 
-            def with_or_fallback(match_query: str, reason: str, tier: int) -> None:
+            def qualifying_partial_versions(
+                fallback_rows: list[sqlite3.Row],
+                channel: str,
+            ) -> set[int]:
+                """Keep tier-6 candidates only when a local structural group carries query evidence.
+
+                Normally a multi-token fallback requires at least two distinct informative
+                query terms in one source-document group, plus an anchor term found in no
+                more than 2% of active documents (with a one-document floor). A candidate
+                must itself match a contributing term. Groups are limited to the same
+                source document and an explicit parent/child or sibling relationship.
+
+                The legacy exact partial-search case is retained only when exactly one
+                distinct query term has any hit in the active index; a lone morphology hit
+                is never sufficient for a multi-token request.
+                """
+                raw_terms = _non_numeric_query_tokens(query)
+                if channel == "morphology":
+                    terms = [self.morphology.normalize_word(term) for term in raw_terms]
+                else:
+                    terms = raw_terms
+                terms = list(dict.fromkeys(term for term in terms if term and len(term) >= 3))
+                if len(terms) < 2 or not fallback_rows:
+                    return set()
+
+                term_hits: dict[str, list[sqlite3.Row]] = {}
+                term_document_frequency: dict[str, int] = {}
+                for term in terms:
+                    term_query = (
+                        build_morph_fts_query(term, self.morphology)
+                        if channel == "morphology"
+                        else build_fts_query(term)
+                    )
+                    hits = fetch_term_rows(term_query)
+                    if hits:
+                        term_hits[term] = hits
+                        term_document_frequency[term] = len({hit["source_path"] for hit in hits})
+
+                if len(term_hits) < 2:
+                    # Preserve legacy exact partial search only when this is the
+                    # sole query term with any hit in the complete active index.
+                    # A lone morphology lemma is deliberately insufficient.
+                    if channel != "exact" or len(term_hits) != 1:
+                        return set()
+                    only_term_hits = {
+                        int(hit["version_id"]) for hit in next(iter(term_hits.values()))
+                    }
+                    return {
+                        int(candidate["version_id"])
+                        for candidate in fallback_rows
+                        if int(candidate["version_id"]) in only_term_hits
+                    }
+
+                active_document_count = int(
+                    conn.execute("SELECT COUNT(*) FROM documents WHERE state='active'").fetchone()[0]
+                )
+                anchor_document_limit = max(1, int(active_document_count * 0.02))
+
+                def same_explicit_group(left: sqlite3.Row, right: sqlite3.Row) -> bool:
+                    if left["source_path"] != right["source_path"]:
+                        return False
+                    if left["version_id"] == right["version_id"]:
+                        return True
+                    if left["node_id"] == right["parent_node_id"]:
+                        return True
+                    if right["node_id"] == left["parent_node_id"]:
+                        return True
+                    return (
+                        left["parent_node_id"] is not None
+                        and left["parent_node_id"] == right["parent_node_id"]
+                    )
+
+                allowed: set[int] = set()
+                for candidate in fallback_rows:
+                    candidate_id = int(candidate["version_id"])
+                    own_terms = {
+                        term
+                        for term, hits in term_hits.items()
+                        if any(hit["version_id"] == candidate_id for hit in hits)
+                    }
+                    if not own_terms:
+                        continue
+
+                    group_terms = {
+                        term
+                        for term, hits in term_hits.items()
+                        if any(same_explicit_group(candidate, hit) for hit in hits)
+                    }
+                    if len(group_terms) < 2:
+                        continue
+                    if not any(term_document_frequency[term] <= anchor_document_limit for term in group_terms):
+                        continue
+                    allowed.add(candidate_id)
+                return allowed
+
+            def with_or_fallback(match_query: str, reason: str, tier: int, channel: str) -> None:
                 if not match_query:
                     return
                 try:
                     count = collect_fts(match_query, reason, tier)
                     if count == 0 and " AND " in match_query:
-                        # Partial-token fallback is deliberately ranked below complete exact/morphological hits.
-                        collect_fts(match_query.replace(" AND ", " OR "), reason + "_or_fallback", 6)
+                        fallback_query = match_query.replace(" AND ", " OR ")
+                        fallback_rows = fetch_fts_rows(fallback_query)
+                        allowed_versions = qualifying_partial_versions(fallback_rows, channel)
+                        collect_fts(
+                            fallback_query,
+                            reason + "_or_fallback",
+                            6,
+                            rows=fallback_rows,
+                            allowed_version_ids=allowed_versions,
+                        )
                 except sqlite3.OperationalError:
                     # Query text is quoted and tokenized before reaching FTS5; this is a last-resort guard.
                     return
 
             exact_q = build_fts_query(query)
             morph_q = build_morph_fts_query(query, self.morphology)
-            with_or_fallback(exact_q, "fts_exact_tokens", 4)
+            with_or_fallback(exact_q, "fts_exact_tokens", 4, "exact")
             if morph_q and morph_q != exact_q:
-                with_or_fallback(morph_q, "fts_morphology", 5)
+                with_or_fallback(morph_q, "fts_morphology", 5, "morphology")
 
             # Numeric lookup uses exact canonical equality, not FTS token or substring matching.
             for number_key, surface, _, _ in extract_numbers(query):
