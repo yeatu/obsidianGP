@@ -998,9 +998,22 @@ def test_rejects_inconsistent_current_content_spans_after_digest_recompute(
             first["char_start"] = first["char_end"] + 1
             first["byte_start"] = first["byte_end"] + 1
             spans = [first]
+        encoded_spans = _canonical(spans).decode("utf-8")
         connection.execute(
             "UPDATE structural_nodes SET content_spans_json=? WHERE node_pk=?",
-            (_canonical(spans).decode("utf-8"), selected["node_pk"]),
+            (encoded_spans, selected["node_pk"]),
+        )
+        # Keep the node's latest version snapshot consistent so this test
+        # reaches the content-span verifier rather than the earlier
+        # current-vs-latest-version consistency guard.
+        connection.execute(
+            """
+            UPDATE node_versions SET content_spans_json=?
+            WHERE node_pk=? AND version_no=(
+                SELECT MAX(version_no) FROM node_versions WHERE node_pk=?
+            )
+            """,
+            (encoded_spans, selected["node_pk"], selected["node_pk"]),
         )
         connection.commit()
     finally:
