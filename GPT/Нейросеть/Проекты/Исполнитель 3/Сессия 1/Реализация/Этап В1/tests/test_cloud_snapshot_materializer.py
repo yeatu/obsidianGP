@@ -32,6 +32,9 @@ from sfra_context_integrations.snapshot_materializer import (
     InMemoryVersionedObjectStore,
     ObjectStoreReadResult,
     SnapshotMaterializationIntegrityError,
+    SnapshotMaterializationStateError,
+    VerificationMaterialization,
+    MaterializedCloudSnapshot,
     SnapshotObjectIntegrityError,
     SnapshotObjectUnavailableError,
     SnapshotObjectVersionMismatchError,
@@ -105,11 +108,14 @@ def test_materializes_exact_versions_and_preserves_raw_e1_artifacts(tmp_path: Pa
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    result = CloudSnapshotMaterializer(catalogue, store).materialize(
+    result = CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
         built.ref.snapshot_id,
         workspace,
     )
 
+    assert type(result) is VerificationMaterialization
+    assert not isinstance(result, MaterializedCloudSnapshot)
+    assert result.catalogue_state is SnapshotLifecycleState.STAGED
     assert result.snapshot_ref == built.ref
     assert result.snapshot_id == built.ref.snapshot_id
     assert result.manifest_bytes == built.manifest_bytes
@@ -149,7 +155,7 @@ def test_immutable_import_revision_is_preserved_without_git_coercion(tmp_path: P
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    result = CloudSnapshotMaterializer(catalogue, store).materialize(
+    result = CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
         built.ref.snapshot_id,
         workspace,
     )
@@ -169,7 +175,7 @@ def test_missing_exact_object_version_fails_without_creating_materialization(tmp
     store = InMemoryVersionedObjectStore({})
 
     with pytest.raises(SnapshotObjectUnavailableError):
-        CloudSnapshotMaterializer(catalogue, store).materialize(
+        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
             built.ref.snapshot_id,
             workspace,
         )
@@ -193,7 +199,7 @@ def test_wrong_key_echo_is_rejected_even_when_version_and_payload_match(tmp_path
             )
 
     with pytest.raises(SnapshotObjectVersionMismatchError):
-        CloudSnapshotMaterializer(catalogue, WrongKeyStore()).materialize(
+        CloudSnapshotMaterializer(catalogue, WrongKeyStore()).materialize_for_verification(
             built.ref.snapshot_id,
             workspace,
         )
@@ -215,7 +221,7 @@ def test_latest_only_or_wrong_version_response_is_rejected(tmp_path: Path):
             )
 
     with pytest.raises(SnapshotObjectVersionMismatchError):
-        CloudSnapshotMaterializer(catalogue, LatestOnlyStore()).materialize(
+        CloudSnapshotMaterializer(catalogue, LatestOnlyStore()).materialize_for_verification(
             built.ref.snapshot_id,
             workspace,
         )
@@ -238,7 +244,7 @@ def test_hash_or_size_mismatch_fails_closed(tmp_path: Path, corruption: str):
     workspace.mkdir()
 
     with pytest.raises(SnapshotObjectIntegrityError):
-        CloudSnapshotMaterializer(catalogue, store).materialize(
+        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
             built.ref.snapshot_id,
             workspace,
         )
@@ -293,7 +299,7 @@ def test_compressed_archive_is_rejected_before_member_read(tmp_path: Path, monke
     workspace.mkdir()
 
     with pytest.raises(SnapshotMaterializationIntegrityError):
-        CloudSnapshotMaterializer(changed_catalogue, store).materialize(
+        CloudSnapshotMaterializer(changed_catalogue, store).materialize_for_verification(
             changed_ref.snapshot_id,
             workspace,
         )
@@ -378,14 +384,54 @@ def test_retired_snapshot_and_mutable_alias_are_rejected(tmp_path: Path):
     workspace.mkdir()
 
     with pytest.raises(SnapshotRetiredError):
-        CloudSnapshotMaterializer(catalogue, store).materialize(
+        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
             built.ref.snapshot_id,
             workspace,
         )
     with pytest.raises(InvalidSnapshotIdError):
-        CloudSnapshotMaterializer(catalogue, store).materialize("latest", workspace)
+        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification("latest", workspace)
 
     assert list(workspace.iterdir()) == []
+
+
+
+def test_staged_snapshot_cannot_use_active_materialization_path(tmp_path: Path):
+    _, _, _, built, catalogue, store = _fixture(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    class CountingStore:
+        def __init__(self):
+            self.calls = 0
+
+        def read_exact(self, key: str, version_id: str) -> ObjectStoreReadResult:
+            self.calls += 1
+            return store.read_exact(key, version_id)
+
+    counting_store = CountingStore()
+    with pytest.raises(SnapshotMaterializationStateError):
+        CloudSnapshotMaterializer(catalogue, counting_store).materialize(
+            built.ref.snapshot_id,
+            workspace,
+        )
+    assert counting_store.calls == 0
+    assert list(workspace.iterdir()) == []
+    assert catalogue.get_exact(built.ref.snapshot_id).state is SnapshotLifecycleState.STAGED
+
+
+def test_verification_materialization_rejects_non_staged_entry(tmp_path: Path):
+    _, _, _, built, catalogue, store = _fixture(tmp_path)
+    catalogue.mark_verified(built.ref.snapshot_id)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    with pytest.raises(SnapshotMaterializationStateError):
+        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
+            built.ref.snapshot_id,
+            workspace,
+        )
+    assert list(workspace.iterdir()) == []
+    assert catalogue.get_exact(built.ref.snapshot_id).state is SnapshotLifecycleState.VERIFIED
 
 
 def test_workspace_must_be_an_existing_real_directory(tmp_path: Path):
@@ -393,7 +439,7 @@ def test_workspace_must_be_an_existing_real_directory(tmp_path: Path):
     missing_workspace = tmp_path / "missing"
 
     with pytest.raises(SnapshotWorkspaceError):
-        CloudSnapshotMaterializer(catalogue, store).materialize(
+        CloudSnapshotMaterializer(catalogue, store).materialize_for_verification(
             built.ref.snapshot_id,
             missing_workspace,
         )

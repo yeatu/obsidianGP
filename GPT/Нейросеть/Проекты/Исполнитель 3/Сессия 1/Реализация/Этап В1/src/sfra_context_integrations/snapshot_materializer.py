@@ -76,6 +76,10 @@ class SnapshotWorkspaceError(SnapshotMaterializationError):
     """The caller workspace cannot safely receive a new disposable materialization."""
 
 
+class SnapshotMaterializationStateError(SnapshotMaterializationError):
+    """The requested lifecycle state is not valid for this materialization purpose."""
+
+
 class ObjectStoreObjectNotFoundError(LookupError):
     """The requested exact key/version pair is not present in the read port."""
 
@@ -136,11 +140,11 @@ class InMemoryVersionedObjectStore:
 
 @dataclass(frozen=True, slots=True)
 class MaterializedCloudSnapshot:
-    """Request-scoped verified snapshot and the exact artifacts consumed by E1.
+    """Verified materialization for an ACTIVE snapshot, ready for #136 binding input.
 
-    The raw attestation and inventory bytes are preserved exactly as extracted
-    from the verified index archive. They are not parsed and re-serialized for
-    the downstream E1 cloud verifier.
+    This is not an E3 query capability. Only #136 may mint the factory-verified
+    request handle after checking the E1 report and the exact ACTIVE catalogue
+    identity.
     """
 
     snapshot_ref: CloudSnapshotRefV2
@@ -163,6 +167,51 @@ class MaterializedCloudSnapshot:
     def index_bundle_sha256(self) -> str:
         return self.snapshot_ref.index_bundle.sha256
 
+
+@dataclass(frozen=True, slots=True)
+class VerificationMaterialization:
+    """Non-query capability carrying exact STAGED inputs for E1 verifier #240.
+
+    This type is intentionally distinct from MaterializedCloudSnapshot and
+    records that the one catalogue lookup observed STAGED. It exposes only
+    immutable identity, paths, bytes and outer-verifier evidence.
+    """
+
+    snapshot_ref: CloudSnapshotRefV2
+    catalogue_state: SnapshotLifecycleState
+    workspace_root: Path
+    source_root: Path
+    index_root: Path
+    index_database_path: Path
+    attestation_path: Path
+    markdown_inventory_path: Path
+    attestation_bytes: bytes
+    markdown_inventory_bytes: bytes
+    manifest_bytes: bytes
+    bundle_report: BundleVerificationReport
+
+    @property
+    def snapshot_id(self) -> str:
+        return self.snapshot_ref.snapshot_id
+
+    @property
+    def index_bundle_sha256(self) -> str:
+        return self.snapshot_ref.index_bundle.sha256
+
+
+@dataclass(frozen=True, slots=True)
+class _MaterializationArtifacts:
+    snapshot_ref: CloudSnapshotRefV2
+    workspace_root: Path
+    source_root: Path
+    index_root: Path
+    index_database_path: Path
+    attestation_path: Path
+    markdown_inventory_path: Path
+    attestation_bytes: bytes
+    markdown_inventory_bytes: bytes
+    manifest_bytes: bytes
+    bundle_report: BundleVerificationReport
 
 def _sha256(payload: bytes) -> str:
     return "sha256:" + hashlib.sha256(payload).hexdigest()
@@ -398,16 +447,70 @@ class CloudSnapshotMaterializer:
         self._catalogue = catalogue
         self._object_store = object_store
 
+    def materialize_for_verification(
+        self,
+        snapshot_id: str,
+        workspace: str | Path,
+    ) -> VerificationMaterialization:
+        """Materialize an exact STAGED snapshot only as input to E1 verifier #240."""
+        if not isinstance(snapshot_id, str) or not snapshot_id:
+            raise SnapshotMaterializationError("snapshot_id must be a non-empty exact identity")
+        entry = self._get_exact_entry(snapshot_id)
+        if entry.state is not SnapshotLifecycleState.STAGED:
+            raise SnapshotMaterializationStateError(
+                "verification materialization requires the exact catalogue entry to be STAGED"
+            )
+        artifacts = self._materialize_artifacts(entry, workspace)
+        return VerificationMaterialization(
+            snapshot_ref=artifacts.snapshot_ref,
+            catalogue_state=entry.state,
+            workspace_root=artifacts.workspace_root,
+            source_root=artifacts.source_root,
+            index_root=artifacts.index_root,
+            index_database_path=artifacts.index_database_path,
+            attestation_path=artifacts.attestation_path,
+            markdown_inventory_path=artifacts.markdown_inventory_path,
+            attestation_bytes=artifacts.attestation_bytes,
+            markdown_inventory_bytes=artifacts.markdown_inventory_bytes,
+            manifest_bytes=artifacts.manifest_bytes,
+            bundle_report=artifacts.bundle_report,
+        )
+
     def materialize(
         self,
         snapshot_id: str,
         workspace: str | Path,
     ) -> MaterializedCloudSnapshot:
+        """Materialize an exact ACTIVE snapshot for the later #136 binding factory."""
         if not isinstance(snapshot_id, str) or not snapshot_id:
             raise SnapshotMaterializationError("snapshot_id must be a non-empty exact identity")
         entry = self._get_exact_entry(snapshot_id)
-        ref = entry.snapshot
+        if entry.state is not SnapshotLifecycleState.ACTIVE:
+            raise SnapshotMaterializationStateError(
+                "query-binding materialization requires the exact catalogue entry to be ACTIVE"
+            )
+        artifacts = self._materialize_artifacts(entry, workspace)
+        return MaterializedCloudSnapshot(
+            snapshot_ref=artifacts.snapshot_ref,
+            workspace_root=artifacts.workspace_root,
+            source_root=artifacts.source_root,
+            index_root=artifacts.index_root,
+            index_database_path=artifacts.index_database_path,
+            attestation_path=artifacts.attestation_path,
+            markdown_inventory_path=artifacts.markdown_inventory_path,
+            attestation_bytes=artifacts.attestation_bytes,
+            markdown_inventory_bytes=artifacts.markdown_inventory_bytes,
+            manifest_bytes=artifacts.manifest_bytes,
+            bundle_report=artifacts.bundle_report,
+        )
 
+    def _materialize_artifacts(
+        self,
+        entry: SnapshotCatalogueEntry,
+        workspace: str | Path,
+    ) -> _MaterializationArtifacts:
+        snapshot_id = entry.snapshot.snapshot_id
+        ref = entry.snapshot
         source_result = self._read_object(ref.source_bundle)
         index_result = self._read_object(ref.index_bundle)
 
@@ -461,7 +564,7 @@ class CloudSnapshotMaterializer:
                 index_members=index_members,
             )
         )
-        return MaterializedCloudSnapshot(
+        return _MaterializationArtifacts(
             snapshot_ref=ref,
             workspace_root=workspace_root,
             source_root=source_root,
@@ -639,8 +742,10 @@ __all__ = [
     "SnapshotBindingChangedError",
     "SnapshotMaterializationError",
     "SnapshotMaterializationIntegrityError",
+    "SnapshotMaterializationStateError",
     "SnapshotObjectIntegrityError",
     "SnapshotObjectUnavailableError",
     "SnapshotObjectVersionMismatchError",
     "SnapshotWorkspaceError",
+    "VerificationMaterialization",
 ]
