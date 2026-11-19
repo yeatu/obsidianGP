@@ -16,7 +16,7 @@ from typing import Any
 
 from .lookup import (
     _LookupFailure, _check_db_snapshot, _decode_json,
-    _open_beneath, _open_canonical_root, _read_only_connection,
+    _line_span_for_chars, _open_beneath, _open_canonical_root, _read_only_connection,
     _resolve_db_status, _safe_source_components, _stat_signature,
     _validate_events, _verify_database, _verify_document_bytes,
     _verify_node_from_source, _valid_hash, _valid_node_id,
@@ -849,13 +849,160 @@ def _required_schema(connection: sqlite3.Connection) -> None:
             actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
             if actual != required:
                 raise CloudIndexVerificationError("schema_mismatch")
-        rows = connection.execute("SELECT schema_version FROM schema_info WHERE singleton=1").fetchall()
-        if len(rows) != 1 or type(rows[0][0]) is not int or rows[0][0] != SUPPORTED_SCHEMA_VERSION:
+
+        # Column names alone do not preserve the schema_info singleton contract.
+        # Require an INTEGER primary key for singleton and a non-null INTEGER
+        # schema_version. The complete row set is then checked below, so an
+        # otherwise well-shaped table cannot hide extra singleton rows.
+        info = connection.execute("PRAGMA table_info(schema_info)").fetchall()
+        info_by_name = {row[1]: row for row in info}
+        singleton = info_by_name.get("singleton")
+        schema_version = info_by_name.get("schema_version")
+        if (
+            singleton is None
+            or str(singleton[2]).upper() != "INTEGER"
+            or singleton[5] != 1
+            or schema_version is None
+            or str(schema_version[2]).upper() != "INTEGER"
+            or schema_version[3] != 1
+            or schema_version[5] != 0
+        ):
+            raise CloudIndexVerificationError("schema_mismatch")
+
+        # Do not filter by singleton=1: that would silently ignore rows such as
+        # (2, 2) in a rebuilt table that lacks the accepted singleton constraint.
+        rows = connection.execute(
+            "SELECT singleton, schema_version FROM schema_info ORDER BY singleton"
+        ).fetchall()
+        if (
+            len(rows) != 1
+            or type(rows[0][0]) is not int
+            or rows[0][0] != 1
+            or type(rows[0][1]) is not int
+            or rows[0][1] != SUPPORTED_SCHEMA_VERSION
+        ):
             raise CloudIndexVerificationError("schema_mismatch")
     except CloudIndexVerificationError:
         raise
-    except sqlite3.Error as exc:
+    except sqlite3.Error:
         raise CloudIndexVerificationError("schema_mismatch") from None
+
+
+_CONTENT_SPAN_FIELDS = frozenset({
+    "line_start", "line_end", "char_start", "char_end", "byte_start", "byte_end"
+})
+
+
+def _validate_content_spans(
+    raw_spans: Any,
+    container: dict[str, Any],
+    *,
+    coordinate_text: str,
+    base_char: int,
+    base_byte: int,
+    base_line: int,
+) -> None:
+    """Validate ordered, disjoint content spans inside one enclosing node.
+
+    coordinate_text is the full verified document for current nodes, or the
+    stored historical node raw_text for old versions. Historical coordinates
+    are therefore checked for internal consistency without claiming access to
+    the historical source file.
+    """
+    spans = _decode_json(
+        raw_spans, list, "node_span_mismatch", "Invalid content span data."
+    )
+    if not isinstance(coordinate_text, str):
+        raise CloudIndexVerificationError("node_span_mismatch")
+
+    previous_char_end = container["char_start"]
+    previous_byte_end = container["byte_start"]
+    for span in spans:
+        if type(span) is not dict or set(span) != _CONTENT_SPAN_FIELDS:
+            raise CloudIndexVerificationError("node_span_mismatch")
+        if any(type(span.get(field)) is not int for field in _CONTENT_SPAN_FIELDS):
+            raise CloudIndexVerificationError("node_span_mismatch")
+
+        char_start = span["char_start"]
+        char_end = span["char_end"]
+        byte_start = span["byte_start"]
+        byte_end = span["byte_end"]
+        if (
+            span["line_start"] < 1
+            or span["line_end"] < 0
+            or span["line_end"] < span["line_start"] - 1
+            or char_start < container["char_start"]
+            or char_end < char_start
+            or char_end > container["char_end"]
+            or byte_start < container["byte_start"]
+            or byte_end < byte_start
+            or byte_end > container["byte_end"]
+            or char_start < previous_char_end
+            or byte_start < previous_byte_end
+        ):
+            raise CloudIndexVerificationError("node_span_mismatch")
+
+        relative_start = char_start - base_char
+        relative_end = char_end - base_char
+        if not (0 <= relative_start <= relative_end <= len(coordinate_text)):
+            raise CloudIndexVerificationError("node_span_mismatch")
+
+        expected_byte_start = base_byte + len(
+            coordinate_text[:relative_start].encode("utf-8", errors="strict")
+        )
+        expected_byte_end = base_byte + len(
+            coordinate_text[:relative_end].encode("utf-8", errors="strict")
+        )
+        local_line_start, local_line_end = _line_span_for_chars(
+            coordinate_text, relative_start, relative_end
+        )
+        expected_line_start = base_line + local_line_start - 1
+        expected_line_end = base_line + local_line_end - 1
+        if (
+            byte_start != expected_byte_start
+            or byte_end != expected_byte_end
+            or span["line_start"] != expected_line_start
+            or span["line_end"] != expected_line_end
+        ):
+            raise CloudIndexVerificationError("node_span_mismatch")
+
+        previous_char_end = char_end
+        previous_byte_end = byte_end
+
+
+def _validate_historical_content_spans(row: dict[str, Any]) -> None:
+    raw_text = row.get("raw_text")
+    if not isinstance(raw_text, str):
+        raise CloudIndexVerificationError("node_version_mismatch")
+    try:
+        raw_bytes = raw_text.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        raise CloudIndexVerificationError("node_version_mismatch") from None
+
+    # The old source file is intentionally unavailable. Bind the enclosing
+    # historical coordinates to its retained raw_text, then validate every
+    # child span relative to that exact retained text.
+    if (
+        row["char_end"] - row["char_start"] != len(raw_text)
+        or row["byte_end"] - row["byte_start"] != len(raw_bytes)
+    ):
+        raise CloudIndexVerificationError("node_span_mismatch")
+    local_line_start, local_line_end = _line_span_for_chars(
+        raw_text, 0, len(raw_text)
+    )
+    if (
+        row["line_start"] != local_line_start
+        or row["line_end"] != local_line_end
+    ):
+        raise CloudIndexVerificationError("node_span_mismatch")
+    _validate_content_spans(
+        row["content_spans_json"],
+        row,
+        coordinate_text=raw_text,
+        base_char=row["char_start"],
+        base_byte=row["byte_start"],
+        base_line=row["line_start"],
+    )
 
 
 def _verify_database_consistency(
@@ -1032,6 +1179,14 @@ def _verify_database_consistency(
                     source_text=source_text,
                     expected_hash=node["content_hash"],
                 )
+                _validate_content_spans(
+                    node.get("content_spans_json"),
+                    node,
+                    coordinate_text=source_text,
+                    base_char=0,
+                    base_byte=0,
+                    base_line=1,
+                )
             del source_text
             del raw
 
@@ -1094,27 +1249,7 @@ def _verify_database_consistency(
             )
             if any(not isinstance(item, str) for item in heading_path):
                 raise CloudIndexVerificationError("node_version_mismatch")
-            spans = _decode_json(
-                row["content_spans_json"], list, "node_version_mismatch", "Invalid version data."
-            )
-            for span in spans:
-                if type(span) is not dict or set(span) != {
-                    "line_start", "line_end", "char_start", "char_end", "byte_start", "byte_end"
-                }:
-                    raise CloudIndexVerificationError("node_span_mismatch")
-                if any(type(span[field]) is not int for field in coordinate_fields):
-                    raise CloudIndexVerificationError("node_span_mismatch")
-                if (
-                    span["line_start"] < 1
-                    or span["line_end"] < 0
-                    or span["line_end"] < span["line_start"] - 1
-                    or (span["line_end"] == span["line_start"] - 1 and span["char_start"] != span["char_end"])
-                    or span["char_start"] < 0
-                    or span["char_end"] < span["char_start"]
-                    or span["byte_start"] < 0
-                    or span["byte_end"] < span["byte_start"]
-                ):
-                    raise CloudIndexVerificationError("node_span_mismatch")
+            _validate_historical_content_spans(row)
             _decode_json(row["metadata_json"], dict, "node_version_mismatch", "Invalid version data.")
             warnings = _decode_json(row["warnings_json"], list, "node_version_mismatch", "Invalid version data.")
             if any(not isinstance(item, str) for item in warnings):
