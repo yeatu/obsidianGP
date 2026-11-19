@@ -639,27 +639,26 @@ def _canonical_bytes(value: dict[str, Any]) -> bytes:
                       sort_keys=True, separators=(",", ":")).encode("utf-8", errors="strict")
 
 
-def _expected_inventory(files: tuple[tuple[str, bytes], ...]) -> bytes:
-    documents = []
-    for path, raw in files:
-        if PurePosixPath(path).suffix.lower() == ".md":
-            raw.decode("utf-8", errors="strict")
-            documents.append({
-                "path": path,
-                "byte_size": len(raw),
-                "sha256": "sha256:" + hashlib.sha256(raw).hexdigest(),
-            })
-    documents.sort(key=lambda item: item["path"].encode("utf-8", errors="strict"))
+def _expected_inventory(documents: list[dict[str, Any]]) -> bytes:
     return _canonical_bytes({"format": INVENTORY_FORMAT, "documents": documents})
 
 
-def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation) -> None:
+def _validate_inventory(
+    raw: bytes,
+    expected_documents: list[dict[str, Any]],
+    att: CloudIndexAttestation,
+) -> None:
     try:
-        obj = _exact(_canonical_object(raw), {"format", "documents"})
+        obj = _exact(_canonical_object(
+            raw,
+            max_bytes=MAX_INVENTORY_BYTES,
+            limited_arrays={"documents": MAX_MARKDOWN_DOCUMENTS},
+        ), {"format", "documents"})
         if obj["format"] != INVENTORY_FORMAT or not isinstance(obj["documents"], list):
             raise ValueError("unsupported inventory")
         seen: set[str] = set()
         previous: bytes | None = None
+        aggregate_bytes = 0
         for row in obj["documents"]:
             item = _exact(row, {"path", "byte_size", "sha256"})
             path = _safe_path(item["path"])
@@ -670,16 +669,23 @@ def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation)
             if previous is not None and encoded <= previous:
                 raise ValueError("inventory is not byte-sorted")
             previous = encoded
-            _uint(item["byte_size"])
+            byte_size = _uint(item["byte_size"])
+            if byte_size > MAX_MARKDOWN_DOCUMENT_BYTES:
+                raise CloudIndexVerificationError("resource_limit_exceeded")
+            aggregate_bytes += byte_size
+            if aggregate_bytes > MAX_AGGREGATE_MARKDOWN_BYTES:
+                raise CloudIndexVerificationError("resource_limit_exceeded")
             if not isinstance(item["sha256"], str) or not _SHA256_RE.fullmatch(item["sha256"]):
                 raise ValueError("invalid file digest")
         digest = "sha256:" + hashlib.sha256(raw).hexdigest()
         if digest != att.markdown_inventory_sha256 or len(obj["documents"]) != att.markdown_document_count:
             raise CloudIndexVerificationError("inventory_mismatch")
-        if raw != expected:
+        if obj["documents"] != expected_documents:
             raise CloudIndexVerificationError("inventory_mismatch")
     except CloudIndexVerificationError:
         raise
+    except _ResourceLimitExceeded:
+        raise CloudIndexVerificationError("resource_limit_exceeded") from None
     except Exception as exc:
         raise CloudIndexVerificationError("inventory_invalid") from None
 
