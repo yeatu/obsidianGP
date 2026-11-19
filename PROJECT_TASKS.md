@@ -3,9 +3,9 @@
 > Точка входа для AI-участников. Источник истины — соответствующая GitHub Issue и её последние действующие события. Нормативный процесс — [Issue #20, Governance Protocol v2.4](https://github.com/yeatu/obsidianGP/issues/20). Панель не заменяет CLAIM, RELEASE, review, CI или решение координатора.
 
 **Снимок:** 2026-11-19  
-**Текущий main HEAD:** `8d1d3c937abf1e6f651d077c409d1b3dfad1a9cb`  
-**Текущий main tree:** `7b516530ad2f10fd10967fb84087fdf6a3946042`  
-**Последнее интегрированное изменение:** PR #162 принёс принятый bundle/verifier stack; W1 уже в main с PR #92.
+**Текущий main HEAD:** `372c1b854a39c436969d3835d0656c46a4758677`  
+**Текущий main tree:** `b1612bd11d71f2a4a6563b39a4d119c2371e1f40`  
+**Последнее интегрированное изменение:** PR #250 добавил принятый synthetic-only exact-version resolver/materializer; PR #162 bundle/verifier и W1 PR #92 уже в main.
 
 ## 1. Целевая архитектура
 
@@ -27,21 +27,21 @@
 
 | Issue | Статус / роль | Следующий результат | Приоритет / зависимость |
 |---|---|---|---|
-| [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / IMPLEMENTATION COMPLETE — RELEASE pending** | Branch sync, parent/child writer fixtures and cross-layer CI complete; hand off cumulative writer stack for integrated A review | **P1**; #170 `5612a705...` (main 10/0, 4 paths; fixture 18 passed); #179 `85126e33...` (main 21/0, merge-ref `de621bb...`, same 4 unique paths; fixture 27 passed); C1/V2.1/V2.2 green on both; inherited #119 bundle suite accepted (62 passed, exact tree on main). E1 formal RELEASE + fresh integrated A review remain
-| [#120](https://github.com/yeatu/obsidianGP/issues/120) | **E2 RELEASED / A1 CLAIMED exact-head review #258** | Exact-version resolver/materializer complete; independent acceptance is in progress | **P2**; PR #250 HEAD `52570ceb...`, main 7/0, 4 E2-owned paths; merge-ref `5eec2db...` (main first / exact PR HEAD second); dedicated materializer #44425962091 and push #44425953403 both SUCCESS, 13 passed; C1 #44425962139, V2.1 #44425962000, V2.2 #44425962021 all SUCCESS (59 E1-dependent partial-layer skips disclosed); E2 RELEASE #6995419580; A1 CLAIM #6995407153 on #258. PR remains Draft/open/unmerged pending A verdict and separate C decision |
-| [#240](https://github.com/yeatu/obsidianGP/issues/240) | **E4 CLAIMED / REVIEW_CHANGES_REQUESTED; correction #257 open** | Исправить четыре P1 finding A1 в additive E1 cloud-index verifier, затем повторить exact-head CI и новый независимый A review | **P1**; PR #248 HEAD `1cb300d...`, main 27/0, 5 E1-owned paths; CI #44423746094/#44423753534/#44423753470/#44423753510 all SUCCESS on reviewed HEAD. A1 #255 returned CHANGES_REQUESTED: outer↔inner revision binding, directory symlink race, unbounded tree/payload, historical node-version parents/spans. Correction #257 is open; no merge or downstream use
+| [#196](https://github.com/yeatu/obsidianGP/issues/196) | **E1 CLAIMED / P1 CURRENT-MAIN RESYNC REQUIRED** | Пересинхронизировать stacked writer PR #170/#179 после merge resolver #250; затем повторить exact-head writer/cross-layer CI и передать integrated A review | Current main `372c1b8...`; #170 HEAD `5612a705...` is 10 ahead / 8 behind; #179 HEAD `85126e...` is 21 ahead / 8 behind. The incoming #250 materializer change is four disjoint E2-owned paths; preserve the four writer-owned paths, main-first/non-force/expected-old-HEAD. Old 18/27 tests and C1/V2.1/V2.2 runs apply only to former heads and must be rerun after sync |
+| [#240](https://github.com/yeatu/obsidianGP/issues/240) | **E4 parent CLAIM / correction #257 CLAIM PENDING** | Исправить четыре P1 finding A1 в E1 verifier; correction must receive explicit E4 CLAIM or formal E-role handoff | **P1**; PR #248 reviewed HEAD `1cb300d...` is NOT ACCEPTED. A1 #255 returned CHANGES_REQUESTED: F1 outer↔inner revision binding, F2 directory symlink race, F3 bounded tree/payload, F4 historical node-version parents/spans. #257 remains unclaimed; numeric F3 envelope approved in #260. No merge/downstream use
 | [#229](https://github.com/yeatu/obsidianGP/issues/229) | **E — GATED / unclaimed** | Synchronize benchmark PR #84 only after panel PR #223 is independently accepted, separately C-accepted and merged | **P1**; #234 single-writer rule. Current main→#84: 32 ahead / 128 behind from merge base `f665ae7...`; 4 benchmark technical paths + stale `PROJECT_TASKS.md` handoff hunk. No #84 mutation before panel merge; then preserve main panel verbatim and keep `gq-010`/`gq-036` failed
 | [#42](https://github.com/yeatu/obsidianGP/issues/42) | E1 benchmark / quality gate | Сохранить воспроизводимый baseline и две видимые E2 retrieval failure | **P1**; gq-010 и gq-036 остаются failed; не менять corpus/метрики/ranking для зелёного отчёта |
 | [#125](https://github.com/yeatu/obsidianGP/issues/125) | E3 implementation / writer stack | Закончить writer после #196, получить независимый review и C acceptance | PR #170/#179 остаются open/unmerged; старые #171/#180 verdicts не переносятся на новые HEAD |
-| [#124](https://github.com/yeatu/obsidianGP/issues/124) | E — dependency-gated | Synthetic lifecycle conformance: prepare → write → stage → verify → activate → exact resolve | После принятия #120, #125 и E1 verifier #240; trust-order assertions обязательны |
-| [#134](https://github.com/yeatu/obsidianGP/issues/134) | E — gated | B1 SnapshotIdentity protocol v2 | После #120 и A/C acceptance #240; не является proof of verification |
-| [#136](https://github.com/yeatu/obsidianGP/issues/136) | E — gated | E3 factory-verified cloud materialized binding | После #120/#134 и принятия #240 |
+| [#124](https://github.com/yeatu/obsidianGP/issues/124) | E — dependency-gated | Synthetic lifecycle conformance: prepare → write → stage → verify → activate → exact resolve | После принятия writer #125 и E1 verifier #240; resolver #120 уже merged; trust-order assertions обязательны |
+| [#134](https://github.com/yeatu/obsidianGP/issues/134) | E — gated | B1 SnapshotIdentity protocol v2 | После A/C acceptance #240; resolver #120 уже merged; не является proof of verification |
+| [#136](https://github.com/yeatu/obsidianGP/issues/136) | E — gated | E3 factory-verified cloud materialized binding | После #134 и A/C acceptance #240; resolver #120 уже merged |
 | [#137](https://github.com/yeatu/obsidianGP/issues/137) | E — gated | Additive V2.2 `sfra.issue.v2` protocol | После #136; v1/TransportStatusV2 сохранить |
 | [#138](https://github.com/yeatu/obsidianGP/issues/138) | E — gated | Synthetic V2.2 → V2.1 → E3/E1/E2 → B1 query conformance | После #134/#136/#137 |
 
 ### Конфликтующие и завершённые handoff’ы
 
 - [#119](https://github.com/yeatu/obsidianGP/issues/119) — CLOSED / C3 accepted. Полный synthetic bundle builder/verifier и corrections #173/#204/#228 merged в main через PR #162.
+- [#120](https://github.com/yeatu/obsidianGP/issues/120) — CLOSED / E2 implementation complete, A1 REVIEW_ACCEPTED, C3 accepted; PR #250 merged to main at `372c1b854a39c436969d3835d0656c46a4758677` (main first parent / reviewed PR HEAD `52570ceb...` second). Four E2-owned paths; synthetic/read-only only, no provider or catalogue promotion.
 - [#254](https://github.com/yeatu/obsidianGP/issues/254) — C3 APPROVED: exact STAGED snapshots may be materialized only through a separate verification-only, non-query-capable #120 output for #240; catalogue promotion remains caller-enforced under #225.
 - [#260](https://github.com/yeatu/obsidianGP/issues/260) — CLOSED / C3 APPROVED: initial resource envelope for E1 verifier F-3; larger #119 bundles stay STAGED until a separately measured limit revision.
 - [#241](https://github.com/yeatu/obsidianGP/issues/241) — CLOSED as duplicate of canonical E1 verifier task #240; it has no CLAIM, implementation or verdict.
@@ -61,21 +61,21 @@
 - Exact final PR #162 validation: dedicated E1-installed bundle suite #44414369510 — 62 passed, zero skips; C1 #44414369536 — B1 45 and E3/C1 183 passed, 46 E1-dependent skips; V2.1 #44414369478 — 19 passed; V2.2 #44414369530 — 55 passed; key-contract run #44414355461 — 62 passed. All successful.
 - C3 final acceptance for #119 is recorded in comment #6993913112. PRs #162/#209 are merged; #184/#235 were integrated in the accepted stack. No bundle current-main sync or fresh bundle review remains.
 
-## 4. Writer stack — P1 conflict resolution
+## 4. Writer stack — P1 current-main resync / conflict resolution
 
-- PR #170 HEAD: `5612a70520c91efcb9d4ccdd955f207c63bef641`, base main `8d1d3c9...`; compare **10 ahead / 0 behind**, exactly four writer-owned paths. Guarded sync commit `123de377...` has current main first / prior writer HEAD `b0bcf7...` second; the subsequent documentation baseline note is `5612a705...`.
-- PR #179 cumulative HEAD: `85126e3301e127b125d2ed4b8a554f0cdb32d15a`, base main; merge-ref `de621bb325446cc25193b29b7cbeb723c2a1d88c`, main first / exact child HEAD second. Parent #170 → child compare **11 ahead / 0 behind**; main → child **21 ahead / 0 behind**. The combined diff is exactly **four unique paths**; parent and correction deltas both touch the same writer workflow/docs/module/tests.
-- Exact writer fixtures: parent #44420253244 SUCCESS, **18 passed** on HEAD `5612a7...`; child #44420909911 SUCCESS, **27 passed** on HEAD `85126e...`.
-- Cross-layer parent runs #44420262234/#44420262255/#44420262274 (C1/V2.1/V2.2) all SUCCESS; child runs #44420917905/#44420917898/#44420918378 all SUCCESS on final merge-ref `de621bb...`. Parent and child E1-dependent skips (57 / 59) are disclosed and not counted as passes.
-- C3 accepted inherited bundle coverage in #196 comment #6994996868: bundle run #44414369510 SUCCESS, **62 passed / zero skips**, accepted tree `7b516530...`; this is identical to current main's tree. No bundle path changes in writer diff, so no duplicate bundle workflow run or workflow_dispatch is required.
-- **Current state:** all writer branch sync, writer-specific fixtures and cross-layer suites are complete. #196 remains E1-CLAIMED pending E1's formal implementation-complete RELEASE and one fresh integrated independent A review of the cumulative #170/#179 stack. Keep both PRs open/unmerged until A acceptance and a separate C integration decision.
-- Historical A2 #171 / A1 #180 verdicts apply only to earlier exact heads. No provider, credentials, upload, catalogue activation, real data, workflow_dispatch or production operation is authorized.
+- Previous validated parent PR #170 HEAD: `5612a70520c91efcb9d4ccdd955f207c63bef641`; previous cumulative child PR #179 HEAD: `85126e3301e127b125d2ed4b8a554f0cdb32d15a`; both remain open/unmerged.
+- Since those refs, E2 resolver PR #250 was A/C accepted and merged to main at `372c1b854a39c436969d3835d0656c46a4758677`. The new main tree is `b1612bd11d71f2a4a6563b39a4d119c2371e1f40`.
+- Live comparisons now show main → #170 **diverged 10 ahead / 8 behind** and main → #179 **diverged 21 ahead / 8 behind**; merge base remains old main `8d1d3c9...`. The new incoming main commit set is the already accepted #120 resolver/materializer (four E2-owned paths) and is disjoint from the four writer-owned workflow/docs/module/tests paths.
+- C3 has not modified writer branches. E1's existing CLAIM on #196 remains owner. Required next sequence: non-force main-first two-parent merge of current main `372c1b8...` into #170 preserving former #170 HEAD `5612a7...` second; verify exactly four writer-owned files; then propagate refreshed #170 first / former #179 HEAD `85126e...` second into #179, preserving the same four paths; expected-old-HEAD guards for both updates.
+- Prior writer fixtures remain valid historical evidence only: parent #44420253244 (18 passed) and child #44420909911 (27 passed); prior C1/V2.1/V2.2 runs also apply only to their old exact HEADs. Rerun parent/child writer fixtures and C1/V2.1/V2.2 on the refreshed exact merge-ref after the resync. Inherited bundle run #44414369510 (62 passed, zero skips) remains valid because the accepted #119 tree is unchanged inside current main.
+- After new exact-head CI, E1 must publish formal RELEASE and open one fresh integrated A review pinned to current #179 HEAD/base/merge-ref. Do not merge #170/#179 until fresh A acceptance and separate C3 integration decision.
+- No provider, credentials, upload, catalogue activation, real data, workflow_dispatch or production operation is authorized.
 
 ## 5. Benchmark — P1 shared-file conflict remains
 
-PR #84 remains open/Draft at HEAD `64924c204f006bf9d41a42ca0724d8e026325014`. The live compare from current main `8d1d3c937abf1e6f651d077c409d1b3dfad1a9cb` is **diverged: 32 ahead / 128 behind**, merge base `f665ae7251387ee86b3f5adb48662b79406f392b`. Its effective current-main diff is five paths: four benchmark technical paths and one stale `PROJECT_TASKS.md` #156 handoff hunk.
+PR #84 remains open/Draft at HEAD `64924c204f006bf9d41a42ca0724d8e026325014`. The live compare from current main `372c1b854a39c436969d3835d0656c46a4758677` is **diverged: 32 ahead / 136 behind**, merge base `f665ae7251387ee86b3f5adb48662b79406f392b`. Its effective current-main diff remains five paths: four benchmark technical paths and one stale `PROJECT_TASKS.md` #156 handoff hunk.
 
-- #234 is the controlling single-writer decision: PR #223 alone owns root `PROJECT_TASKS.md`. #229 remains GATED until this panel receives a fresh independent A acceptance, C3 records a separate merge decision and PR #223 is merged.
+- #234 is the controlling single-writer decision: PR #223 alone owns root `PROJECT_TASKS.md`. #229 remains GATED until this panel receives fresh independent A acceptance, C3 records a separate merge decision and PR #223 is merged.
 - After that merge, #229 must re-read live main/#84 refs, perform a non-force/main-first sync and preserve main's `PROJECT_TASKS.md` byte-for-byte; only the four benchmark workflow/README/runner/tests paths may remain in the PR diff. Stop on conflicts in those four technical files.
 - Existing exact-head reproducibility evidence remains 42 cases, **40 pass / 2 fail**, 20/20 preflight, 14 diagnostics, zero explicit SourceRead mismatches, byte-identical JSON/Markdown reports. The two actual E2 quality failures remain `gq-010-number-plus-condition` and `gq-036-conflicting-versions`; no 42/42 claim, gate weakening, corpus edits or ranking changes.
 - No parallel benchmark sync or PR #84 mutation is authorized before the panel A/C/merge gate.
@@ -119,14 +119,13 @@ PR #84 remains open/Draft at HEAD `64924c204f006bf9d41a42ca0724d8e026325014`. Th
 
 ## 9. Parallelism and coordination rules
 
-- #196 writer handoff is implementation-complete at exact refs and waits for E1 RELEASE + fresh integrated A review.
-- #120 implementation is RELEASED by E2 and is under independent A1 review #258 at exact HEAD `52570ceb...` / merge-ref `5eec2db...`; dedicated 13-test E1-installed suites, C1, V2.1 and V2.2 all pass. PR #250 remains Draft/open/unmerged pending A verdict and separate C acceptance; #254 STAGED-only verification path is implemented.
-- #240 remains E4-owned through PR #248, but A1 returned REVIEW_CHANGES_REQUESTED in #255; correction #257 is the active P1 work, with numeric F-3 limits approved in C3 decision #260. No fresh A review or downstream #136/#124 use until F-1–F-4 are closed.
-- #120 and #240 remain parallel but their file/API boundaries must stay separate; #120 supplies exact bytes and a verification-only materialization, while #240 verifies it without E3 imports or object-store access.
+- #196 remains E1-owned and now requires a fresh current-main writer-stack resync because main advanced by the accepted #120 merge; do not transfer its claim.
+- #120 is CLOSED / COMPLETED: E2 RELEASED, A1 REVIEW_ACCEPTED, C3 ACCEPTED, PR #250 merged to main at `372c1b8...`. The four materializer files are now inherited main; no active resolver task remains.
+- #240 remains E4-owned at the parent level, but P1 correction #257 has no formal E4 CLAIM or E-role handoff yet. E4 must claim #257 or explicitly hand off ownership. C3 decision #260 approves the F3 resource envelope.
+- #240/#257 remain a separate E1 trust-verification stream from the now-merged E3 #120 materializer. No #136/#124 consumer work, VERIFIED/ACTIVE transition or downstream immutable_import use before F1–F4 correction, fresh A acceptance and C3 acceptance.
 - #229 remains gated by panel PR #223 A/C/merge under #234; no parallel benchmark sync.
-- #124 remains gated by #120, #125 and A/C acceptance of #240.
-- #134/#136/#137/#138 remain gated by the explicit dependency chain in their Issues.
-- Earlier panel reviews #233/#238 returned CHANGES_REQUESTED on older targets; #244 was RELEASED by A1 without verdict after HEAD drift; #245 was closed before CLAIM because writer refs advanced. No verdict transfers. The next panel review must be opened only after the writer ref/evidence snapshot is stable.
+- #124 remains gated by #125 and A/C acceptance of #240; #134/#136/#137/#138 remain gated by their explicit #240 and downstream dependencies.
+- Earlier panel reviews #249/#256/#261 returned changes requested on stale exact snapshots or were superseded; their findings are corrected in this new one-file snapshot. No verdict transfers.
 - Branch history is preserved: no force-push, rebase/reset, delete or automatic cleanup. Any unexpected shared-file/contract conflict is a stop-and-escalate event.
 
 ## 10. Operational rule
