@@ -583,3 +583,22 @@ def test_exact_number_control_remains_independent_of_partial_fallback(index):
 
     assert {item["node_id"] for item in results(index, "18518")} == {"target_18518"}
 
+def test_partial_fallback_preserves_single_rare_exact_anchor(index):
+    index.import_nodes([
+        node("bench_partial_target", "synthetic/partial/target.md",
+             "Маяк был виден издалека, даже во время сильного снегопада.")
+    ])
+
+    found = results(index, "заснеженный маяк")
+    assert {item["node_id"] for item in found} == {"bench_partial_target"}
+    assert found[0]["relevance"]["tier"] == 6
+    assert "fts_exact_tokens_or_fallback" in found[0]["match_reasons"]
+
+
+def test_partial_fallback_does_not_allow_single_morphology_anchor(index):
+    index.import_nodes([
+        node("launch_z9", "dependencies/chain.md", "Инструкция для узла Z-9.")
+    ])
+
+    assert results(index, "узел с двумя несовместимыми версиями") == []
+
