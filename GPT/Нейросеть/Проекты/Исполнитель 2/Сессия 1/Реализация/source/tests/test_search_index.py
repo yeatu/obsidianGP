@@ -510,3 +510,76 @@ def test_search_hit_has_executor3_provenance_and_rank_fields(index):
     assert source["raw_text"] == item["raw_text"]
     assert source["index_generation"] >= 1
     assert source["document_hash"] is None
+
+def test_gq010_related_split_nodes_survive_but_unrelated_decoy_is_rejected(index):
+    batch_cycles = node(
+        "batch_cycles", "north/batches.md",
+        "Партия Север завершила 18 518 циклов.",
+    )
+    batch_conditions = node(
+        "batch_conditions", "north/batches.md",
+        "Температура партии Север была зафиксирована отдельно.",
+        line=2,
+    )
+    batch_conditions["parent_node_id"] = "batch_cycles"
+    decoy_cycles = node(
+        "decoy_cycles", "south/decoy-run.md",
+        "Южная партия завершила 18 519 циклов.",
+    )
+    index.import_nodes([batch_cycles, batch_conditions, decoy_cycles])
+
+    found = results(index, "партия Север число циклов и температура")
+    found_ids = {item["node_id"] for item in found}
+    assert {"batch_cycles", "batch_conditions"}.issubset(found_ids)
+    assert "decoy_cycles" not in found_ids
+
+    # The same decoy remains retrievable when the user explicitly asks for South.
+    south = results(index, "Южная партия циклов")
+    assert "decoy_cycles" in {item["node_id"] for item in south}
+
+
+def test_gq036_single_morphology_hit_does_not_satisfy_multitoken_query(index):
+    index.import_nodes([
+        node("launch_z9", "dependencies/chain.md", "Инструкция для узла Z-9."),
+    ])
+
+    found = results(index, "узел с двумя несовместимыми версиями")
+    assert found == []
+
+    # A genuine one-token query still uses the ordinary exact/morphology channels.
+    single_token = results(index, "узел")
+    assert "launch_z9" in {item["node_id"] for item in single_token}
+
+
+def test_partial_fallback_keeps_local_two_term_anchor_match(index):
+    index.import_nodes([
+        node("alpha", "docs/alpha.md", "Проект Альфа содержит краткое описание."),
+        node("beta", "docs/beta.md", "Проект Бета содержит краткое описание."),
+    ])
+
+    found = results(index, "Проект Альфа дополнительное описание")
+    found_ids = {item["node_id"] for item in found}
+    assert "alpha" in found_ids
+    assert "beta" not in found_ids
+    alpha = next(item for item in found if item["node_id"] == "alpha")
+    assert alpha["relevance"]["tier"] == 6
+    assert "fts_exact_tokens_or_fallback" in alpha["match_reasons"] or "fts_morphology_or_fallback" in alpha["match_reasons"]
+
+
+def test_partial_fallback_does_not_combine_terms_from_unrelated_documents(index):
+    index.import_nodes([
+        node("north", "docs/north.md", "Север отмечен на схеме."),
+        node("temperature", "docs/temperature.md", "Температура отмечена на схеме."),
+    ])
+
+    assert results(index, "Север температура") == []
+
+
+def test_exact_number_control_remains_independent_of_partial_fallback(index):
+    index.import_nodes([
+        node("target_18518", "numbers/target.md", "Измерено 18 518 циклов."),
+        node("decoy_18519", "numbers/decoy.md", "Измерено 18 519 циклов."),
+    ])
+
+    assert {item["node_id"] for item in results(index, "18518")} == {"target_18518"}
+
