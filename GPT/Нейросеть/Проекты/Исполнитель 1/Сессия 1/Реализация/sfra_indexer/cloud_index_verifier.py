@@ -364,14 +364,14 @@ def _signature(st: os.stat_result) -> tuple[int, int, int, int, int]:
 def _directory_flags() -> int:
     if (
         os.name != "posix" or not hasattr(os, "O_DIRECTORY")
-        or not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd
+        or not hasattr(os, "O_NOFOLLOW")
     ):
         raise CloudIndexVerificationError("filesystem_unsafe")
     return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 
 
 def _file_flags() -> int:
-    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd:
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
         raise CloudIndexVerificationError("filesystem_unsafe")
     return (
         os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
@@ -1037,6 +1037,10 @@ def _verify_database_consistency(
             node_ids_by_doc.setdefault(doc["document_pk"], set()).add(node_id)
             nodes_by_doc.setdefault(doc["document_pk"], []).append(node)
 
+        # Run the complete historical type/link/span/generation preflight before
+        # _check_db_snapshot's narrower legacy status checks can coarsen errors.
+        _validate_historical_node_versions(connection, doc_by_pk, nodes)
+
         active_node_count = 0
         for doc_pk, doc in doc_by_pk.items():
             events = _validate_events(connection, doc_pk, doc["generation"])
@@ -1082,8 +1086,6 @@ def _verify_database_consistency(
                     raise CloudIndexVerificationError("node_integrity_failure")
             source_bytes = None
             source_text = None
-
-        _validate_historical_node_versions(connection, doc_by_pk, nodes)
 
         counts = (
             len(documents),
