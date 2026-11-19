@@ -196,23 +196,103 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _canonical_object(raw: bytes, *, max_bytes: int) -> dict[str, Any]:
+def _canonical_object(
+    raw: bytes,
+    *,
+    max_bytes: int,
+    bounded_arrays: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Parse canonical JSON and stop at the first item beyond bounded arrays.
+
+    The coordinator-approved parser/document counts are enforced while the
+    array is decoded, not after json.loads has allocated the complete list.
+    Other JSON values continue through the standard duplicate-key-aware
+    decoder. Re-serialization is used only for canonical-byte comparison.
+    """
     if type(raw) is not bytes:
         raise ValueError("payload must be bytes")
     if len(raw) > max_bytes:
         raise CloudIndexVerificationError("resource_limit_exceeded")
-    value = json.loads(
-        raw.decode("utf-8", errors="strict"),
+
+    decoder = json.JSONDecoder(
         object_pairs_hook=_reject_duplicate_pairs,
         parse_constant=lambda _v: (_ for _ in ()).throw(ValueError("invalid JSON constant")),
     )
-    if not isinstance(value, dict):
+    text = raw.decode("utf-8", errors="strict")
+    array_limits = bounded_arrays or {}
+    result: dict[str, Any] = {}
+    position = 0
+    length = len(text)
+
+    def skip_space(index: int) -> int:
+        while index < length and text[index] in " \\t\\r\\n":
+            index += 1
+        return index
+
+    position = skip_space(position)
+    if position >= length or text[position] != "{":
         raise ValueError("JSON root must be an object")
-    canonical = json.dumps(value, ensure_ascii=False, allow_nan=False,
-                           sort_keys=True, separators=(",", ":")).encode("utf-8", errors="strict")
+    position += 1
+    position = skip_space(position)
+
+    if position < length and text[position] == "}":
+        position += 1
+    else:
+        while True:
+            position = skip_space(position)
+            key, position = decoder.raw_decode(text, position)
+            if not isinstance(key, str) or key in result:
+                raise ValueError("invalid or duplicate JSON object key")
+            position = skip_space(position)
+            if position >= length or text[position] != ":":
+                raise ValueError("invalid JSON object separator")
+            position = skip_space(position + 1)
+
+            if key in array_limits and position < length and text[position] == "[":
+                limit = array_limits[key]
+                if type(limit) is not int or limit < 0:
+                    raise ValueError("invalid bounded JSON array limit")
+                items: list[Any] = []
+                position = skip_space(position + 1)
+                if position < length and text[position] == "]":
+                    position += 1
+                else:
+                    while True:
+                        item, position = decoder.raw_decode(text, position)
+                        items.append(item)
+                        if len(items) > limit:
+                            raise CloudIndexVerificationError("resource_limit_exceeded")
+                        position = skip_space(position)
+                        if position < length and text[position] == ",":
+                            position = skip_space(position + 1)
+                            continue
+                        if position < length and text[position] == "]":
+                            position += 1
+                            break
+                        raise ValueError("invalid JSON array separator")
+                value: Any = items
+            else:
+                value, position = decoder.raw_decode(text, position)
+
+            result[key] = value
+            position = skip_space(position)
+            if position < length and text[position] == ",":
+                position = skip_space(position + 1)
+                continue
+            if position < length and text[position] == "}":
+                position += 1
+                break
+            raise ValueError("invalid JSON object separator")
+
+    if skip_space(position) != length:
+        raise ValueError("trailing JSON data")
+    canonical = json.dumps(
+        result, ensure_ascii=False, allow_nan=False,
+        sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8", errors="strict")
     if canonical != raw:
         raise ValueError("JSON is not canonical")
-    return value
+    return result
 
 
 def _exact(value: Any, keys: set[str]) -> dict[str, Any]:
@@ -253,7 +333,7 @@ def _revision(value: Any) -> SourceRevision:
 def parse_cloud_index_attestation(raw: bytes) -> CloudIndexAttestation:
     """Parse exact canonical attestation bytes into immutable E1-owned types."""
     try:
-        obj = _exact(_canonical_object(raw, max_bytes=MAX_ATTESTATION_BYTES), {
+        obj = _exact(_canonical_object(raw, max_bytes=MAX_ATTESTATION_BYTES, bounded_arrays={"parser_identities": MAX_PARSER_IDENTITIES}), {
             "attestation_version", "format", "source_revision", "markdown_inventory",
             "indexer_identity", "parser_identities", "sqlite_schema_identity", "database", "counts",
         })
@@ -629,7 +709,7 @@ def _validate_inventory(raw: bytes, expected: bytes, att: CloudIndexAttestation)
     if type(raw) is not bytes or len(raw) > MAX_INVENTORY_BYTES:
         raise CloudIndexVerificationError("resource_limit_exceeded")
     try:
-        obj = _exact(_canonical_object(raw, max_bytes=MAX_INVENTORY_BYTES), {"format", "documents"})
+        obj = _exact(_canonical_object(raw, max_bytes=MAX_INVENTORY_BYTES, bounded_arrays={"documents": MAX_MARKDOWN_DOCUMENTS}), {"format", "documents"})
         if obj["format"] != INVENTORY_FORMAT or not isinstance(obj["documents"], list):
             raise ValueError("unsupported inventory")
         if len(obj["documents"]) > MAX_MARKDOWN_DOCUMENTS:
@@ -1146,7 +1226,6 @@ def verify_materialized_cloud_index(
             or parsed.indexer_identity.version != _installed_indexer_version()
         ):
             raise CloudIndexVerificationError("indexer_identity_mismatch")
-
         if not isinstance(markdown_inventory, bytes) or len(markdown_inventory) > MAX_INVENTORY_BYTES:
             raise CloudIndexVerificationError("resource_limit_exceeded")
 
@@ -1173,7 +1252,7 @@ def verify_materialized_cloud_index(
         counts, parsers = _verify_database_consistency(db_path, root, source_files)
 
         # Re-scan using the same descriptor-rooted admission rules. This catches
-        # a tree replacement or inventory drift during the SQLite verification.
+        # tree replacement or inventory drift during the SQLite verification.
         source_files_after = _collect_source_files(root)
         if source_files_after != source_files:
             raise CloudIndexVerificationError("filesystem_race")
