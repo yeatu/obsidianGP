@@ -417,86 +417,221 @@ def _safe_path(value: Any) -> str:
     return value
 
 
-def _read_regular(path: Path) -> bytes:
-    before = path.lstat()
-    if not stat.S_ISREG(before.st_mode):
-        raise CloudIndexVerificationError("filesystem_unsafe")
-    fd = os.open(
-        path,
-        os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+def _stat_signature(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev, value.st_ino, value.st_mode, value.st_size,
+        value.st_mtime_ns, value.st_ctime_ns,
     )
-    try:
-        opened = os.fstat(fd)
-        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
-            raise CloudIndexVerificationError("filesystem_race")
-        chunks = []
-        while True:
-            chunk = os.read(fd, 1024 * 1024)
-            if not chunk:
-                break
-            chunks.append(chunk)
-        after = os.fstat(fd)
-        signature_before = (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)
-        signature_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
-        raw = b"".join(chunks)
-        if signature_before != signature_after or len(raw) != after.st_size:
-            raise CloudIndexVerificationError("filesystem_race")
-        try:
-            path_after = path.lstat()
-        except OSError as exc:
-            raise CloudIndexVerificationError("filesystem_race") from None
-        if (path_after.st_dev, path_after.st_ino) != (opened.st_dev, opened.st_ino):
-            raise CloudIndexVerificationError("filesystem_race")
-        return raw
-    finally:
-        os.close(fd)
 
 
-def _collect_source_files(source_root: str | Path) -> tuple[tuple[str, bytes], ...]:
+def _open_source_root(source_root: str | Path) -> tuple[Path, int]:
     requested = Path(source_root).expanduser()
-    if requested.is_symlink():
-        raise CloudIndexVerificationError("filesystem_unsafe")
     try:
+        requested_stat = requested.lstat()
+        if stat.S_ISLNK(requested_stat.st_mode) or not stat.S_ISDIR(requested_stat.st_mode):
+            raise CloudIndexVerificationError("filesystem_unsafe")
         root = requested.resolve(strict=True)
+        before = root.lstat()
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(root, flags)
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+        ):
+            os.close(descriptor)
+            raise CloudIndexVerificationError("filesystem_race")
+        return root, descriptor
+    except CloudIndexVerificationError:
+        raise
     except (OSError, RuntimeError, ValueError) as exc:
         raise CloudIndexVerificationError("filesystem_unsafe") from None
-    if not root.is_dir():
-        raise CloudIndexVerificationError("filesystem_unsafe")
-    files: list[tuple[str, bytes]] = []
-    seen: set[str] = set()
 
-    def walk(directory: Path, prefix: str) -> None:
+
+def _open_child_directory(
+    parent_fd: int,
+    name: str,
+    before: os.stat_result,
+) -> int:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(name, flags, dir_fd=parent_fd)
+    except OSError:
+        # The entry was observed as a directory but could not be pinned without
+        # following a link or accepting a replaced directory component.
+        raise CloudIndexVerificationError("filesystem_race") from None
+    opened = os.fstat(descriptor)
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+    ):
+        os.close(descriptor)
+        raise CloudIndexVerificationError("filesystem_race")
+    return descriptor
+
+
+def _read_markdown_at(
+    parent_fd: int,
+    name: str,
+    before: os.stat_result,
+    *,
+    retain_bytes: bool,
+) -> tuple[int, str, bytes | None]:
+    if not stat.S_ISREG(before.st_mode):
+        raise CloudIndexVerificationError("filesystem_unsafe")
+    if before.st_size > MAX_MARKDOWN_DOCUMENT_BYTES:
+        raise CloudIndexVerificationError("resource_limit_exceeded")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(name, flags, dir_fd=parent_fd)
+    except OSError:
+        raise CloudIndexVerificationError("filesystem_race") from None
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+            or _stat_signature(before) != _stat_signature(opened)
+        ):
+            raise CloudIndexVerificationError("filesystem_race")
+
+        digest = hashlib.sha256()
+        decoder = codecs.getincrementaldecoder("utf-8")("strict")
+        chunks: list[bytes] | None = [] if retain_bytes else None
+        total = 0
+        while True:
+            chunk = os.read(descriptor, _READ_CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_MARKDOWN_DOCUMENT_BYTES:
+                raise CloudIndexVerificationError("resource_limit_exceeded")
+            decoder.decode(chunk, final=False)
+            digest.update(chunk)
+            if chunks is not None:
+                chunks.append(chunk)
+        decoder.decode(b"", final=True)
+        after = os.fstat(descriptor)
         try:
-            with os.scandir(directory) as scan:
-                entries = list(scan)
-            entries.sort(key=lambda item: item.name.encode("utf-8", errors="strict"))
-        except (OSError, UnicodeError) as exc:
+            path_after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        except OSError:
+            raise CloudIndexVerificationError("filesystem_race") from None
+        if (
+            _stat_signature(opened) != _stat_signature(after)
+            or _stat_signature(after) != _stat_signature(path_after)
+            or total != after.st_size
+        ):
+            raise CloudIndexVerificationError("filesystem_race")
+        raw = b"".join(chunks) if chunks is not None else None
+        return total, "sha256:" + digest.hexdigest(), raw
+    except UnicodeDecodeError:
+        raise CloudIndexVerificationError("filesystem_unsafe") from None
+    finally:
+        os.close(descriptor)
+
+
+def _scan_source_inventory(root_fd: int) -> tuple[list[dict[str, Any]], int]:
+    """Descriptor-relative tree walk; non-Markdown payload bytes are never read."""
+    documents: list[dict[str, Any]] = []
+    total_entries = 0
+    aggregate_markdown_bytes = 0
+
+    def walk(directory_fd: int, prefix: str) -> None:
+        nonlocal total_entries, aggregate_markdown_bytes
+        try:
+            names = os.listdir(directory_fd)
+            names.sort(key=lambda item: item.encode("utf-8", errors="strict"))
+        except (OSError, UnicodeError):
             raise CloudIndexVerificationError("filesystem_unsafe") from None
-        for entry in entries:
-            relative = f"{prefix}/{entry.name}" if prefix else entry.name
+
+        for name in names:
             try:
+                relative = f"{prefix}/{name}" if prefix else name
                 relative = _safe_path(relative)
-                if relative in seen or entry.is_symlink():
+                total_entries += 1
+                if total_entries > MAX_SOURCE_TREE_ENTRIES:
+                    raise CloudIndexVerificationError("resource_limit_exceeded")
+                before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                if stat.S_ISLNK(before.st_mode):
                     raise CloudIndexVerificationError("filesystem_unsafe")
-                seen.add(relative)
-                if entry.is_dir(follow_symlinks=False):
-                    walk(Path(entry.path), relative)
-                elif entry.is_file(follow_symlinks=False):
-                    raw = _read_regular(Path(entry.path))
-                    if PurePosixPath(relative).suffix.lower() == ".md":
-                        raw.decode("utf-8", errors="strict")
-                    files.append((relative, raw))
+                if stat.S_ISDIR(before.st_mode):
+                    child_fd = _open_child_directory(directory_fd, name, before)
+                    try:
+                        walk(child_fd, relative)
+                    finally:
+                        os.close(child_fd)
+                elif stat.S_ISREG(before.st_mode):
+                    if PurePosixPath(relative).suffix.lower() != ".md":
+                        # Count and type-check attachments, but deliberately do
+                        # not open, hash, decode, or retain their payload bytes.
+                        continue
+                    if len(documents) >= MAX_MARKDOWN_DOCUMENTS:
+                        raise CloudIndexVerificationError("resource_limit_exceeded")
+                    if before.st_size > MAX_MARKDOWN_DOCUMENT_BYTES:
+                        raise CloudIndexVerificationError("resource_limit_exceeded")
+                    aggregate_markdown_bytes += before.st_size
+                    if aggregate_markdown_bytes > MAX_AGGREGATE_MARKDOWN_BYTES:
+                        raise CloudIndexVerificationError("resource_limit_exceeded")
+                    size, digest, _ = _read_markdown_at(
+                        directory_fd, name, before, retain_bytes=False
+                    )
+                    if size != before.st_size:
+                        raise CloudIndexVerificationError("filesystem_race")
+                    documents.append({
+                        "path": relative,
+                        "byte_size": size,
+                        "sha256": digest,
+                    })
                 else:
                     raise CloudIndexVerificationError("filesystem_unsafe")
             except CloudIndexVerificationError:
                 raise
-            except (OSError, UnicodeError, ValueError) as exc:
+            except _ResourceLimitExceeded:
+                raise CloudIndexVerificationError("resource_limit_exceeded") from None
+            except (OSError, UnicodeError, ValueError, TypeError):
                 raise CloudIndexVerificationError("filesystem_unsafe") from None
 
-    walk(root, "")
-    files.sort(key=lambda item: item[0].encode("utf-8", errors="strict"))
-    return tuple(files)
+    walk(root_fd, "")
+    documents.sort(key=lambda item: item["path"].encode("utf-8", errors="strict"))
+    return documents, total_entries
+
+
+def _read_markdown_beneath(root_fd: int, relative_path: str) -> bytes:
+    """Open one Markdown file below the pinned root without following components."""
+    components = _safe_path(relative_path).split("/")
+    current_fd = os.dup(root_fd)
+    try:
+        for component in components[:-1]:
+            try:
+                before = os.stat(component, dir_fd=current_fd, follow_symlinks=False)
+            except OSError:
+                raise CloudIndexVerificationError("filesystem_race") from None
+            if stat.S_ISLNK(before.st_mode) or not stat.S_ISDIR(before.st_mode):
+                raise CloudIndexVerificationError("filesystem_unsafe")
+            child_fd = _open_child_directory(current_fd, component, before)
+            os.close(current_fd)
+            current_fd = child_fd
+        try:
+            before = os.stat(components[-1], dir_fd=current_fd, follow_symlinks=False)
+        except OSError:
+            raise CloudIndexVerificationError("filesystem_race") from None
+        size, _digest, raw = _read_markdown_at(
+            current_fd, components[-1], before, retain_bytes=True
+        )
+        if raw is None or len(raw) != size:
+            raise CloudIndexVerificationError("filesystem_race")
+        return raw
+    except CloudIndexVerificationError:
+        raise
+    except _ResourceLimitExceeded:
+        raise CloudIndexVerificationError("resource_limit_exceeded") from None
+    except (OSError, UnicodeError, ValueError, TypeError):
+        raise CloudIndexVerificationError("filesystem_unsafe") from None
+    finally:
+        os.close(current_fd)
 
 
 def _canonical_bytes(value: dict[str, Any]) -> bytes:
