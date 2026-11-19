@@ -602,3 +602,17 @@ def test_partial_fallback_does_not_allow_single_morphology_anchor(index):
 
     assert results(index, "узел с двумя несовместимыми версиями") == []
 
+def test_partial_fallback_does_not_combine_distinct_sections_in_one_document(index):
+    north = node(
+        "north_section", "docs/shared.md", "Северный пост расположен у моря.",
+    )
+    north["parent_node_id"] = "section_north"
+    temperature = node(
+        "temperature_section", "docs/shared.md", "Температура воздуха остаётся низкой.",
+        line=5,
+    )
+    temperature["parent_node_id"] = "section_conditions"
+    index.import_nodes([north, temperature])
+
+    assert results(index, "Север температура") == []
+

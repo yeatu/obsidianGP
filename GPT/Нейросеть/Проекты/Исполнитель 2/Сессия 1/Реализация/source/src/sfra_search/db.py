@@ -857,17 +857,9 @@ class SFRAIndex:
                         for term, hits in term_hits.items()
                         if any(same_explicit_group(candidate, hit) for hit in hits)
                     }
-                    if len(group_terms) == 1:
-                        # Preserve the documented exact partial-search control only for a rare
-                        # original-form anchor. A lone morphology lemma is not sufficient.
-                        if channel != "exact":
-                            continue
-                        only_term = next(iter(group_terms))
-                        if term_document_frequency[only_term] > anchor_document_limit:
-                            continue
-                    elif len(group_terms) < 2:
+                    if len(group_terms) < 2:
                         continue
-                    elif not any(term_document_frequency[term] <= anchor_document_limit for term in group_terms):
+                    if not any(term_document_frequency[term] <= anchor_document_limit for term in group_terms):
                         continue
                     allowed.add(candidate_id)
                 return allowed
