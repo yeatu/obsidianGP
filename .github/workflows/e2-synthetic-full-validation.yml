@@ -1,0 +1,123 @@
+name: E2 synthetic-only package and gold validation
+
+on:
+  pull_request:
+    branches:
+      - executor-2/issue-281-validation-base
+    paths:
+      - ".github/workflows/e2-synthetic-full-validation.yml"
+      - "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark/**"
+      - "GPT/Нейросеть/Проекты/Аналитик 1/Сессия 4/Issue 41/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1/**"
+      - "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2-synthetic-full-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  e2-package-and-gold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the PR merge commit (repository source only)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install local SFRA packages and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install "jsonschema[format]==4.25.1"
+          python -m pip install \
+            "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация" \
+            "GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source" \
+            "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап Б1" \
+            "GPT/Нейросеть/Проекты/Исполнитель 3/Сессия 1/Реализация/Этап В1"
+          python -m pip install "pytest==8.4.2"
+
+      - name: Run the complete E2 source package test suite on synthetic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="GPT/Нейросеть/Проекты/Исполнитель 2/Сессия 1/Реализация/source"
+          python -m pytest -q "$source_dir/tests" \
+            --junitxml "$RUNNER_TEMP/e2-source-tests.xml"
+
+      - name: Run the gold benchmark schema and fixture preflight tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          benchmark_dir="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark"
+          python -m pytest -q "$benchmark_dir/test_runner.py" \
+            --junitxml "$RUNNER_TEMP/gold-preflight-tests.xml"
+
+      - name: Run two complete 42-case synthetic gold attempts and compare report bytes
+        shell: bash
+        env:
+          PYTHONHASHSEED: "0"
+          BENCHMARK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BENCHMARK_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BENCHMARK_CHECKOUT_SHA: ${{ github.sha }}
+          BENCHMARK_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          benchmark_dir="GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 2/Benchmark"
+          output_root="$RUNNER_TEMP/e2-full-validation"
+          mkdir -p "$output_root"
+
+          set +e
+          python "$benchmark_dir/runner.py" --output-dir "$output_root/attempt-1"
+          attempt_1_rc=$?
+          python "$benchmark_dir/runner.py" --output-dir "$output_root/attempt-2"
+          attempt_2_rc=$?
+          set -e
+
+          echo "Attempt 1 exit code: $attempt_1_rc"
+          echo "Attempt 2 exit code: $attempt_2_rc"
+          test -s "$output_root/attempt-1/benchmark.json"
+          test -s "$output_root/attempt-1/benchmark.md"
+          test -s "$output_root/attempt-2/benchmark.json"
+          test -s "$output_root/attempt-2/benchmark.md"
+
+          cmp "$output_root/attempt-1/benchmark.json" "$output_root/attempt-2/benchmark.json"
+          cmp "$output_root/attempt-1/benchmark.md" "$output_root/attempt-2/benchmark.md"
+          sha256sum "$output_root/attempt-1/benchmark.json" "$output_root/attempt-1/benchmark.md"
+          sha256sum "$output_root/attempt-2/benchmark.json" "$output_root/attempt-2/benchmark.md"
+
+          if [ "$attempt_1_rc" -ne 0 ] || [ "$attempt_2_rc" -ne 0 ]; then
+            echo "At least one full gold benchmark attempt failed a quality or invariant gate." >&2
+            exit 1
+          fi
+
+      - name: Verify the validation run made no repository writes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+
+      - name: Upload synthetic-only test and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2-synthetic-full-validation-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/e2-source-tests.xml
+            ${{ runner.temp }}/gold-preflight-tests.xml
+            ${{ runner.temp }}/e2-full-validation/
+          if-no-files-found: warn
+          retention-days: 30
