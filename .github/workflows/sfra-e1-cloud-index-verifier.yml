@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - executor-4/issue-240-cloud-index-verifier
+      - executor-3/issue-257-e1-cloud-verifier-correction
     paths:
       - "GPT/Нейросеть/Проекты/Исполнитель 1/Сессия 1/Реализация/**"
       - ".github/workflows/sfra-e1-cloud-index-verifier.yml"

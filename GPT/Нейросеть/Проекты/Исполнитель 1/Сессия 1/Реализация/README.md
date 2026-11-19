@@ -245,9 +245,12 @@ the Git-backed v1 state manifest and restore workflow:
 
 - parse_cloud_index_attestation(raw_bytes) parses the exact canonical
   sfra.e1.cloud-index-attestation.v1 payload into immutable E1-owned types.
-- verify_materialized_cloud_index(database_path, source_root, attestation=...,
-  markdown_inventory=...) verifies the already-materialized Markdown tree,
-  the exact #119 inventory and attestation bytes, and the E1 SQLite database.
+- verify_materialized_cloud_index(database_path, source_root, *,
+  expected_source_revision=..., attestation=..., markdown_inventory=...) verifies
+  the already-materialized Markdown tree, the exact #119 inventory/attestation
+  bytes, and the E1 SQLite database. expected_source_revision must be the exact
+  E1-owned tagged revision (or its strict primitive mapping) from the outer
+  verified snapshot reference; the tag and value must match the attestation.
 - The result is an immutable CloudIndexVerificationReport; failures raise
   CloudIndexVerificationError with a stable code and a safe message.
 
@@ -257,3 +260,18 @@ database connection or migration path. The public SourceRevision union keeps Git
 IDs as separate tagged variants. The report establishes consistency of the
 materialized snapshot; it does not authenticate source origin or provider
 immutability. All tests use temporary synthetic fixtures only.
+
+
+### E1 verifier resource envelope (C3 decision #260)
+
+The verifier applies these operational admission limits without changing the
+accepted #119 inventory/attestation wire format or Markdown selection rules:
+attestation 2 MiB; inventory 64 MiB; 100,000 Markdown rows; 256 parser identity
+pairs; 500,000 total source-tree entries (including directories and
+non-Markdown files); one Markdown file 32 MiB; aggregate Markdown bytes 2 GiB;
+and relative path length 4,096 characters. Limits are enforced during parsing
+or traversal. Markdown bytes are hashed in chunks and at most one Markdown file
+is retained for span verification. Non-Markdown attachment payloads are not
+read. Exceeding any ceiling raises the stable `resource_limit_exceeded` code.
+A larger valid #119 bundle remains valid at producer level but must not be
+promoted by an E1 verifier invocation outside this execution envelope.
