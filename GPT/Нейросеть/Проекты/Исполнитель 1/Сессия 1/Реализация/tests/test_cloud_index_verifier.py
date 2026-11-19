@@ -800,6 +800,10 @@ def test_rejects_historical_node_version_parent_from_another_document(tmp_path):
             JOIN structural_nodes AS current ON current.node_pk=old.node_pk
             JOIN structural_nodes AS other ON other.document_pk != current.document_pk
             WHERE old.version_no=1 AND old.parent_node_id IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM node_versions AS newer
+                  WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
+              )
             ORDER BY old.node_version_pk, other.node_pk
             LIMIT 1
             """
@@ -832,8 +836,13 @@ def test_rejects_historical_node_version_coordinates_when_digest_is_recomputed(t
     try:
         row = connection.execute(
             """
-            SELECT node_version_pk, char_end FROM node_versions
-            WHERE version_no=1 ORDER BY node_version_pk LIMIT 1
+            SELECT node_version_pk, char_end FROM node_versions AS old
+            WHERE version_no=1
+              AND EXISTS (
+                  SELECT 1 FROM node_versions AS newer
+                  WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
+              )
+            ORDER BY node_version_pk LIMIT 1
             """
         ).fetchone()
         assert row is not None
@@ -863,7 +872,13 @@ def test_rejects_historical_node_type_when_digest_is_recomputed(tmp_path):
     connection = sqlite3.connect(db_path)
     try:
         row = connection.execute(
-            "SELECT node_version_pk FROM node_versions WHERE version_no=1 ORDER BY node_version_pk LIMIT 1"
+            "SELECT node_version_pk FROM node_versions AS old
+            WHERE version_no=1
+              AND EXISTS (
+                  SELECT 1 FROM node_versions AS newer
+                  WHERE newer.node_pk=old.node_pk AND newer.version_no > old.version_no
+              )
+            ORDER BY node_version_pk LIMIT 1"
         ).fetchone()
         assert row is not None
         connection.execute(
