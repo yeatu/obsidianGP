@@ -1,5 +1,18 @@
 """Source-preserving structural indexer for SFRA stages B and C."""
 
+from .cloud_index_verifier import (
+    CloudIndexAttestation,
+    CloudIndexVerificationError,
+    CloudIndexVerificationReport,
+    GitCommitSourceRevision,
+    ImmutableImportSourceRevision,
+    IndexerIdentity,
+    ParserIdentity,
+    SourceRevision,
+    parse_cloud_index_attestation,
+    verify_materialized_cloud_index,
+)
+
 from .identity import MatchPlan, build_match_plan, content_hash
 from .indexer import IndexResult, get_database_summary, index_vault, read_markdown_file
 from .lookup import (
@@ -36,6 +49,16 @@ from .state import (
 from .storage import connect_database, save_parsed_document
 
 __all__ = [
+    "CloudIndexAttestation",
+    "CloudIndexVerificationError",
+    "CloudIndexVerificationReport",
+    "GitCommitSourceRevision",
+    "ImmutableImportSourceRevision",
+    "IndexerIdentity",
+    "ParserIdentity",
+    "SourceRevision",
+    "parse_cloud_index_attestation",
+    "verify_materialized_cloud_index",
     "IndexResult",
     "CurrentNodeAddress",
     "SourceScopeResult",

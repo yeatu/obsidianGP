@@ -236,3 +236,42 @@ The state branch separates files and Git history from the source Vault but does 
 Each persistence run checks out an explicit `vault_ref` input (default: `executor-1/sfra-indexer-session-1`; never an implicit switch to `main`), resolves its actual `vault_commit_sha` using `git rev-parse HEAD`, indexes only that checkout's `ГП/` tree, and stores both values in `state/manifest.json`. Legacy `source_branch` and `source_commit` keys remain as aliases so existing manifest readers continue to work. When manually dispatching the workflow, choose the Vault ref deliberately; the implementation branch and Vault source ref are separate concepts.
 
 The independent-run integration test will use its own fixture Vault, SQLite database, and \`sfra-state-test\` branch. It must never write test data to production \`sfra-state\`.
+
+
+## Additive E1 cloud-index verification
+
+The public, read-only cloud-index verification API is additive and separate from
+the Git-backed v1 state manifest and restore workflow:
+
+- parse_cloud_index_attestation(raw_bytes) parses the exact canonical
+  sfra.e1.cloud-index-attestation.v1 payload into immutable E1-owned types.
+- verify_materialized_cloud_index(database_path, source_root, attestation=...,
+  markdown_inventory=..., expected_source_revision=...) verifies the already-
+  materialized Markdown tree, exact #119 inventory and attestation bytes, and
+  the E1 SQLite database. expected_source_revision is the tagged Git/import
+  revision from the separately verified outer snapshot reference; it must
+  exactly equal the revision inside attestation.json.
+- The result is an immutable CloudIndexVerificationReport; failures raise
+  CloudIndexVerificationError with a stable code and a safe message.
+
+The verifier opens SQLite read-only, enables query-only mode, checks the exact
+schema_info.schema_version value (currently 2), and never calls the mutating
+database connection or migration path. The public SourceRevision union keeps Git revisions and opaque immutable-import
+IDs as separate tagged variants. The expected outer revision is compared by
+exact typed value before a report is produced; opaque import IDs are not trimmed,
+normalized or coerced.
+
+The approved resource envelope (C3 decision #260) is enforced incrementally:
+attestation <= 2 MiB; inventory <= 64 MiB and <= 100,000 Markdown rows;
+parser identities <= 256; source tree <= 500,000 entries (including
+directories/non-Markdown files); each Markdown document <= 32 MiB; aggregate
+Markdown bytes <= 2 GiB; and every relative path <= 4,096 characters. Limit
+violations use the stable resource_limit_exceeded code. Source-tree traversal is
+root-descriptor-relative and no-follow; inventory hashing streams Markdown
+bytes and never opens or retains non-Markdown attachment payloads. Historical
+node-version parent identity, node type, ordered coordinate spans and
+generation linkage are also checked.
+
+The report establishes consistency of the materialized snapshot; it does not
+authenticate source origin or provider immutability. All tests use temporary
+synthetic fixtures only.
